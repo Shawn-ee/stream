@@ -23,7 +23,7 @@ The repository is a secure, reproducibly packaged private launch candidate for t
 - A repeatable human browser acceptance checklist spanning all three roles, English/Chinese, truthful playback, creator operations, administrative boundaries, and deterministic reset.
 - Owner-approved physical camera/microphone proof through the existing Cloudflare Live Input: current-state lifecycle, signed audience authorization, audio/video playback tracks, automatic stop, and offline recovery.
 - Focused authentication, security, schema, lifecycle, realtime, two-process realtime, expanded workflow, build, deployment-start, backup/restore, and 100-user checks.
-- Digest-locked production-container load result: 100 connected sockets, zero unexpected disconnects, all p95 targets passed, 20 pooled database connections with zero settled waiters/errors, 160 MiB RSS, 126% single-core-equivalent CPU, 1 MiB Redis memory, and exactly-once handling of a ten-request duplicate race.
+- Fresh-volume, random-secret, digest-locked production-container load result: 100 connected sockets, zero unexpected disconnects, all p95 targets passed, 20 pooled database connections with zero settled waiters/errors, 160 MiB RSS, 121% single-core-equivalent CPU, 1 MiB Redis memory, and exactly-once handling of a ten-request duplicate race.
 - All Node/Nginx/PostgreSQL/Redis foundations are multi-architecture digest-locked; the web gateway uses official stable Nginx 1.30.4, and a verifier rejects floating image references.
 - Synthetic demo data reset after verification.
 
@@ -32,6 +32,7 @@ The repository is a secure, reproducibly packaged private launch candidate for t
 - A supported Linux host with Docker/Compose, adequate CPU/RAM/disk, private secret storage, encrypted off-host PostgreSQL backups, log retention, and an approved TLS terminator.
 - Run the repository's read-only Linux admission check before secrets or services are placed on the approved host; the minimum is 2 logical CPUs, 4 GiB RAM, and 20 GiB free workspace disk.
 - Exact production origin and trusted-proxy configuration.
+- A completed host-only environment file that passes the fail-fast production validator: distinct strong secrets, internally consistent database/Redis URLs, explicit private HTTPS or localhost-tunnel origin, strict file permissions, and complete-or-disabled Cloudflare credentials.
 - Managed availability/error/resource monitoring and alert routing.
 - A private staging soak on the intended host, followed by restore and rollback drills there.
 - Cloudflare Stream plan and live-input review only after explicit owner approval.

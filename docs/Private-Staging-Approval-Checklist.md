@@ -54,7 +54,7 @@ Do not change DNS, expose public ports, configure Cloudflare resources, or perfo
 1. Verify the exact SSH target and run only `sh deploy/verify-host-prerequisites.sh` first.
 2. Report host-preflight evidence and stop if minimums fail or permission scope is insufficient.
 3. Fetch the owner repository and check out the exact annotated release tag; verify the commit is `8aa41bf688336c1f8a0a8478e69d556d094477b5`.
-4. Create host-only staging configuration with newly generated secrets; validate Compose without starting services.
+4. Create host-only staging configuration with newly generated secrets; run `npm run validate:production-env -- .env.production`, then validate Compose without starting services.
 5. Build the digest-locked images and record the resulting application-image digests.
 6. Start the localhost-bound stack, verify migrations, liveness, readiness, authentication, gateway isolation, and private metrics.
 7. Create and encrypt a backup, restore it into a separate test database, and verify application readiness.

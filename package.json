@@ -22,6 +22,8 @@
     "verify:external-gates": "node scripts/verify-external-gates.mjs",
     "verify:backup-restore": "node --env-file=.env scripts/verify-backup-restore.mjs",
     "verify:production-compose": "node scripts/verify-production-compose.mjs",
+    "validate:production-env": "node scripts/validate-production-env.mjs",
+    "verify:production-env-validator": "node scripts/verify-production-env-validator.mjs",
     "verify:image-lock": "node scripts/verify-image-lock.mjs",
     "verify:release-preflight": "node scripts/verify-release-preflight.mjs",
     "verify:load:100": "node --env-file=.env scripts/verify-load-100.mjs",
@@ -32,7 +34,7 @@
     "verify:cloudflare-live": "node --env-file=.env scripts/verify-cloudflare-live.mjs",
     "verify:camera-live": "node --env-file=.env scripts/verify-camera-cloudflare.mjs",
     "verify:expanded": "npm run db:seed && node --env-file=.env scripts/verify-expanded.mjs && npm run db:seed",
-    "verify:staging": "npm run db:migrate && npm run db:seed && npm run check && npm test && npm run verify:image-lock && npm run verify:local && npm run verify:security && npm run verify:logs && npm run verify:external-gates && npm run verify:auth && npm run db:seed && npm run verify:realtime && npm run verify:realtime:cluster && npm run verify:lifecycle && npm run verify:expanded"
+    "verify:staging": "npm run db:migrate && npm run db:seed && npm run check && npm test && npm run verify:image-lock && npm run verify:production-env-validator && npm run verify:local && npm run verify:security && npm run verify:logs && npm run verify:external-gates && npm run verify:auth && npm run db:seed && npm run verify:realtime && npm run verify:realtime:cluster && npm run verify:lifecycle && npm run verify:expanded"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -23,7 +23,7 @@ For the production-style private package, migration sequencing, readiness, backu
 
 The approved Linux staging operator begins with `sh deploy/verify-host-prerequisites.sh`. This is a read-only suitability check and is not authorization to deploy.
 
-Run `npm run verify:production-compose` to reproduce the full local production-package build/start/readiness/private-metrics/gateway-boundary/shutdown smoke test.
+Run `npm run verify:production-compose` to reproduce the full local production-package build/start/readiness/private-metrics/gateway-boundary/shutdown smoke test. It uses a uniquely named disposable Docker project plus a temporary validator-approved environment with random secrets and Cloudflare disabled, then removes only those generated test containers/volumes and deletes the file.
 
 Before creating the first Git baseline, run `npm run verify:release-preflight` and follow `docs/Release-Baseline-Checklist.md`. The preflight never stages, commits, tags, pushes, or deploys files.
 

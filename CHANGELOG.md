@@ -33,6 +33,9 @@
 - Prepared the GitHub baseline as Markdown-only documentation: added a documentation index, modernized the README to the verified launch-candidate state, excluded Word/lock files, and made release preflight reject `.docx` publication.
 - With owner approval, published the reviewed baseline commit `8aa41bf` and annotated tag `stream-launch-candidate-0.1.0` to `Shawn-ee/stream`; follow-up readiness records now treat version control as complete while keeping Linux deployment separately gated.
 - Added a private Linux staging approval checklist with a recommended localhost-bound SSH-tunnel deployment, credential-rotation boundary, exact owner approval statement, host evidence sequence, and no-public-exposure safeguards.
+- Added a secret-safe pre-start production-environment validator and staging-enforced failure tests for placeholders, weak or reused secrets, database/Redis mismatches, unsafe origins, Cloudflare partial configuration, unknown variables, and Linux file permissions.
+- Reworked production-package and 100-user verifiers to use ephemeral validator-approved environments with distinct random secrets and Cloudflare disabled, replacing the former placeholder-template runtime and deleting temporary files after every run.
+- Fixed hidden-state dependence found by that change: production verifiers now use uniquely named Docker projects with fresh disposable volumes and remove only those exact test resources, so an old database password or schema cannot influence release evidence.
 
 ## 2026-08-23 - Harness loop stop-rule audit
 

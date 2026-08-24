@@ -23,15 +23,15 @@ The 100-concurrent-active-user application target is demonstrated on the local d
 |---|---:|---:|---|
 | Connected WebSockets | 100 | 100 | Pass |
 | Unexpected disconnects | 0 | 0 | Pass |
-| Login p95 | 58 ms | 1,500 ms | Pass |
-| Discovery p95 | 40 ms | 750 ms | Pass |
-| Room read p95 | 40 ms | 750 ms | Pass |
-| Offline playback authorization p95 | 45 ms | 750 ms | Pass |
-| Realtime join p95 | 93 ms | 1,500 ms | Pass |
-| Chat acknowledgement p95 | 47 ms | 1,000 ms | Pass |
+| Login p95 | 55 ms | 1,500 ms | Pass |
+| Discovery p95 | 34 ms | 750 ms | Pass |
+| Room read p95 | 35 ms | 750 ms | Pass |
+| Offline playback authorization p95 | 40 ms | 750 ms | Pass |
+| Realtime join p95 | 85 ms | 1,500 ms | Pass |
+| Chat acknowledgement p95 | 40 ms | 1,000 ms | Pass |
 | PostgreSQL pool | 20 total, 0 waiting | max 20, 0 waiting | Pass |
 | API RSS | 160 MiB | 512 MiB | Pass |
-| API CPU | 126% of one core | 200% | Pass |
+| API CPU | 121% of one core | 200% | Pass |
 | Redis memory | 1 MiB | 128 MiB | Pass |
 | Duplicate purchase race | 1 write + 9 duplicates | exactly once | Pass |
 | Cross-role probe | audience denied | denied | Pass |
@@ -54,7 +54,7 @@ The release-grade reproducible command is:
 npm run verify:load:production:100
 ```
 
-It owns the localhost-bound production-style stack for the duration of the check, uses the digest-locked images, resets disposable demo data, and shuts down without removing named volumes.
+It owns a uniquely named localhost-bound Docker project for the duration of the check, generates an ephemeral validator-approved environment with distinct random secrets and Cloudflare disabled, uses the digest-locked images, resets disposable demo data, removes only that exact verification project's containers/network/test volumes, and deletes the temporary environment file. Normal development and any separately approved staging volumes are never targeted.
 
 ## Interpretation and limits
 

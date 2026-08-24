@@ -32,6 +32,16 @@ The check requires Linux on x86-64 or ARM64, Docker 24+, Docker Compose 2.20+, a
 4. Keep secrets in the host secret store or a root-readable environment file. Never bake them into an image.
 5. Rotate the previously exposed Cloudflare test token before any approved deployment. Cloudflare configuration is a separate owner gate.
 
+Set `PRIVATE_SSH_TUNNEL=true` only for the recommended localhost-only SSH-tunnel boundary, with `WEB_ORIGIN=http://localhost:<APP_PORT>`. Otherwise keep it `false` and use the exact approved private HTTPS origin. Set `CLOUDFLARE_STREAM_ENABLED=false` and leave all four `CLOUDFLARE_*` values blank when media playback is excluded; when enabled, all four rotated values are required.
+
+Validate the completed file before Docker reads it. The command reports field names and modes only; it never prints secret values:
+
+```powershell
+npm run validate:production-env -- .env.production
+```
+
+On Linux, the validator also rejects an environment file readable by group or other users. Use owner-only permissions (`chmod 600 .env.production`) before validation.
+
 Validate without starting services:
 
 ```powershell
@@ -64,7 +74,7 @@ The complete disposable localhost production-package smoke test is:
 npm run verify:production-compose
 ```
 
-It builds the images, runs the migration service, waits for health/readiness, verifies the localhost gateway, confirms `/internal/metrics` is unavailable through the public web boundary but accessible with authentication inside the API network, and runs `down` without deleting volumes.
+It builds the images in a uniquely named verification project, runs the migration service against fresh disposable volumes, waits for health/readiness, verifies the localhost gateway, confirms `/internal/metrics` is unavailable through the public web boundary but accessible with authentication inside the API network, and removes only that exact verification project's containers/network/test volumes. It never targets normal development or approved staging volumes.
 
 ## Backup and restore
 

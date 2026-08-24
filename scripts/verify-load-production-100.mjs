@@ -1,35 +1,36 @@
-import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createTemporaryProductionEnvironment } from "./temporary-production-environment.mjs";
 
 const composeFile = "docker-compose.production.yml";
-const environmentFile = ".env.production.example";
 const gateway = "http://127.0.0.1:18080";
-
-const fileEnvironment = Object.fromEntries(
-  readFileSync(environmentFile, "utf8")
-    .split(/\r?\n/)
-    .filter((line) => line && !line.startsWith("#"))
-    .map((line) => {
-      const separator = line.indexOf("=");
-      assert.ok(separator > 0, `invalid environment template line: ${line}`);
-      return [line.slice(0, separator), line.slice(separator + 1)];
-    }),
-);
+const projectName = `stream-lc-load-verify-${process.pid}`;
+const temporaryEnvironment = createTemporaryProductionEnvironment({
+  appPort: "18080",
+});
+const environmentFile = temporaryEnvironment.path;
 
 const environment = {
   ...process.env,
+  ...temporaryEnvironment.environment,
   PRODUCTION_ENV_FILE: environmentFile,
   APP_PORT: "18080",
   LOAD_BASE_URL: gateway,
   LOAD_USERS: "100",
-  LOCAL_DEMO_PASSWORD: fileEnvironment.LOCAL_DEMO_PASSWORD,
 };
 
 function compose(...args) {
   return execFileSync(
     "docker",
-    ["compose", "--env-file", environmentFile, "-f", composeFile, ...args],
+    [
+      "compose",
+      "--project-name",
+      projectName,
+      "--env-file",
+      environmentFile,
+      "-f",
+      composeFile,
+      ...args,
+    ],
     {
       cwd: process.cwd(),
       env: environment,
@@ -52,6 +53,11 @@ async function waitForGateway() {
 
 let servicesStarted = false;
 try {
+  execFileSync(process.execPath, ["scripts/validate-production-env.mjs", environmentFile], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   compose("config", "--quiet");
   compose("up", "-d", "--build");
   servicesStarted = true;
@@ -92,5 +98,9 @@ try {
       );
     } catch {}
   }
-  compose("down");
+  try {
+    compose("down", "--volumes", "--remove-orphans");
+  } finally {
+    temporaryEnvironment.cleanup();
+  }
 }

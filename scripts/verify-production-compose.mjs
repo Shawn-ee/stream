@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createTemporaryProductionEnvironment } from "./temporary-production-environment.mjs";
 
 const composeFile = "docker-compose.production.yml";
-const environmentFile = ".env.production.example";
 const gateway = "http://127.0.0.1:18080";
+const projectName = `stream-lc-package-verify-${process.pid}`;
+const temporaryEnvironment = createTemporaryProductionEnvironment({
+  appPort: "18080",
+});
+const environmentFile = temporaryEnvironment.path;
 const environment = {
   ...process.env,
+  ...temporaryEnvironment.environment,
   PRODUCTION_ENV_FILE: environmentFile,
   APP_PORT: "18080",
 };
@@ -13,7 +19,16 @@ const environment = {
 function compose(...args) {
   return execFileSync(
     "docker",
-    ["compose", "--env-file", environmentFile, "-f", composeFile, ...args],
+    [
+      "compose",
+      "--project-name",
+      projectName,
+      "--env-file",
+      environmentFile,
+      "-f",
+      composeFile,
+      ...args,
+    ],
     {
       cwd: process.cwd(),
       env: environment,
@@ -58,6 +73,11 @@ async function waitForGateway() {
 
 try {
   verifyHostPreflightSyntax();
+  execFileSync(process.execPath, ["scripts/validate-production-env.mjs", environmentFile], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   compose("config", "--quiet");
   compose("up", "-d", "--build");
   await waitForGateway();
@@ -106,5 +126,9 @@ try {
     "Linux host-script syntax, Production Compose build, migration, readiness, private metrics, clean browser artifacts, and gateway boundary verified.",
   );
 } finally {
-  compose("down");
+  try {
+    compose("down", "--volumes", "--remove-orphans");
+  } finally {
+    temporaryEnvironment.cleanup();
+  }
 }
