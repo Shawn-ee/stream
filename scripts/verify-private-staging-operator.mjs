@@ -19,6 +19,7 @@ writeFileSync(
 case "$1" in
   rev-parse) printf '%s\\n' "\${MOCK_GIT_HEAD:-${expectedCommit}}" ;;
   status) exit 0 ;;
+  --version) printf 'git version 2.45.0\\n' ;;
   *) exit 1 ;;
 esac
 `,
@@ -70,6 +71,20 @@ try {
     ],
     { cwd: repository, stdio: "pipe" },
   );
+  execFileSync(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--mount",
+      `type=bind,source=${repository},target=/workspace,readonly`,
+      nodeImage,
+      "sh",
+      "-n",
+      "/workspace/deploy/verify-host-prerequisites.sh",
+    ],
+    { cwd: repository, stdio: "pipe" },
+  );
 
   const missingApproval = runOperator(["plan"], {
     EXPECTED_RELEASE_COMMIT: expectedCommit,
@@ -115,12 +130,16 @@ try {
   const source = await import("node:fs").then(({ readFileSync }) =>
     readFileSync("deploy/private-staging-operator.sh", "utf8"),
   );
+  const hostPreflight = await import("node:fs").then(({ readFileSync }) =>
+    readFileSync("deploy/verify-host-prerequisites.sh", "utf8"),
+  );
   assert.match(source, /compose down/);
   assert.doesNotMatch(source, /compose down[^\n]*(--volumes|-v)/);
   assert.match(source, /127\.0\.0\.1:\*/);
+  assert.match(hostPreflight, /command -v git/);
 
   console.log(
-    "Private staging operator syntax, owner/commit/action guards, localhost check, and volume-preserving stop verified.",
+    "Private staging operator and host-preflight syntax, Git admission, owner/commit/action guards, localhost check, and volume-preserving stop verified.",
   );
 } finally {
   rmSync(fixture, { recursive: true, force: true });

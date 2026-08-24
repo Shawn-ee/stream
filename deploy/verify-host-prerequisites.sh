@@ -52,6 +52,17 @@ else
   fail "Free workspace disk: ${disk_gib} GiB; minimum is ${MIN_DISK_GIB} GiB"
 fi
 
+if ! command -v git >/dev/null 2>&1; then
+  fail "Git is not installed or is not on PATH"
+else
+  git_version=$(git --version 2>/dev/null || true)
+  if [ -n "$git_version" ]; then
+    pass "$git_version"
+  else
+    fail "Git is present but its version could not be read"
+  fi
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   fail "Docker is not installed or is not on PATH"
 else
