@@ -51,4 +51,6 @@ The repository is a secure, reproducibly packaged private launch candidate for t
 1. Approve a specific private Linux staging host and secret/TLS/monitoring approach before any deployment action.
 2. Separately approve and obtain professional direction for real identity, payments, age/KYC, content policy, privacy, and legal/compliance work before public launch.
 
+Use `Private-Staging-Approval-Checklist.md` for the recommended localhost-bound SSH-tunnel option and the exact information/authorization required for item 1.
+
 The 100-user local application-readiness claim is demonstrated. Public-production readiness is not claimed until the remaining owner-gated evidence and operational controls are completed.

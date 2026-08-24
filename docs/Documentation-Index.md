@@ -17,6 +17,7 @@ All published project documentation is Markdown so it remains searchable, review
 - [`Deployment-Runbook.md`](Deployment-Runbook.md) — private Docker deployment, migrations, backup/restore, upgrade, rollback, and incident boundaries.
 - [`Monitoring-Runbook.md`](Monitoring-Runbook.md) — protected metrics, initial 100-user thresholds, and response order.
 - [`Release-Baseline-Checklist.md`](Release-Baseline-Checklist.md) — version-baseline review and publication safeguards.
+- [`Private-Staging-Approval-Checklist.md`](Private-Staging-Approval-Checklist.md) — exact host inputs, recommended no-public-listener boundary, approval statement, and Linux evidence sequence.
 - [`Launch-Acceptance-Checklist.md`](Launch-Acceptance-Checklist.md) — repeatable human acceptance pass across roles, languages, media states, and reset.
 
 ## Architecture and readiness evidence
