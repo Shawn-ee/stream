@@ -2,7 +2,7 @@
 
 ## Current state
 
-The repository now contains the core bilingual product workflow, secure synthetic-account sessions, a digest-locked production Docker topology, operational verification, and a passing local 100-concurrent-user workload. The local application-source candidate is commit `4cadd6a631544377b826ea998dcd1102d5f5799c` and still requires publication approval. No Linux host has been selected or approved, so host-specific TLS, secret storage, backup destination, monitoring delivery, soak behavior, and rollback evidence remain unproven.
+The repository now contains the core bilingual product workflow, secure synthetic-account sessions, a digest-locked production Docker topology, operational verification, and a passing local 100-concurrent-user workload. The local application-source candidate is commit `e1f64ad73e26792a84a94460afba50e0e16d5db3` and still requires publication approval. No Linux host has been selected or approved, so host-specific TLS, secret storage, backup destination, monitoring delivery, soak behavior, and rollback evidence remain unproven.
 
 ## Phase A — Finish essential product proof
 

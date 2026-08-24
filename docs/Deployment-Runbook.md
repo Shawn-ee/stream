@@ -24,7 +24,7 @@ After the owner selects and approves a private Linux staging host, run the read-
 sh deploy/verify-host-prerequisites.sh
 ```
 
-The check requires Linux on x86-64 or ARM64, Docker 24+, Docker Compose 2.20+, at least 2 logical CPUs, 4 GiB memory, 20 GiB free workspace disk, Docker daemon access, and an available `APP_PORT` (8080 by default). It may warn when clock or port inspection tools are unavailable. It never installs software, changes firewall/network state, reads project secrets, or starts a container. Passing it is evidence of minimum host suitability, not permission to deploy.
+The check requires Linux on x86-64 or ARM64, Git, Docker 24+, Docker Compose 2.20+, at least 2 logical CPUs, 4 GiB memory, 20 GiB free workspace disk, Docker daemon access, and an available `APP_PORT` (8080 by default). It may warn when clock or port inspection tools are unavailable. It never installs software, changes firewall/network state, reads project secrets, or starts a container. Passing it is evidence of minimum host suitability, not permission to deploy.
 
 1. Copy `.env.production.example` to `.env.production` outside source control.
 2. Replace every `replace-with-...` value. Use a long random database password and synthetic-account password.
@@ -39,7 +39,7 @@ On Linux, keep the completed environment file owner-only. The guarded operator r
 ```sh
 chmod 600 /approved/secret/path/.env.production
 export STREAM_PRIVATE_STAGING_APPROVED=I_APPROVE_PRIVATE_STAGING
-export EXPECTED_RELEASE_COMMIT=4cadd6a631544377b826ea998dcd1102d5f5799c
+export EXPECTED_RELEASE_COMMIT=e1f64ad73e26792a84a94460afba50e0e16d5db3
 export PRODUCTION_ENV_FILE=/approved/secret/path/.env.production
 sh deploy/private-staging-operator.sh plan
 ```

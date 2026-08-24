@@ -17,7 +17,7 @@ See the [documentation index](docs/Documentation-Index.md) for requirements, ope
 
 ## Version baseline
 
-The immutable initial baseline is commit [`8aa41bf`](https://github.com/Shawn-ee/stream/commit/8aa41bf688336c1f8a0a8478e69d556d094477b5), with annotated tag [`stream-launch-candidate-0.1.0`](https://github.com/Shawn-ee/stream/tree/stream-launch-candidate-0.1.0). The current local application-source candidate is `4cadd6a631544377b826ea998dcd1102d5f5799c`; it adds the owner-approved hardening already on GitHub plus a guarded private-Linux staging operator. It must not be deployed or pushed until separately approved. An approved staging operator must use that exact application-source commit (or a later owner-approved immutable release tag that contains it) and record the built application-image digests used on the host.
+The immutable initial baseline is commit [`8aa41bf`](https://github.com/Shawn-ee/stream/commit/8aa41bf688336c1f8a0a8478e69d556d094477b5), with annotated tag [`stream-launch-candidate-0.1.0`](https://github.com/Shawn-ee/stream/tree/stream-launch-candidate-0.1.0). The current local application-source candidate is `e1f64ad73e26792a84a94460afba50e0e16d5db3`; it adds the owner-approved hardening already on GitHub plus a guarded private-Linux staging operator and aligned Git host admission. It must not be deployed or pushed until separately approved. An approved staging operator must use that exact application-source commit (or a later owner-approved immutable release tag that contains it) and record the built application-image digests used on the host.
 
 ## Local development
 

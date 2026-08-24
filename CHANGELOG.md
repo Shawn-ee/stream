@@ -41,6 +41,7 @@
 - Added a requirement-by-requirement launch-candidate completion audit that separates completed local software evidence from the still-unapproved Linux host proof.
 - Added a guarded POSIX private-staging operator that requires an explicit approval phrase, an exact clean commit, and a second action-specific confirmation before start/stop. It validates the host, production environment, Compose model, localhost binding, migrations, readiness, and private metrics without requiring host Node/npm.
 - Added staging-gate coverage for operator syntax, missing approval, malformed/mismatched commits, unapproved mutation, a successful read-only plan, localhost enforcement, and volume-preserving shutdown.
+- Made Git an explicit, tested Linux host-admission prerequisite because exact source verification is mandatory before any guarded staging action.
 
 ## 2026-08-23 - Harness loop stop-rule audit
 

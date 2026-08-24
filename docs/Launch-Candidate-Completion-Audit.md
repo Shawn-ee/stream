@@ -4,7 +4,7 @@
 
 This audit evaluates the repository against `GOAL.md` without treating test names or prior claims as proof by themselves. The private launch-candidate software boundary is implemented and locally verified for the defined 100-active-user workload. The full goal is not yet closed because no Linux staging host, host access, secret/TLS/backup/monitoring choices, or deployment authorization has been supplied; therefore host deployment, soak, restore, and rollback evidence is missing by design.
 
-The exact local application-source candidate audited here is commit `4cadd6a631544377b826ea998dcd1102d5f5799c`. It has not yet been approved for publication or deployment. The immutable tag `stream-launch-candidate-0.1.0` points to the earlier baseline and must not be used as a substitute for this commit.
+The exact local application-source candidate audited here is commit `e1f64ad73e26792a84a94460afba50e0e16d5db3`. It has not yet been approved for publication or deployment. The immutable tag `stream-launch-candidate-0.1.0` points to the earlier baseline and must not be used as a substitute for this commit.
 
 ## Requirement evidence
 

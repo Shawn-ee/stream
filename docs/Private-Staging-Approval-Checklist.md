@@ -6,7 +6,7 @@ This checklist defines the information and explicit authorization required befor
 
 ## Recommended first staging boundary
 
-- After separate publication approval, deploy exact application-source commit `4cadd6a631544377b826ea998dcd1102d5f5799c` from `https://github.com/Shawn-ee/stream`. The older `stream-launch-candidate-0.1.0` tag is an immutable historical baseline and does not contain the later environment, supply-chain, or guarded-operator hardening.
+- After separate publication approval, deploy exact application-source commit `e1f64ad73e26792a84a94460afba50e0e16d5db3` from `https://github.com/Shawn-ee/stream`. The older `stream-launch-candidate-0.1.0` tag is an immutable historical baseline and does not contain the later environment, supply-chain, or guarded-operator hardening.
 - Keep the application gateway bound to `127.0.0.1` on the Linux host.
 - Reach it through an SSH tunnel from the owner's computer; no domain, DNS record, or public application port is required.
 - Do not run the physical-media broadcast verifier during deployment. Media was already proven separately and needs fresh approval for every rerun.
@@ -18,7 +18,7 @@ This is the lowest-risk route to proving a real Linux deployment. A private VPN 
 
 - [ ] Linux host address or SSH hostname.
 - [ ] SSH username and approved authentication method. Do not paste a private key into chat or the repository; use the existing local SSH agent/key path or another owner-approved secret handoff.
-- [ ] Linux distribution/version and whether Docker/Compose are already installed.
+- [ ] Linux distribution/version and whether Git, Docker, and Docker Compose are already installed.
 - [ ] Permission level: ordinary user with Docker access, or explicit approval for narrowly scoped administrator commands if installation/hardening is required.
 - [ ] Host purpose confirmation: disposable/private staging, with no production or unrelated data in scope.
 - [ ] Approved local gateway port (default `8080`) and SSH port.
@@ -40,7 +40,7 @@ Fill the bracketed fields and send this statement when ready:
 
 ```text
 I approve a private Linux staging deployment to [HOST] using SSH user [USER].
-Use exact application-source commit 4cadd6a631544377b826ea998dcd1102d5f5799c.
+Use exact application-source commit e1f64ad73e26792a84a94460afba50e0e16d5db3.
 Keep the application bound to localhost and access it only through an SSH tunnel.
 You may run the read-only host preflight and [may / may not] install or update Docker with narrowly scoped administrator commands.
 Use [SECRET STORAGE METHOD] for newly generated staging secrets and [BACKUP METHOD] for encrypted backups.
@@ -53,7 +53,7 @@ Do not change DNS, expose public ports, configure Cloudflare resources, or perfo
 
 1. Verify the exact SSH target and run only `sh deploy/verify-host-prerequisites.sh` first.
 2. Report host-preflight evidence and stop if minimums fail or permission scope is insufficient.
-3. Fetch the owner repository, check out detached commit `4cadd6a631544377b826ea998dcd1102d5f5799c`, and verify `git rev-parse HEAD` exactly matches it. Do not substitute the older tag or a moving branch name.
+3. Fetch the owner repository, check out detached commit `e1f64ad73e26792a84a94460afba50e0e16d5db3`, and verify `git rev-parse HEAD` exactly matches it. Do not substitute the older tag or a moving branch name.
 4. Create host-only staging configuration with newly generated secrets, owner-only permissions, and run the guarded operator's `plan` action. It validates the exact commit, environment, host admission checks, and Compose model without starting services.
 5. Build the digest-locked images and record the resulting application-image digests.
 6. Start the localhost-bound stack, verify migrations, liveness, readiness, authentication, gateway isolation, and private metrics.

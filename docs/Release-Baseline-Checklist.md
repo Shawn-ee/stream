@@ -16,7 +16,7 @@ This checklist records the reviewed initial release baseline and remains the pro
 ## Current application-source candidate
 
 - Owner approval received: 2026-08-24.
-- Commit: `4cadd6a631544377b826ea998dcd1102d5f5799c` on the local `main` branch. This commit is not yet published.
+- Commit: `e1f64ad73e26792a84a94460afba50e0e16d5db3` on the local `main` branch. This commit is not yet published.
 - Additions after the immutable initial tag: fail-fast production-environment validation, isolated random-secret production verification, fresh disposable verification volumes, exact dependency install-script policy, lockfile integrity checks, CycloneDX SBOM generation, a live production-dependency audit command, and a guarded POSIX private-staging operator.
 - Release-identifier status: this commit has no immutable release tag. The existing `stream-launch-candidate-0.1.0` tag remains unchanged at the historical baseline and must not be moved.
 - Deployment rule: first obtain approval to publish this exact commit, then separately obtain host/deployment approval. Use it for the first approved private staging deployment unless the owner approves a newer exact commit or a new annotated tag.
