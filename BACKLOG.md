@@ -64,7 +64,7 @@ The project-owned verifier sends a 25-second synthetic FFmpeg broadcast to the e
 
 ## Deployable 100-user roadmap
 
-The active product goal and phase gates are in `GOAL.md` and `docs/100-User-Deployment-Plan.md`. Local product, security, packaging, physical media, operational, and 100-concurrent-user evidence are complete, including a repeatable human browser acceptance checklist. The next work is owner-gated: establish a reviewed version baseline, then select and approve a private Linux staging target and host-specific secret/TLS/monitoring approach. Cloudflare configuration/cost, public exposure, payment, real identity, age/KYC, and compliance actions remain separate explicit approval gates.
+The active product goal and phase gates are in `GOAL.md` and `docs/100-User-Deployment-Plan.md`. Local product, security, packaging, physical media, operational, and 100-concurrent-user evidence are complete, including a repeatable human browser acceptance checklist. The reviewed version baseline and later hardening commits are published; the current application-source candidate is `3d0b0ca6198785aded7203043d1a153ec7360c3e`. The next work is owner-gated: select and approve a private Linux staging target and host-specific secret/TLS/monitoring approach. Cloudflare configuration/cost, public exposure, payment, real identity, age/KYC, and compliance actions remain separate explicit approval gates.
 
 ### Production-readiness audit queue
 

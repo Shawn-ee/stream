@@ -1,8 +1,8 @@
 # 100-User Deployable Product Plan
 
-## Starting point
+## Current state
 
-The current local prototype already has the core product workflow: discovery, bilingual rooms, Cloudflare playback authorization, broadcast lifecycle, chat/presence, creator controls, gifts/actions/goals, test private access, moderation, reports, and local verification. It is intentionally not deployable yet because roles are dummy sessions and the runtime is local-only.
+The repository now contains the core bilingual product workflow, secure synthetic-account sessions, a digest-locked production Docker topology, operational verification, and a passing local 100-concurrent-user workload. The application-source candidate is commit `3d0b0ca6198785aded7203043d1a153ec7360c3e`. No Linux host has been selected or approved, so host-specific TLS, secret storage, backup destination, monitoring delivery, soak behavior, and rollback evidence remain unproven.
 
 ## Phase A — Finish essential product proof
 
@@ -23,6 +23,8 @@ The current local prototype already has the core product workflow: discovery, bi
 
 **Exit:** no dummy role can obtain creator/admin access; automated authorization and abuse tests pass.
 
+**Current evidence:** database-backed hashed synthetic credentials, opaque expiring/revocable sessions, server-derived WebSocket identity, CSRF/origin/cookie defenses, role/ownership tests, abuse limits, safe errors, and log-redaction checks pass. Real customer email/OAuth, recovery, MFA, deletion/export, and credential-operations policy remain a separately approved pre-public-launch identity milestone.
+
 ## Phase C — Deployable Linux environment
 
 1. Separate local, staging, and production environment files; store secrets outside Git and rotate the exposed test token before any production use.
@@ -31,6 +33,8 @@ The current local prototype already has the core product workflow: discovery, bi
 4. Document database backups, encrypted off-host backup storage, restore drill, upgrades, rollbacks, and incident recovery.
 
 **Exit:** a new Linux host can deploy a private staging instance and recover its database from a tested backup.
+
+**Current evidence:** packaging, migration ordering, production-environment validation, readiness, localhost-only gateway, and disposable backup/restore are locally verified. Repeating that evidence on a selected Linux host requires the explicit approval in `Private-Staging-Approval-Checklist.md`.
 
 ## Phase D — 100-concurrent-user readiness
 
@@ -42,6 +46,8 @@ The current local prototype already has the core product workflow: discovery, bi
 6. Add basic dashboards and alerts for availability, error rate, database health, realtime connections, and Cloudflare playback failures reported by the API.
 
 **Exit:** 100 concurrent active users meet the agreed thresholds in a staging environment, with no data corruption, authorization leak, or sustained error condition.
+
+**Current evidence:** the exact digest-locked production topology passed the predefined local 100-user thresholds with zero unexpected disconnects and exactly-once mutation behavior. A host-specific multi-hour staging soak remains owner-gated.
 
 ## Phase E — Limited launch gate
 

@@ -6,7 +6,7 @@ This checklist defines the information and explicit authorization required befor
 
 ## Recommended first staging boundary
 
-- Deploy release tag `stream-launch-candidate-0.1.0` from `https://github.com/Shawn-ee/stream`.
+- Deploy exact application-source commit `3d0b0ca6198785aded7203043d1a153ec7360c3e` from `https://github.com/Shawn-ee/stream`. The older `stream-launch-candidate-0.1.0` tag is an immutable historical baseline and does not contain the later environment and supply-chain hardening.
 - Keep the application gateway bound to `127.0.0.1` on the Linux host.
 - Reach it through an SSH tunnel from the owner's computer; no domain, DNS record, or public application port is required.
 - Do not run the physical-media broadcast verifier during deployment. Media was already proven separately and needs fresh approval for every rerun.
@@ -40,7 +40,7 @@ Fill the bracketed fields and send this statement when ready:
 
 ```text
 I approve a private Linux staging deployment to [HOST] using SSH user [USER].
-Use release tag stream-launch-candidate-0.1.0.
+Use exact application-source commit 3d0b0ca6198785aded7203043d1a153ec7360c3e.
 Keep the application bound to localhost and access it only through an SSH tunnel.
 You may run the read-only host preflight and [may / may not] install or update Docker with narrowly scoped administrator commands.
 Use [SECRET STORAGE METHOD] for newly generated staging secrets and [BACKUP METHOD] for encrypted backups.
@@ -53,13 +53,13 @@ Do not change DNS, expose public ports, configure Cloudflare resources, or perfo
 
 1. Verify the exact SSH target and run only `sh deploy/verify-host-prerequisites.sh` first.
 2. Report host-preflight evidence and stop if minimums fail or permission scope is insufficient.
-3. Fetch the owner repository and check out the exact annotated release tag; verify the commit is `8aa41bf688336c1f8a0a8478e69d556d094477b5`.
+3. Fetch the owner repository, check out detached commit `3d0b0ca6198785aded7203043d1a153ec7360c3e`, and verify `git rev-parse HEAD` exactly matches it. Do not substitute the older tag or a moving branch name.
 4. Create host-only staging configuration with newly generated secrets; run `npm run validate:production-env -- .env.production`, then validate Compose without starting services.
 5. Build the digest-locked images and record the resulting application-image digests.
 6. Start the localhost-bound stack, verify migrations, liveness, readiness, authentication, gateway isolation, and private metrics.
 7. Create and encrypt a backup, restore it into a separate test database, and verify application readiness.
 8. Run the private human acceptance pass and an agreed staging soak/load check without video traffic through the application server.
-9. Exercise application rollback to the recorded tag/image and confirm readiness; restore a database only into a separate database first.
+9. Exercise application rollback to the recorded source commit/image and confirm readiness; restore a database only into a separate database first.
 10. Leave the host in the owner-approved running or stopped state and report every change, image digest, port, secret location (not value), backup location, result, and remaining risk.
 
 ## Staging exit evidence

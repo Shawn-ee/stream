@@ -37,6 +37,8 @@
 - Reworked production-package and 100-user verifiers to use ephemeral validator-approved environments with distinct random secrets and Cloudflare disabled, replacing the former placeholder-template runtime and deleting temporary files after every run.
 - Fixed hidden-state dependence found by that change: production verifiers now use uniquely named Docker projects with fresh disposable volumes and remove only those exact test resources, so an old database password or schema cannot influence release evidence.
 - Added supply-chain controls: exact-version npm install-script approvals for the two Linux esbuild packages, HTTPS npm-registry and SHA-512 lock integrity checks, an offline CycloneDX production SBOM gate, and a separate live audit command. The current production audit reports zero known vulnerabilities.
+- Corrected release documentation so private staging uses owner-approved application-source commit `3d0b0ca6198785aded7203043d1a153ec7360c3e`; the immutable `stream-launch-candidate-0.1.0` tag remains a historical baseline and is not moved.
+- Added a requirement-by-requirement launch-candidate completion audit that separates completed local software evidence from the still-unapproved Linux host proof.
 
 ## 2026-08-23 - Harness loop stop-rule audit
 
