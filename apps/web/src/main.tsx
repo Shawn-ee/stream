@@ -1,0 +1,1923 @@
+import { StrictMode, useEffect, useRef, useState, type FormEvent } from "react";
+import { createRoot } from "react-dom/client";
+import { io } from "socket.io-client";
+import "./styles.css";
+
+type Role = "audience" | "streamer" | "admin";
+type Language = "en" | "zh";
+type User = {
+  id: string;
+  displayName: string;
+  role: Role;
+  ageAcknowledged: boolean;
+};
+type Room = {
+  slug: string;
+  title: string;
+  status: string;
+  streamer_id: string;
+  streamer_name: string;
+  category: string;
+  bio?: string;
+  schedule_text?: string;
+  follower_count?: number;
+  goal_text?: string;
+  broadcast_state?: "live" | "connecting" | "offline" | "unavailable";
+  broadcast_checked_at?: string | null;
+  broadcast_status_message?: string;
+};
+type StreamerProfile = {
+  display_name: string;
+  bio: string;
+  category: string;
+  schedule_text: string;
+  follower_count: number;
+  room_slug: string | null;
+  room_status: string | null;
+};
+const audienceId = "10000000-0000-4000-8000-000000000001";
+const copy: Record<Language, Record<string, string>> = {
+  en: {
+    title: "Stream MVP",
+    test: "LOCAL TEST MODE - synthetic accounts, no real payments or age verification",
+    choose: "Choose a demo role",
+    local: "LOCAL DEVELOPMENT",
+    end: "Sign out",
+    audience: "Audience",
+    streamer: "Streamer",
+    adminRole: "Administrator",
+    demoSession: "Demo-only test session",
+    ageTitle: "Test age acknowledgement",
+    ageText: "This is not real age verification or a launch gate.",
+    age: "I confirm for this local test",
+    live: "Live now",
+    search: "Search rooms or streamers",
+    allCategories: "All categories",
+    followers: "followers",
+    recent: "Recently visited",
+    notifications: "Notifications",
+    noHistory: "No rooms visited in this test session yet.",
+    noNotes: "No test notifications yet.",
+    back: "Back to rooms",
+    privateLocked: "Private show: purchase test access to watch.",
+    privateAccessActive: "Private access active",
+    privateAccessLocked: "Private access locked",
+    accessEnds: "Test access ends in",
+    offline: "The stream is offline or not broadcasting.",
+    preparing: "Preparing secure playback...",
+    inRoom: "in room",
+    follow: "Follow",
+    following: "Following",
+    report: "Report",
+    buyAccess: "Buy private access",
+    coins: "Test coins",
+    send: "Send",
+    liveChat: "Live chat",
+    connecting: "Connecting chat...",
+    joining: "Joining chat...",
+    connected: "Chat connected",
+    unavailable: "Chat connection unavailable",
+    message: "Test message",
+    studio: "Creator studio",
+    studioText:
+      "Local test controls only. Use OBS and your Cloudflare Live Input for broadcasting.",
+    room: "Room",
+    noRoom: "No room",
+    earnings: "Test earnings",
+    roomTitle: "Room title",
+    goal: "Test goal / notice",
+    saveRoom: "Save room details",
+    privateShow: "Private show",
+    active: "Active",
+    inactive: "Inactive",
+    ticket: "Ticket access",
+    perMinute: "Per-minute access",
+    ticketCost: "Ticket coin cost",
+    minuteCost: "Per-minute coin cost",
+    startPrivate: "Start private show",
+    endPrivate: "End private show",
+    admin: "Admin dashboard",
+    reports: "Open reports",
+    noReports: "No reports.",
+    review: "Review",
+    dismiss: "Dismiss",
+    audit: "Audit events",
+    transactions: "Test transactions",
+    noTransactions: "No gift or private-show test transactions yet.",
+    reportSent: "Test report sent to the admin queue.",
+    metadataSaved: "Test room metadata saved.",
+    privateOn: "Private-show test mode is active.",
+    privateOff: "Private-show test mode ended.",
+    broadcast: "Broadcast status",
+    refreshBroadcast: "Refresh Cloudflare status",
+    localBroadcast: "Local test broadcast state",
+    broadcastGuidance:
+      "Use OBS with the existing Cloudflare Live Input. This screen never displays stream credentials.",
+    connectingBroadcast:
+      "The creator is starting the broadcast. Playback will appear when it is ready.",
+    unavailableBroadcast:
+      "Broadcast status is temporarily unavailable. Please try again later.",
+    lastChecked: "Last checked",
+    stateLive: "Live",
+    stateConnecting: "Connecting",
+    stateOffline: "Offline",
+    stateUnavailable: "Status unavailable",
+  },
+  zh: {
+    title: "直播平台 MVP",
+    test: "本地测试模式：使用合成账户，无真实支付或年龄验证",
+    choose: "选择测试角色",
+    local: "本地开发",
+    end: "退出登录",
+    audience: "观众",
+    streamer: "主播",
+    adminRole: "管理员",
+    demoSession: "仅限演示的测试会话",
+    ageTitle: "测试年龄确认",
+    ageText: "这不是真实年龄验证，也不是上线门槛。",
+    age: "我确认用于本地测试",
+    live: "正在直播",
+    search: "搜索直播间或主播",
+    allCategories: "全部分类",
+    followers: "位关注者",
+    recent: "最近访问",
+    notifications: "通知",
+    noHistory: "本次测试尚未访问直播间。",
+    noNotes: "暂无测试通知。",
+    back: "返回直播间列表",
+    privateLocked: "私密直播：请购买测试访问权限后观看。",
+    privateAccessActive: "私密访问已开启",
+    privateAccessLocked: "私密访问已锁定",
+    accessEnds: "测试访问剩余",
+    offline: "直播未开始或已离线。",
+    preparing: "正在准备安全播放...",
+    inRoom: "人在房间",
+    follow: "关注",
+    following: "已关注",
+    report: "举报",
+    buyAccess: "购买私密访问",
+    coins: "测试金币",
+    send: "发送",
+    liveChat: "实时聊天",
+    connecting: "正在连接聊天...",
+    joining: "正在加入聊天...",
+    connected: "聊天已连接",
+    unavailable: "聊天连接不可用",
+    message: "测试消息",
+    studio: "主播工作室",
+    studioText: "仅限本地测试。请使用 OBS 和 Cloudflare Live Input 推流。",
+    room: "直播间",
+    noRoom: "暂无直播间",
+    earnings: "测试收益",
+    roomTitle: "直播间标题",
+    goal: "测试目标 / 公告",
+    saveRoom: "保存直播间信息",
+    privateShow: "私密直播",
+    active: "已开启",
+    inactive: "未开启",
+    ticket: "门票访问",
+    perMinute: "按分钟访问",
+    ticketCost: "门票金币价格",
+    minuteCost: "每分钟金币价格",
+    startPrivate: "开启私密直播",
+    endPrivate: "结束私密直播",
+    admin: "管理后台",
+    reports: "待处理举报",
+    noReports: "暂无举报。",
+    review: "审核",
+    dismiss: "驳回",
+    audit: "审计记录",
+    transactions: "测试交易记录",
+    noTransactions: "暂时没有礼物或私密直播测试交易。",
+    reportSent: "测试举报已发送至管理队列。",
+    metadataSaved: "测试直播间信息已保存。",
+    privateOn: "私密直播测试模式已开启。",
+    privateOff: "私密直播测试模式已结束。",
+    broadcast: "\u63a8\u6d41\u72b6\u6001",
+    refreshBroadcast: "\u5237\u65b0 Cloudflare \u72b6\u6001",
+    localBroadcast: "\u672c\u5730\u6d4b\u8bd5\u63a8\u6d41\u72b6\u6001",
+    broadcastGuidance:
+      "\u8bf7\u4f7f\u7528 OBS \u548c\u73b0\u6709 Cloudflare Live Input\u3002\u6b64\u5904\u4e0d\u4f1a\u663e\u793a\u63a8\u6d41\u51ed\u8bc1\u3002",
+    connectingBroadcast:
+      "\u4e3b\u64ad\u6b63\u5728\u542f\u52a8\u63a8\u6d41\u3002\u51c6\u5907\u5b8c\u6210\u540e\u5c06\u663e\u793a\u64ad\u653e\u3002",
+    unavailableBroadcast:
+      "\u63a8\u6d41\u72b6\u6001\u6682\u65f6\u4e0d\u53ef\u7528\u3002\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
+    lastChecked: "\u4e0a\u6b21\u68c0\u67e5",
+    stateLive: "\u6b63\u5728\u76f4\u64ad",
+    stateConnecting: "\u6b63\u5728\u8fde\u63a5",
+    stateOffline: "\u5df2\u79bb\u7ebf",
+    stateUnavailable: "\u72b6\u6001\u6682\u65f6\u4e0d\u53ef\u7528",
+  },
+};
+async function request(path: string, options?: RequestInit) {
+  const csrf = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("stream_csrf="))
+    ?.slice("stream_csrf=".length);
+  const response = await fetch(path, {
+    credentials: "include",
+    headers: {
+      ...(options?.body ? { "content-type": "application/json" } : {}),
+      ...(csrf && options?.method && options.method !== "GET"
+        ? { "x-csrf-token": csrf }
+        : {}),
+      ...(options?.headers ?? {}),
+    },
+    ...options,
+  });
+  if (!response.ok && response.status !== 204)
+    throw new Error(`${response.status}`);
+  return response.status === 204 ? null : response.json();
+}
+function roleLabel(t: Record<string, string>, role: Role) {
+  return role === "admin" ? t.adminRole : t[role];
+}
+function broadcastLabel(
+  t: Record<string, string>,
+  state: string | null | undefined,
+) {
+  return state === "live"
+    ? t.stateLive
+    : state === "connecting"
+      ? t.stateConnecting
+      : state === "unavailable"
+        ? t.stateUnavailable
+        : t.stateOffline;
+}
+function LanguagePicker({
+  language,
+  onChange,
+}: {
+  language: Language;
+  onChange: (v: Language) => void;
+}) {
+  return (
+    <div className="locale">
+      <button
+        onClick={() => onChange("en")}
+        className={language === "en" ? "active" : ""}
+      >
+        EN
+      </button>
+      <button
+        onClick={() => onChange("zh")}
+        className={language === "zh" ? "active" : ""}
+      >
+        {"中文"}
+      </button>
+    </div>
+  );
+}
+function App() {
+  const [language, setLanguage] = useState<Language>("en");
+  const [user, setUser] = useState<User | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [room, setRoom] = useState<Room | null>(null);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [handle, setHandle] = useState("demo-audience");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const t = copy[language];
+  const loadRooms = () =>
+    void request(
+      `/api/rooms?q=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}`,
+    ).then((d) => setRooms(d.rooms));
+  useEffect(() => {
+    void request("/api/auth/session").then((d) => setUser(d.user));
+    void request("/api/discovery/categories").then((d) =>
+      setCategories(d.categories),
+    );
+  }, []);
+  useEffect(() => {
+    if (user?.role === "audience" && user.ageAcknowledged) loadRooms();
+  }, [user, query, category]);
+  useEffect(() => {
+    if (user?.role !== "audience" || !user.ageAcknowledged) return;
+    const socket = io({ transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("discovery:join"));
+    socket.on(
+      "discovery:broadcast",
+      (event: {
+        slug: string;
+        state: "live" | "connecting" | "offline" | "unavailable";
+        message: string;
+        checkedAt: string;
+      }) => {
+        setRooms((current) =>
+          current.map((item) =>
+            item.slug === event.slug
+              ? {
+                  ...item,
+                  status: event.state === "live" ? "live" : "offline",
+                  broadcast_state: event.state,
+                  broadcast_status_message: event.message,
+                  broadcast_checked_at: event.checkedAt,
+                }
+              : item,
+          ),
+        );
+      },
+    );
+    return () => {
+      socket.disconnect();
+    };
+  }, [user?.role, user?.ageAcknowledged]);
+  async function login(e: FormEvent) {
+    e.preventDefault();
+    setLoginError("");
+    try {
+      setUser(
+        (
+          await request("/api/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ handle, password }),
+          })
+        ).user,
+      );
+      setPassword("");
+    } catch {
+      setLoginError(
+        language === "en"
+          ? "Invalid local account credentials."
+          : "\u672c\u5730\u8d26\u6237\u51ed\u636e\u65e0\u6548\u3002",
+      );
+    }
+  }
+  async function acknowledge() {
+    setUser(
+      (
+        await request("/api/demo/age-acknowledgement", {
+          method: "POST",
+          body: "{}",
+        })
+      ).user,
+    );
+  }
+  async function logout() {
+    await request("/api/auth/session", { method: "DELETE" });
+    setHandle("");
+    setPassword("");
+    setLoginError("");
+    setUser(null);
+    setRoom(null);
+  }
+  if (!user)
+    return (
+      <main className="landing">
+        <LanguagePicker language={language} onChange={setLanguage} />
+        <p className="eyebrow">{t.local}</p>
+        <h1>{t.title}</h1>
+        <p className="notice">{t.test}</p>
+        <h2>
+          {language === "en"
+            ? "Sign in to a synthetic local account"
+            : "\u767b\u5f55\u672c\u5730\u6d4b\u8bd5\u8d26\u6237"}
+        </h2>
+        <div className="account-shortcuts">
+          {(["audience", "streamer", "admin"] as Role[]).map((role) => (
+            <button
+              type="button"
+              className="secondary"
+              key={role}
+              onClick={() => setHandle(`demo-${role}`)}
+            >
+              {roleLabel(t, role)}
+            </button>
+          ))}
+        </div>
+        <form className="login-form" onSubmit={(e) => void login(e)}>
+          <label>
+            {language === "en" ? "Account handle" : "\u8d26\u6237\u540d"}
+            <input
+              value={handle}
+              onChange={(e) => setHandle(e.target.value)}
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            {language === "en"
+              ? "Local test password"
+              : "\u672c\u5730\u6d4b\u8bd5\u5bc6\u7801"}
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </label>
+          <button>{language === "en" ? "Sign in" : "\u767b\u5f55"}</button>
+        </form>
+        {loginError && <p className="error">{loginError}</p>}
+      </main>
+    );
+  return (
+    <main className="app">
+      <LanguagePicker language={language} onChange={setLanguage} />
+      <header>
+        <div>
+          <p className="eyebrow">{t.test}</p>
+          <h1>{t.title}</h1>
+          <p>
+            {user.displayName} · {roleLabel(t, user.role)}
+          </p>
+        </div>
+        <button className="secondary" onClick={() => void logout()}>
+          {t.end}
+        </button>
+      </header>
+      {!user.ageAcknowledged ? (
+        <section className="age-gate">
+          <h2>{t.ageTitle}</h2>
+          <p>{t.ageText}</p>
+          <button onClick={() => void acknowledge()}>{t.age}</button>
+        </section>
+      ) : user.role === "audience" ? (
+        room ? (
+          <RoomView
+            room={room}
+            back={() => {
+              setRoom(null);
+              loadRooms();
+            }}
+            t={t}
+          />
+        ) : (
+          <section className="workspace">
+            <h2>{t.live}</h2>
+            <div className="filters">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t.search}
+              />
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="">{t.allCategories}</option>
+                {categories.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </div>
+            <div className="roles">
+              {rooms.map((item) => (
+                <button
+                  className={`room-card ${item.broadcast_state ?? item.status}`}
+                  key={item.slug}
+                  onClick={() => setRoom(item)}
+                >
+                  <strong>{item.title}</strong>
+                  <span
+                    className={`broadcast-label state-${item.broadcast_state ?? item.status}`}
+                  >
+                    {broadcastLabel(t, item.broadcast_state ?? item.status)}
+                  </span>
+                  <span>
+                    {item.streamer_name} · {item.category} ·{" "}
+                    {item.follower_count ?? 0} {t.followers}
+                  </span>
+                  <span>{item.schedule_text}</span>
+                </button>
+              ))}
+            </div>
+            <AudienceShelf t={t} />
+          </section>
+        )
+      ) : user.role === "admin" ? (
+        <AdminPanel t={t} />
+      ) : (
+        <StreamerStudio t={t} />
+      )}
+    </main>
+  );
+}
+function AudienceShelf({ t }: { t: typeof copy.en }) {
+  const [history, setHistory] = useState<Room[]>([]);
+  const [notes, setNotes] = useState<
+    { id: string; title: string; body: string }[]
+  >([]);
+  useEffect(() => {
+    void request("/api/me/history").then((d) => setHistory(d.rooms));
+    void request("/api/me/notifications").then((d) =>
+      setNotes(d.notifications),
+    );
+  }, []);
+  return (
+    <div className="shelves">
+      <div>
+        <h3>{t.recent}</h3>
+        {history.length ? (
+          history.map((item) => (
+            <p key={item.slug}>
+              {item.title} · {item.streamer_name}
+            </p>
+          ))
+        ) : (
+          <p className="muted">{t.noHistory}</p>
+        )}
+      </div>
+      <div>
+        <h3>{t.notifications}</h3>
+        {notes.length ? (
+          notes.slice(0, 4).map((item) => (
+            <p key={item.id}>
+              <strong>{item.title}</strong> · {item.body}
+            </p>
+          ))
+        ) : (
+          <p className="muted">{t.noNotes}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [presence, setPresence] = useState(0);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [gifts, setGifts] = useState<any[]>([]);
+  const [draft, setDraft] = useState("");
+  const [status, setStatus] = useState("");
+  const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  useEffect(() => {
+    void request(`/api/rooms/${slug}/chat-history`).then((d) =>
+      setMessages(d.messages),
+    );
+    const socket = io({ transports: ["websocket"] });
+    socketRef.current = socket;
+    socket.on("connect", () => socket.emit("room:join", slug));
+    socket.on("room:presence", (d: { count: number; users: any[] }) => {
+      setPresence(d.count);
+      setParticipants(d.users.filter((user) => user.role === "audience"));
+    });
+    socket.on("chat:message", (d) =>
+      setMessages((current) => [...current.slice(-39), d]),
+    );
+    socket.on("gift:sent", (d) =>
+      setGifts((current) =>
+        [{ ...d, createdAt: new Date().toISOString() }, ...current].slice(0, 8),
+      ),
+    );
+    socket.on("action:purchased", (d) =>
+      setGifts((current) =>
+        [
+          {
+            ...d,
+            name: d.title,
+            createdAt: new Date().toISOString(),
+            action: true,
+          },
+          ...current,
+        ].slice(0, 8),
+      ),
+    );
+    return () => {
+      socket.disconnect();
+    };
+  }, [slug]);
+  const zh = t.title !== "Stream MVP";
+  function send(e: FormEvent) {
+    e.preventDefault();
+    if (!draft.trim() || !socketRef.current?.connected) return;
+    socketRef.current.emit(
+      "chat:send",
+      { roomSlug: slug, body: draft.trim() },
+      (result: { error?: string }) =>
+        setStatus(result?.error ? result.error : ""),
+    );
+    setDraft("");
+  }
+  async function moderate(targetId: string, action: "mute" | "unmute") {
+    await request(`/api/streamer/rooms/${slug}/moderation`, {
+      method: "POST",
+      body: JSON.stringify({ targetId, action }),
+    });
+  }
+  return (
+    <div className="creator-monitor">
+      <h3>{zh ? "直播间监控" : "Live room monitor"}</h3>
+      <p className="muted">
+        {presence} {zh ? "人在直播间" : "in room"}
+      </p>
+      <div className="messages">
+        {messages.length ? (
+          messages.map((message) => (
+            <p key={message.id}>
+              <strong>{message.sender.displayName}</strong> {message.body}
+            </p>
+          ))
+        ) : (
+          <p className="muted">
+            {zh ? "暂无聊天记录。" : "No local chat yet."}
+          </p>
+        )}
+      </div>
+      <form className="creator-chat-form" onSubmit={send}>
+        <input
+          value={draft}
+          maxLength={500}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={zh ? "发送测试消息" : "Send test message"}
+        />
+        <button>{zh ? "发送" : "Send"}</button>
+      </form>
+      {status && <p className="error">{status}</p>}
+      <div className="gift-activity">
+        <p className="eyebrow">{zh ? "最新测试礼物" : "Recent test gifts"}</p>
+        {gifts.length ? (
+          gifts.map((gift) => (
+            <p key={gift.id}>
+              <strong>{gift.sender}</strong> · {gift.name} · {gift.cost}{" "}
+              {t.coins}
+            </p>
+          ))
+        ) : (
+          <p className="muted">
+            {zh ? "暂时没有测试礼物。" : "No test gifts yet."}
+          </p>
+        )}
+      </div>
+      <div className="participant-roster">
+        <p className="eyebrow">{zh ? "当前观众" : "Current audience"}</p>
+        {participants.length ? (
+          participants.map((participant) => (
+            <p key={participant.id}>
+              <strong>{participant.displayName}</strong>{" "}
+              <button
+                type="button"
+                onClick={() => void moderate(participant.id, "mute")}
+              >
+                {zh ? "禁言" : "Mute"}
+              </button>{" "}
+              <button
+                type="button"
+                onClick={() => void moderate(participant.id, "unmute")}
+              >
+                {zh ? "解除禁言" : "Unmute"}
+              </button>
+            </p>
+          ))
+        ) : (
+          <p className="muted">
+            {zh ? "暂无其他观众。" : "No audience is currently present."}
+          </p>
+        )}
+      </div>
+      <CreatorSessionInsights slug={slug} presence={presence} t={t} />
+    </div>
+  );
+}
+function CreatorSessionInsights({
+  slug,
+  presence,
+  t,
+}: {
+  slug: string;
+  presence: number;
+  t: typeof copy.en;
+}) {
+  const [insights, setInsights] = useState<any>(null);
+  const zh = t.title !== "Stream MVP";
+  const refresh = () =>
+    void request(`/api/streamer/rooms/${slug}/insights`).then(setInsights);
+  useEffect(() => {
+    refresh();
+    const socket = io({ transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("room:join", slug));
+    socket.on("gift:sent", refresh);
+    socket.on("action:purchased", refresh);
+    return () => {
+      socket.disconnect();
+    };
+  }, [slug]);
+  if (!insights)
+    return (
+      <section className="session-insights">
+        <p className="muted">{t.preparing}</p>
+      </section>
+    );
+  const stats = insights.stats;
+  return (
+    <section className="session-insights">
+      <div>
+        <p className="eyebrow">
+          {zh ? "\u4f1a\u8bdd\u6d1e\u5bdf" : "Session insights"}
+        </p>
+        <h3>
+          {zh
+            ? "\u76f4\u64ad\u652f\u6301\u6982\u89c8"
+            : "Live support overview"}
+        </h3>
+      </div>
+      <div className="insight-metrics">
+        <div>
+          <span>{zh ? "\u5f53\u524d\u89c2\u4f17" : "Audience now"}</span>
+          <strong>{Math.max(0, presence - 1)}</strong>
+        </div>
+        <div>
+          <span>{zh ? "\u793c\u7269\u652f\u6301" : "Gift support"}</span>
+          <strong>
+            {stats.gift_total} {t.coins}
+          </strong>
+        </div>
+        <div>
+          <span>{zh ? "\u52a8\u4f5c\u652f\u6301" : "Action support"}</span>
+          <strong>
+            {stats.action_total} {t.coins}
+          </strong>
+        </div>
+        <div>
+          <span>{zh ? "\u52a8\u4f5c\u89e6\u53d1" : "Action purchases"}</span>
+          <strong>{stats.action_count}</strong>
+        </div>
+      </div>
+      <div className="insight-detail">
+        <div>
+          <p className="eyebrow">
+            {zh
+              ? "\u672c\u573a\u6700\u4f73\u652f\u6301\u8005"
+              : "Top supporter"}
+          </p>
+          <strong>
+            {insights.topSupporter
+              ? `${insights.topSupporter.sender} · ${insights.topSupporter.total} ${t.coins}`
+              : zh
+                ? "\u6682\u65e0\u652f\u6301"
+                : "No support yet"}
+          </strong>
+        </div>
+        <div>
+          <p className="eyebrow">
+            {zh ? "\u76ee\u6807\u8fdb\u5ea6" : "Goal progress"}
+          </p>
+          <strong>
+            {insights.goal.goal_progress} / {insights.goal.goal_target}{" "}
+            {t.coins}
+          </strong>
+        </div>
+      </div>
+      <div className="insight-activity">
+        <p className="eyebrow">
+          {zh ? "\u6700\u8fd1\u652f\u6301" : "Recent support"}
+        </p>
+        {insights.recent.length ? (
+          insights.recent.map((item: any, index: number) => (
+            <p key={`${item.created_at}-${index}`}>
+              <strong>{item.sender}</strong> ·{" "}
+              {item.support_type === "gift"
+                ? zh
+                  ? "\u793c\u7269"
+                  : "Gift"
+                : zh
+                  ? "\u52a8\u4f5c"
+                  : "Action"}{" "}
+              · {item.label} · {item.coin_cost} {t.coins}
+            </p>
+          ))
+        ) : (
+          <p className="muted">
+            {zh
+              ? "\u6682\u65e0\u6d4b\u8bd5\u652f\u6301\u3002"
+              : "No test support yet."}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+function ActionMenuManager({ slug, t }: { slug: string; t: typeof copy.en }) {
+  const [actions, setActions] = useState<any[]>([]);
+  const [title, setTitle] = useState("");
+  const [cost, setCost] = useState(25);
+  const [duration, setDuration] = useState("");
+  const zh = t.title !== "Stream MVP";
+  const refresh = () =>
+    void request(`/api/streamer/rooms/${slug}/actions`).then((d) =>
+      setActions(d.actions),
+    );
+  useEffect(refresh, [slug]);
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    await request(`/api/streamer/rooms/${slug}/actions`, {
+      method: "POST",
+      body: JSON.stringify({ title, coinCost: cost, durationLabel: duration }),
+    });
+    setTitle("");
+    setCost(25);
+    setDuration("");
+    refresh();
+  }
+  async function update(action: any, patch: Record<string, unknown>) {
+    await request(`/api/streamer/rooms/${slug}/actions/${action.id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+    refresh();
+  }
+  return (
+    <section className="action-manager">
+      <div>
+        <p className="eyebrow">
+          {zh
+            ? "\u89c2\u4f17\u652f\u6301\u52a8\u4f5c"
+            : "Viewer-supported actions"}
+        </p>
+        <h3>{zh ? "\u5feb\u901f\u64cd\u4f5c\u83dc\u5355" : "Action menu"}</h3>
+      </div>
+      <p className="muted">
+        {zh
+          ? "\u8bbe\u7f6e\u5c0f\u800c\u6e05\u695a\u7684\u6d4b\u8bd5\u91d1\u5e01\u52a8\u4f5c\u3002\u89c2\u4f17\u89e6\u53d1\u540e\uff0c\u76f4\u64ad\u95f4\u4f1a\u5b9e\u65f6\u663e\u793a\u652f\u6301\u3002"
+          : "Set a small, clear set of test-coin actions. Viewer support appears in the room in real time."}
+      </p>
+      <div className="action-editor-list">
+        {actions.map((action) => (
+          <div className="action-editor" key={action.id}>
+            <input
+              defaultValue={action.title}
+              onBlur={(e) =>
+                e.target.value !== action.title &&
+                void update(action, { title: e.target.value })
+              }
+              aria-label="Action title"
+            />
+            <input
+              type="number"
+              min="1"
+              defaultValue={action.coin_cost}
+              onBlur={(e) =>
+                Number(e.target.value) !== action.coin_cost &&
+                void update(action, { coinCost: Number(e.target.value) })
+              }
+              aria-label="Action coin cost"
+            />
+            <input
+              defaultValue={action.duration_label ?? ""}
+              onBlur={(e) =>
+                e.target.value !== (action.duration_label ?? "") &&
+                void update(action, { durationLabel: e.target.value })
+              }
+              placeholder={
+                zh
+                  ? "\u65f6\u957f\uff08\u53ef\u9009\uff09"
+                  : "Duration (optional)"
+              }
+            />
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                void update(action, { isActive: !action.is_active })
+              }
+            >
+              {action.is_active
+                ? zh
+                  ? "\u5df2\u542f\u7528"
+                  : "Active"
+                : zh
+                  ? "\u5df2\u505c\u7528"
+                  : "Inactive"}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                void update(action, {
+                  displayOrder: Math.max(0, action.display_order - 1),
+                })
+              }
+              aria-label="Move action earlier"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                void update(action, { displayOrder: action.display_order + 1 })
+              }
+              aria-label="Move action later"
+            >
+              ↓
+            </button>
+          </div>
+        ))}
+      </div>
+      <form className="action-editor add-action" onSubmit={(e) => void add(e)}>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={80}
+          placeholder={
+            zh ? "\u65b0\u52a8\u4f5c\u6807\u9898" : "New action title"
+          }
+        />
+        <input
+          type="number"
+          min="1"
+          value={cost}
+          onChange={(e) => setCost(Number(e.target.value))}
+          aria-label="New action coin cost"
+        />
+        <input
+          value={duration}
+          onChange={(e) => setDuration(e.target.value)}
+          maxLength={60}
+          placeholder={
+            zh ? "\u65f6\u957f\uff08\u53ef\u9009\uff09" : "Duration (optional)"
+          }
+        />
+        <button>{zh ? "\u6dfb\u52a0\u52a8\u4f5c" : "Add action"}</button>
+      </form>
+    </section>
+  );
+}
+function ObsReadiness({ state, t }: { state?: string; t: typeof copy.en }) {
+  const zh = t.title !== "Stream MVP";
+  const stateGuide: Record<string, string> = zh
+    ? {
+        offline: "OBS \u5c1a\u672a\u5f00\u59cb\u63a8\u6d41\u3002",
+        connecting:
+          "Cloudflare \u6b63\u5728\u51c6\u5907\u89c2\u4f17\u64ad\u653e\u3002",
+        live: "\u89c2\u4f17\u73b0\u5728\u5e94\u53ef\u4ee5\u89c2\u770b\u76f4\u64ad\u3002",
+        unavailable:
+          "\u6682\u65f6\u65e0\u6cd5\u786e\u8ba4\u76f4\u64ad\u72b6\u6001\u3002",
+      }
+    : {
+        offline: "OBS is not streaming yet.",
+        connecting: "Cloudflare is preparing audience playback.",
+        live: "Audience playback should now be available.",
+        unavailable: "The broadcast status could not be confirmed.",
+      };
+  return (
+    <section className="obs-readiness">
+      <div>
+        <p className="eyebrow">
+          {zh ? "OBS \u5f00\u64ad\u51c6\u5907" : "Go live with OBS"}
+        </p>
+        <h3>
+          {zh
+            ? "\u76f8\u673a\u4e0e\u9ea6\u514b\u98ce\u5728 OBS \u4e2d\u9009\u62e9"
+            : "Choose camera and microphone in OBS"}
+        </h3>
+      </div>
+      <ol>
+        <li>
+          {zh
+            ? "\u6253\u5f00 OBS\uff0c\u6dfb\u52a0\u6b63\u786e\u7684\u6444\u50cf\u5934\u548c\u9ea6\u514b\u98ce\u6765\u6e90\u3002"
+            : "Open OBS and add the correct camera and microphone sources."}
+        </li>
+        <li>
+          {zh
+            ? "\u5728 OBS \u4e2d\u4f7f\u7528\u60a8\u5df2\u914d\u7f6e\u7684\u79c1\u6709 Cloudflare Live Input\u3002"
+            : "Use your already configured private Cloudflare Live Input in OBS."}
+        </li>
+        <li>
+          {zh
+            ? "\u5f00\u59cb\u63a8\u6d41\u540e\uff0c\u5728\u8fd9\u91cc\u5237\u65b0\u72b6\u6001\u3002"
+            : "Start streaming, then refresh status here."}
+        </li>
+      </ol>
+      <p className={`obs-state state-${state ?? "offline"}`}>
+        {stateGuide[state ?? "offline"]}
+      </p>
+      <details>
+        <summary>
+          {zh
+            ? "OBS \u76f8\u673a / \u97f3\u9891\u6392\u67e5"
+            : "OBS camera / audio checks"}
+        </summary>
+        <ul>
+          <li>
+            {zh
+              ? "\u786e\u8ba4\u9009\u4e2d\u4e86\u6b63\u786e\u6444\u50cf\u5934\u6765\u6e90\u3002"
+              : "Check that the correct camera source is selected."}
+          </li>
+          <li>
+            {zh
+              ? "\u786e\u8ba4\u9ea6\u514b\u98ce\u97f3\u91cf\u8868\u5728\u6d3b\u52a8\u3002"
+              : "Confirm the microphone meter is moving."}
+          </li>
+          <li>
+            {zh
+              ? "\u786e\u8ba4 OBS \u5177\u6709\u6444\u50cf\u5934\u548c\u9ea6\u514b\u98ce\u6743\u9650\u3002"
+              : "Confirm OBS has camera and microphone permissions."}
+          </li>
+          <li>
+            {zh
+              ? "\u5728\u672c\u5730\u76d1\u542c\u97f3\u9891\uff0c\u5f00\u59cb\u63a8\u6d41\u540e\u518d\u5237\u65b0\u72b6\u6001\u3002"
+              : "Monitor audio locally, then refresh status after streaming starts."}
+          </li>
+        </ul>
+      </details>
+    </section>
+  );
+}
+function StreamerStudio({ t }: { t: typeof copy.en }) {
+  const [studio, setStudio] = useState<any>(null);
+  const [notice, setNotice] = useState("");
+  const [title, setTitle] = useState("");
+  const [goal, setGoal] = useState("");
+  const [goalTarget, setGoalTarget] = useState(500);
+  const [bio, setBio] = useState("");
+  const [category, setCategory] = useState("");
+  const [schedule, setSchedule] = useState("");
+  const [mode, setMode] = useState<"ticket" | "per_minute">("ticket");
+  const [ticketCost, setTicketCost] = useState(100);
+  const [perMinuteCost, setPerMinuteCost] = useState(10);
+  const refresh = () =>
+    void request("/api/streamer/studio").then((d) => {
+      setStudio(d);
+      setTitle(d.room?.title ?? "");
+      setGoal(d.room?.goal_text ?? "");
+      setGoalTarget(d.room?.goal_target ?? 500);
+      setBio(d.room?.bio ?? "");
+      setCategory(d.room?.category ?? "");
+      setSchedule(d.room?.schedule_text ?? "");
+      setMode(d.room?.private_show_mode ?? "ticket");
+      setTicketCost(d.room?.private_show_ticket_cost ?? 100);
+      setPerMinuteCost(d.room?.private_show_per_minute_cost ?? 10);
+    });
+  useEffect(refresh, []);
+  async function toggle(active: boolean) {
+    const result = await request(
+      `/api/streamer/rooms/${studio.room.slug}/private-show`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ active, mode, ticketCost, perMinuteCost }),
+      },
+    );
+    setNotice(result.active ? t.privateOn : t.privateOff);
+    refresh();
+  }
+  async function moderate(action: "mute" | "unmute") {
+    await request(`/api/streamer/rooms/${studio.room.slug}/moderation`, {
+      method: "POST",
+      body: JSON.stringify({ targetId: audienceId, action }),
+    });
+    const zh = t.title !== "Stream MVP";
+    setNotice(
+      action === "mute"
+        ? zh
+          ? "此直播间已禁言演示观众。"
+          : "Demo Audience muted in this room."
+        : zh
+          ? "此直播间已解除演示观众禁言。"
+          : "Demo Audience unmuted in this room.",
+    );
+  }
+  async function refreshBroadcast() {
+    const result = await request(
+      `/api/streamer/rooms/${studio.room.slug}/broadcast/refresh`,
+      { method: "POST", body: "{}" },
+    );
+    setNotice(result.broadcast.message);
+    refresh();
+  }
+  async function setLocalBroadcast(
+    state: "live" | "connecting" | "offline" | "unavailable",
+  ) {
+    const result = await request(
+      `/api/streamer/rooms/${studio.room.slug}/broadcast/local-status`,
+      { method: "PUT", body: JSON.stringify({ state }) },
+    );
+    setNotice(result.broadcast.message);
+    refresh();
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    await request(`/api/streamer/rooms/${studio.room.slug}`, {
+      method: "PUT",
+      body: JSON.stringify({ title, goalText: goal, goalTarget }),
+    });
+    setNotice(t.metadataSaved);
+    refresh();
+  }
+  async function saveProfile(e: FormEvent) {
+    e.preventDefault();
+    await request("/api/streamer/profile", {
+      method: "PUT",
+      body: JSON.stringify({ bio, category, scheduleText: schedule }),
+    });
+    setNotice(
+      t.title === "Stream MVP"
+        ? "Test profile saved."
+        : "测试主页信息已保存。 ",
+    );
+    refresh();
+  }
+  if (!studio) return <section className="workspace">{t.preparing}</section>;
+  const room = studio.room;
+  return (
+    <section className="workspace">
+      <h2>{t.studio}</h2>
+      <p>{t.studioText}</p>
+      {room && (
+        <section className="live-session">
+          <div>
+            <p className="eyebrow">
+              {t.title === "Stream MVP"
+                ? "Live session"
+                : "\u76f4\u64ad\u4f1a\u8bdd"}
+            </p>
+            <h3>{broadcastLabel(t, room.broadcast_state)}</h3>
+            <p className="muted">{room.broadcast_status_message}</p>
+          </div>
+          <div className="goal-progress">
+            <p className="eyebrow">
+              {t.title === "Stream MVP"
+                ? "Live contribution goal"
+                : "\u5b9e\u65f6\u652f\u6301\u76ee\u6807"}
+            </p>
+            <strong>{room.goal_text}</strong>
+            <div className="progress-track">
+              <span
+                style={{
+                  width: `${Math.min(100, Math.round((room.goal_progress / room.goal_target) * 100))}%`,
+                }}
+              />
+            </div>
+            <small>
+              {room.goal_progress} / {room.goal_target} {t.coins}
+            </small>
+          </div>
+          <div>
+            <p className="eyebrow">
+              {t.title === "Stream MVP"
+                ? "Session earnings"
+                : "\u4f1a\u8bdd\u6d4b\u8bd5\u6536\u76ca"}
+            </p>
+            <strong>
+              {room.test_earnings} {t.coins}
+            </strong>
+            <p className="muted">
+              {room.followers} {t.followers}
+            </p>
+          </div>
+        </section>
+      )}
+      <ObsReadiness state={room?.broadcast_state} t={t} />
+      <div className="shelves">
+        <div>
+          <h3>{t.room}</h3>
+          <p>
+            {room?.title ?? t.noRoom} · {room?.status}
+          </p>
+          <p>
+            {t.followers}: {room?.followers ?? 0}
+          </p>
+          <p>
+            {t.earnings}: {room?.test_earnings ?? 0} {t.coins}
+          </p>
+          <form className="studio-form" onSubmit={(e) => void save(e)}>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t.roomTitle}
+            />
+            <input
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder={t.goal}
+            />
+            <input
+              type="number"
+              min="1"
+              value={goalTarget}
+              onChange={(e) => setGoalTarget(Number(e.target.value))}
+              aria-label={
+                t.title === "Stream MVP"
+                  ? "Goal target in test coins"
+                  : "\u6d4b\u8bd5\u91d1\u5e01\u76ee\u6807"
+              }
+            />
+            <button>{t.saveRoom}</button>
+          </form>
+          <form className="studio-form" onSubmit={(e) => void saveProfile(e)}>
+            <input
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder={t.title === "Stream MVP" ? "Public bio" : "公开简介"}
+              maxLength={500}
+            />
+            <input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder={t.title === "Stream MVP" ? "Category" : "分类"}
+              maxLength={60}
+            />
+            <input
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+              placeholder={t.title === "Stream MVP" ? "Schedule" : "直播时间"}
+              maxLength={160}
+            />
+            <button>
+              {t.title === "Stream MVP"
+                ? "Save public profile"
+                : "保存公开主页"}
+            </button>
+          </form>
+        </div>
+        <div className="broadcast-panel">
+          <h3>{t.broadcast}</h3>
+          <p
+            className={`broadcast-state state-${room?.broadcast_state ?? "offline"}`}
+          >
+            {broadcastLabel(t, room?.broadcast_state)}
+          </p>
+          <p className="muted">{room?.broadcast_status_message}</p>
+          <p className="muted">
+            {t.lastChecked}:{" "}
+            {room?.broadcast_checked_at
+              ? new Date(room.broadcast_checked_at).toLocaleString()
+              : "—"}
+          </p>
+          <p className="muted">{t.broadcastGuidance}</p>
+          <button type="button" onClick={() => void refreshBroadcast()}>
+            {t.refreshBroadcast}
+          </button>
+          <label className="muted">{t.localBroadcast}</label>
+          <select
+            value={room?.broadcast_state ?? "offline"}
+            onChange={(e) =>
+              void setLocalBroadcast(
+                e.target.value as
+                  "live" | "connecting" | "offline" | "unavailable",
+              )
+            }
+          >
+            <option value="live">live</option>
+            <option value="connecting">connecting</option>
+            <option value="offline">offline</option>
+            <option value="unavailable">unavailable</option>
+          </select>
+        </div>
+        <div>
+          <h3>{t.privateShow}</h3>
+          <p>{room?.private_show_enabled ? t.active : t.inactive}</p>
+          <div className="studio-form">
+            <select
+              value={mode}
+              onChange={(e) =>
+                setMode(e.target.value as "ticket" | "per_minute")
+              }
+            >
+              <option value="ticket">{t.ticket}</option>
+              <option value="per_minute">{t.perMinute}</option>
+            </select>
+            <input
+              type="number"
+              min="1"
+              value={ticketCost}
+              onChange={(e) => setTicketCost(Number(e.target.value))}
+              aria-label={t.ticketCost}
+            />
+            <input
+              type="number"
+              min="1"
+              value={perMinuteCost}
+              onChange={(e) => setPerMinuteCost(Number(e.target.value))}
+              aria-label={t.minuteCost}
+            />
+            <button
+              type="button"
+              onClick={() => void toggle(!room?.private_show_enabled)}
+            >
+              {room?.private_show_enabled ? t.endPrivate : t.startPrivate}
+            </button>
+          </div>
+        </div>
+        <div>
+          <h3>
+            {t.title === "Stream MVP"
+              ? "Local room moderation"
+              : "本地直播间管理"}
+          </h3>
+          <p className="muted">
+            {t.title === "Stream MVP" ? "Demo Audience only" : "仅限演示观众"}
+          </p>
+          <div className="admin-actions">
+            <button type="button" onClick={() => void moderate("mute")}>
+              {t.title === "Stream MVP" ? "Mute audience" : "禁言观众"}
+            </button>
+            <button type="button" onClick={() => void moderate("unmute")}>
+              {t.title === "Stream MVP" ? "Unmute audience" : "解除观众禁言"}
+            </button>
+          </div>
+        </div>
+      </div>
+      {room?.slug && <ActionMenuManager slug={room.slug} t={t} />}
+      {room?.slug && <CreatorLiveMonitor slug={room.slug} t={t} />}
+      {notice && <p>{notice}</p>}
+    </section>
+  );
+}
+function AdminPanel({ t }: { t: typeof copy.en }) {
+  const [events, setEvents] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [broadcasts, setBroadcasts] = useState<any[]>([]);
+  const [notice, setNotice] = useState("");
+  const refresh = () => {
+    void request("/api/admin/rooms/demo-streamer/moderation").then((d) =>
+      setEvents(d.events),
+    );
+    void request("/api/admin/reports").then((d) => setReports(d.reports));
+    void request("/api/admin/test-transactions").then((d) =>
+      setTransactions(d.transactions),
+    );
+    void request("/api/admin/users").then((d) => setUsers(d.users));
+    void request("/api/admin/rooms/broadcasts").then((d) =>
+      setBroadcasts(d.rooms),
+    );
+  };
+  useEffect(refresh, []);
+  async function action(value: "mute" | "unmute" | "ban" | "unban") {
+    await request("/api/admin/rooms/demo-streamer/moderation", {
+      method: "POST",
+      body: JSON.stringify({
+        targetId: audienceId,
+        action: value,
+        reason: "local admin test",
+      }),
+    });
+    setNotice(`${value}: Demo Audience`);
+    refresh();
+  }
+  async function review(id: string, status: "reviewed" | "dismissed") {
+    await request(`/api/admin/reports/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+    refresh();
+  }
+  return (
+    <section className="workspace">
+      <h2>{t.admin}</h2>
+      <div className="admin-actions">
+        {(["mute", "unmute", "ban", "unban"] as const).map((v) => (
+          <button key={v} onClick={() => void action(v)}>
+            {v}
+          </button>
+        ))}
+      </div>
+      {notice && <p>{notice}</p>}
+      <h3>
+        {t.title === "Stream MVP" ? "Local account review" : "本地账号审核"}
+      </h3>
+      <div className="transaction-list">
+        {users.map((user) => (
+          <p key={user.id}>
+            <strong>{user.display_name}</strong> · {user.role} ·{" "}
+            {user.is_banned ? "banned" : user.is_muted ? "muted" : "active"}
+          </p>
+        ))}
+      </div>
+      <h3>
+        {t.title === "Stream MVP"
+          ? "Broadcast health"
+          : "\u76f4\u64ad\u72b6\u6001"}
+      </h3>
+      <div className="transaction-list">
+        {broadcasts.map((item) => (
+          <p key={item.slug}>
+            <strong>{item.title}</strong> ·{" "}
+            {broadcastLabel(t, item.broadcast_state)} ·{" "}
+            {item.broadcast_checked_at
+              ? new Date(item.broadcast_checked_at).toLocaleString()
+              : "—"}
+          </p>
+        ))}
+      </div>
+      <h3>{t.reports}</h3>
+      {reports.length ? (
+        reports.map((r) => (
+          <p key={r.id}>
+            {r.status} · {r.reason} ·{" "}
+            <button onClick={() => void review(r.id, "reviewed")}>
+              {t.review}
+            </button>{" "}
+            <button onClick={() => void review(r.id, "dismissed")}>
+              {t.dismiss}
+            </button>
+          </p>
+        ))
+      ) : (
+        <p className="muted">{t.noReports}</p>
+      )}
+      <h3>{t.transactions}</h3>
+      {transactions.length ? (
+        <div className="transaction-list">
+          {transactions.map((item, i) => (
+            <p key={i}>
+              <strong>{item.participant_name}</strong> · {item.reference_type} ·{" "}
+              {item.entry_type} · {item.amount > 0 ? "+" : ""}
+              {item.amount} {t.coins}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">{t.noTransactions}</p>
+      )}
+      <h3>{t.audit}</h3>
+      {events.map((e, i) => (
+        <p key={i}>
+          {e.action} · {e.target_name} · {e.reason ?? "-"}
+        </p>
+      ))}
+    </section>
+  );
+}
+function CreatorProfile({
+  streamerId,
+  fallbackName,
+  t,
+}: {
+  streamerId: string;
+  fallbackName: string;
+  t: Record<string, string>;
+}) {
+  const [profile, setProfile] = useState<StreamerProfile | null>(null);
+  useEffect(() => {
+    void request(`/api/streamers/${streamerId}`)
+      .then((d) => setProfile(d.streamer))
+      .catch(() => setProfile(null));
+  }, [streamerId]);
+  if (!profile) return null;
+  return (
+    <aside className="creator-profile" aria-label={`${fallbackName} profile`}>
+      <p className="eyebrow">
+        {profile.room_status === "live" ? t.live : t.offline}
+      </p>
+      <h3>{profile.display_name}</h3>
+      <p>{profile.bio}</p>
+      <div>
+        <span>{profile.category}</span>
+        <span>
+          {profile.follower_count} {t.followers}
+        </span>
+        <span>{profile.schedule_text}</span>
+      </div>
+    </aside>
+  );
+}
+function PrivateShowStatus({
+  show,
+  t,
+}: {
+  show: any;
+  t: Record<string, string>;
+}) {
+  const [now, setNow] = useState(Date.now());
+  const expiresAt = show?.session?.expiresAt as string | null | undefined;
+  useEffect(() => {
+    if (!expiresAt) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [expiresAt]);
+  if (!show?.active) return null;
+  const remaining = expiresAt
+    ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000))
+    : null;
+  const hasAccess = Boolean(show.session?.hasAccess) && remaining !== 0;
+  return (
+    <aside
+      className={`private-status ${hasAccess ? "access-active" : "access-locked"}`}
+    >
+      <p className="eyebrow">
+        {t.privateShow} ·{" "}
+        {show.session.mode === "ticket" ? t.ticket : t.perMinute}
+      </p>
+      <strong>
+        {hasAccess ? t.privateAccessActive : t.privateAccessLocked}
+      </strong>
+      <span>
+        {show.session.mode === "ticket"
+          ? `${show.session.ticket_cost} ${t.coins}`
+          : `${show.session.per_minute_cost} ${t.coins}`}
+      </span>
+      {hasAccess && remaining !== null && (
+        <span>
+          {t.accessEnds} {remaining}s
+        </span>
+      )}
+    </aside>
+  );
+}
+function RoomView({
+  room,
+  back,
+  t,
+}: {
+  room: Room;
+  back: () => void;
+  t: Record<string, string>;
+}) {
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
+  const [playerMessage, setPlayerMessage] = useState(t.preparing);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [presence, setPresence] = useState(0);
+  const [chatStatus, setChatStatus] = useState(t.connecting);
+  const [draft, setDraft] = useState("");
+  const [wallet, setWallet] = useState<number | null>(null);
+  const [walletHistory, setWalletHistory] = useState<any[]>([]);
+  const [gifts, setGifts] = useState<any[]>([]);
+  const [actions, setActions] = useState<any[]>([]);
+  const [goalProgress, setGoalProgress] = useState<any>(null);
+  const [supportFeed, setSupportFeed] = useState<any[]>([]);
+  const [giftNotice, setGiftNotice] = useState("");
+  const [following, setFollowing] = useState(false);
+  const [show, setShow] = useState<any>(null);
+  const [broadcast, setBroadcast] = useState<any>({
+    state: room.broadcast_state ?? "offline",
+    message: room.broadcast_status_message ?? t.offline,
+    checkedAt: room.broadcast_checked_at ?? null,
+  });
+  const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  const refreshShow = () =>
+    void request(`/api/rooms/${room.slug}/private-show`).then(setShow);
+  const refreshWallet = () => {
+    void request("/api/wallet").then((d) => setWallet(d.balance));
+    void request("/api/wallet/history").then((d) =>
+      setWalletHistory(d.entries),
+    );
+  };
+  const refreshBroadcast = () =>
+    void request(`/api/rooms/${room.slug}/broadcast`).then((d) =>
+      setBroadcast(d.broadcast),
+    );
+  const refreshActions = () =>
+    void request(`/api/rooms/${room.slug}/actions`).then((d) => {
+      setActions(d.actions);
+      setGoalProgress(d.goal);
+    });
+  const refreshSupportFeed = () =>
+    void request(`/api/rooms/${room.slug}/support-feed`).then((d) =>
+      setSupportFeed(d.support),
+    );
+  const refreshPlayback = () =>
+    broadcast.state !== "live"
+      ? setIframeUrl(null)
+      : void request(`/api/rooms/${room.slug}/playback`)
+          .then((d) => setIframeUrl(d.iframeUrl))
+          .catch((e) =>
+            setPlayerMessage(e.message === "403" ? t.privateLocked : t.offline),
+          );
+  useEffect(() => {
+    setPlayerMessage(t.preparing);
+    setChatStatus(t.connecting);
+  }, [t]);
+  useEffect(() => {
+    void request(`/api/rooms/${room.slug}/visit`, {
+      method: "POST",
+      body: "{}",
+    });
+    refreshPlayback();
+    refreshBroadcast();
+    refreshShow();
+    refreshWallet();
+    void request(`/api/rooms/${room.slug}/chat-history`).then((d) =>
+      setMessages(d.messages),
+    );
+    void request("/api/gifts").then((d) => setGifts(d.gifts));
+    refreshActions();
+    refreshSupportFeed();
+  }, [room.slug]);
+  useEffect(() => {
+    refreshPlayback();
+  }, [broadcast.state, room.slug]);
+  useEffect(() => {
+    const expiry = show?.session?.expiresAt;
+    if (!expiry) return;
+    const delay = new Date(expiry).getTime() - Date.now() + 150;
+    const timer = window.setTimeout(
+      () => {
+        refreshShow();
+        refreshPlayback();
+      },
+      Math.max(delay, 0),
+    );
+    return () => window.clearTimeout(timer);
+  }, [show?.session?.expiresAt, room.slug]);
+  useEffect(() => {
+    const socket = io({ transports: ["websocket"] });
+    socketRef.current = socket;
+    socket.on("connect", () => {
+      setChatStatus(t.joining);
+      socket.emit("room:join", room.slug, (result: { error?: string }) =>
+        setChatStatus(
+          result?.error ? `${t.unavailable}: ${result.error}` : t.connected,
+        ),
+      );
+    });
+    socket.on("connect_error", () => setChatStatus(t.unavailable));
+    socket.on("room:presence", (d: { count: number }) => setPresence(d.count));
+    socket.on("chat:message", (d) => setMessages((items) => [...items, d]));
+    socket.on(
+      "moderation:action",
+      (d: { action?: string; targetId?: string }) => {
+        if (
+          d.targetId === audienceId &&
+          ["mute", "ban", "creator_mute"].includes(d.action ?? "")
+        )
+          setChatStatus(`${t.unavailable}: ${d.action}`);
+      },
+    );
+    socket.on("gift:sent", (d) => {
+      setGiftNotice(`${d.sender} ${t.send} ${d.name}`);
+      if (d.goal) setGoalProgress(d.goal);
+      refreshSupportFeed();
+    });
+    socket.on("action:purchased", (d) => {
+      setGiftNotice(
+        `${d.sender} ${t.title === "Stream MVP" ? "supported" : "\u652f\u6301\u4e86"} ${d.title}`,
+      );
+      if (d.goal) setGoalProgress(d.goal);
+      refreshSupportFeed();
+    });
+    socket.on(
+      "broadcast:state",
+      (d: {
+        state: "live" | "connecting" | "offline" | "unavailable";
+        message: string;
+      }) => {
+        setBroadcast({
+          state: d.state,
+          message: d.message,
+          checkedAt: new Date().toISOString(),
+        });
+        if (d.state !== "live") setIframeUrl(null);
+      },
+    );
+    return () => {
+      socket.disconnect();
+    };
+  }, [room.slug, t]);
+  function send() {
+    if (draft.trim() && socketRef.current?.connected) {
+      socketRef.current.emit(
+        "chat:send",
+        {
+          roomSlug: room.slug,
+          body: draft.trim(),
+        },
+        (result: { error?: string }) => {
+          if (result?.error) setChatStatus(`${t.unavailable}: ${result.error}`);
+        },
+      );
+      setDraft("");
+    }
+  }
+  async function sendGift(id: string) {
+    const d = await request(`/api/rooms/${room.slug}/gifts`, {
+      method: "POST",
+      body: JSON.stringify({ giftId: id, idempotencyKey: crypto.randomUUID() }),
+    });
+    setGiftNotice(`${t.send} ${d.gift.name}`);
+    refreshWallet();
+  }
+  async function purchaseAction(id: string) {
+    const d = await request(`/api/rooms/${room.slug}/actions/${id}/purchase`, {
+      method: "POST",
+      body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+    });
+    if (!d.duplicate)
+      setGiftNotice(
+        `${t.title === "Stream MVP" ? "Action supported" : "\u5df2\u652f\u6301\u52a8\u4f5c"}: ${d.action.title}`,
+      );
+    if (d.action?.goal) setGoalProgress(d.action.goal);
+    refreshWallet();
+    refreshSupportFeed();
+  }
+  async function buyAccess() {
+    const d = await request(`/api/rooms/${room.slug}/private-show/purchase`, {
+      method: "POST",
+      body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+    });
+    setGiftNotice(`${t.buyAccess}: ${d.cost}`);
+    refreshWallet();
+    refreshShow();
+    refreshPlayback();
+  }
+  async function follow() {
+    await request(`/api/streamers/${room.streamer_id}/follow`, {
+      method: "POST",
+      body: "{}",
+    });
+    setFollowing(true);
+  }
+  async function report() {
+    await request(`/api/rooms/${room.slug}/reports`, {
+      method: "POST",
+      body: JSON.stringify({ reason: "Local test report" }),
+    });
+    setGiftNotice(t.reportSent);
+  }
+  return (
+    <section className="workspace">
+      <button className="secondary" onClick={back}>
+        {t.back}
+      </button>
+      {iframeUrl && broadcast.state === "live" ? (
+        <>
+          <p className="watching-live">
+            {t.title === "Stream MVP"
+              ? "You are watching the creator’s live broadcast."
+              : "\u60a8\u6b63\u5728\u89c2\u770b\u4e3b\u64ad\u7684\u76f4\u64ad\u3002"}
+          </p>
+          <iframe
+            className="player"
+            title="Cloudflare Stream playback"
+            src={iframeUrl}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        </>
+      ) : (
+        <div className="player-placeholder">
+          {broadcast.state === "connecting"
+            ? t.connectingBroadcast
+            : broadcast.state === "unavailable"
+              ? t.unavailableBroadcast
+              : broadcast.message || playerMessage}
+        </div>
+      )}
+      <p className="eyebrow">
+        {room.status} · {presence} {t.inRoom}
+      </p>
+      <h2>{room.title}</h2>
+      <p className="eyebrow">
+        {broadcastLabel(t, broadcast.state)} · {presence} {t.inRoom}
+      </p>
+      <p>
+        {room.streamer_name} · {room.category}
+      </p>
+      {room.goal_text && (
+        <aside className="room-goal">
+          <p className="eyebrow">{t.goal}</p>
+          <strong>{room.goal_text}</strong>
+        </aside>
+      )}
+      {goalProgress && (
+        <aside className="support-actions">
+          <div>
+            <p className="eyebrow">
+              {t.title === "Stream MVP"
+                ? "Support / Actions"
+                : "\u652f\u6301 / \u52a8\u4f5c"}
+            </p>
+            <strong>{goalProgress.goal_text}</strong>
+          </div>
+          <div className="goal-progress">
+            <div className="progress-track">
+              <span
+                style={{
+                  width: `${Math.min(100, Math.round((goalProgress.goal_progress / goalProgress.goal_target) * 100))}%`,
+                }}
+              />
+            </div>
+            <small>
+              {goalProgress.goal_progress} / {goalProgress.goal_target}{" "}
+              {t.coins}
+            </small>
+          </div>
+          <div className="viewer-actions">
+            {actions.length ? (
+              actions.map((action) => (
+                <button
+                  key={action.id}
+                  onClick={() => void purchaseAction(action.id)}
+                >
+                  <strong>{action.title}</strong>
+                  <span>
+                    {action.coin_cost} {t.coins}
+                    {action.duration_label ? ` · ${action.duration_label}` : ""}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="muted">
+                {t.title === "Stream MVP"
+                  ? "No actions are active right now."
+                  : "\u6682\u65e0\u5df2\u542f\u7528\u52a8\u4f5c\u3002"}
+              </p>
+            )}
+          </div>
+        </aside>
+      )}
+      <aside className="public-support-feed">
+        <p className="eyebrow">
+          {t.title === "Stream MVP"
+            ? "Recent support"
+            : "\u6700\u8fd1\u652f\u6301"}
+        </p>
+        {supportFeed.length ? (
+          supportFeed.map((item, index) => (
+            <p key={`${item.created_at}-${index}`}>
+              <strong>{item.sender}</strong> ·{" "}
+              <span className={`support-kind ${item.support_type}`}>
+                {item.support_type === "gift"
+                  ? t.title === "Stream MVP"
+                    ? "Gift"
+                    : "\u793c\u7269"
+                  : t.title === "Stream MVP"
+                    ? "Action"
+                    : "\u52a8\u4f5c"}
+              </span>{" "}
+              · {item.label} · {item.coin_cost} {t.coins}
+            </p>
+          ))
+        ) : (
+          <p className="muted">
+            {t.title === "Stream MVP"
+              ? "No support activity yet."
+              : "\u6682\u65e0\u652f\u6301\u52a8\u6001\u3002"}
+          </p>
+        )}
+      </aside>
+      <CreatorProfile
+        streamerId={room.streamer_id}
+        fallbackName={room.streamer_name}
+        t={t}
+      />
+      <PrivateShowStatus show={show} t={t} />
+      <div className="gift">
+        <button onClick={() => void follow()}>
+          {following ? t.following : t.follow}
+        </button>
+        <button onClick={() => void report()}>{t.report}</button>
+        {show?.active && !show.session.hasAccess && (
+          <button onClick={() => void buyAccess()}>
+            {t.buyAccess} (
+            {show.session.mode === "ticket"
+              ? show.session.ticket_cost
+              : show.session.per_minute_cost}
+            )
+          </button>
+        )}
+      </div>
+      <div className="gift">
+        <span>
+          {t.coins}: {wallet ?? "..."}
+        </span>
+        {gifts.map((gift) => (
+          <button key={gift.id} onClick={() => void sendGift(gift.id)}>
+            {t.send} {gift.name_en} ({gift.coin_cost})
+          </button>
+        ))}
+        {giftNotice && <strong>{giftNotice}</strong>}
+      </div>
+      <aside className="wallet-history">
+        <p className="eyebrow">
+          {t.title === "Stream MVP" ? "Recent test activity" : "最近测试记录"}
+        </p>
+        {walletHistory
+          .filter((entry) => entry.reference_type !== "seed")
+          .slice(0, 4)
+          .map((entry, index) => (
+            <p key={index}>
+              {entry.entry_type} · {entry.amount > 0 ? "+" : ""}
+              {entry.amount} {t.coins}
+            </p>
+          ))}
+      </aside>
+      <div className="chat">
+        <h3>{t.liveChat}</h3>
+        <p className="muted">{chatStatus}</p>
+        <div className="messages">
+          {messages.map((item) => (
+            <p key={item.id}>
+              <strong>{item.sender.displayName}</strong> {item.body}
+            </p>
+          ))}
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+        >
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            maxLength={500}
+            placeholder={t.message}
+          />
+          <button>{t.send}</button>
+        </form>
+      </div>
+    </section>
+  );
+}
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />{" "}
+  </StrictMode>,
+);

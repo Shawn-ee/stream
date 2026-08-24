@@ -1,0 +1,40 @@
+{
+  "name": "stream-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently --names api,web --prefix-colors blue,green \"npm run dev --workspace=@stream-mvp/api\" \"npm run dev --workspace=@stream-mvp/web\"",
+    "check": "npm run check --workspaces --if-present",
+    "test": "node --env-file=.env --import tsx --test apps/api/tests/schema.test.ts apps/api/tests/broadcast-status.test.ts",
+    "db:migrate": "node --env-file=.env --import tsx apps/api/src/db/migrate.ts",
+    "db:seed": "node --env-file=.env --import tsx apps/api/src/db/seed.ts",
+    "verify:local": "node --env-file=.env --import tsx scripts/verify-local.ts",
+    "verify:realtime": "node --env-file=.env scripts/verify-realtime.mjs",
+    "verify:realtime:cluster": "node --env-file=.env scripts/verify-realtime-cluster.mjs",
+    "verify:auth": "node --env-file=.env scripts/verify-auth.mjs",
+    "verify:security": "node --env-file=.env scripts/verify-security.mjs",
+    "verify:resilience": "node --env-file=.env scripts/verify-resilience.mjs",
+    "verify:logs": "node --env-file=.env scripts/verify-log-redaction.mjs",
+    "verify:external-gates": "node scripts/verify-external-gates.mjs",
+    "verify:backup-restore": "node --env-file=.env scripts/verify-backup-restore.mjs",
+    "verify:production-compose": "node scripts/verify-production-compose.mjs",
+    "verify:image-lock": "node scripts/verify-image-lock.mjs",
+    "verify:release-preflight": "node scripts/verify-release-preflight.mjs",
+    "verify:load:100": "node --env-file=.env scripts/verify-load-100.mjs",
+    "verify:load:production:100": "node scripts/verify-load-production-100.mjs",
+    "build": "npm run build --workspaces --if-present",
+    "verify:lifecycle": "node --env-file=.env scripts/verify-lifecycle.mjs",
+    "verify:cloudflare": "node --env-file=.env scripts/verify-cloudflare.mjs",
+    "verify:cloudflare-live": "node --env-file=.env scripts/verify-cloudflare-live.mjs",
+    "verify:camera-live": "node --env-file=.env scripts/verify-camera-cloudflare.mjs",
+    "verify:expanded": "npm run db:seed && node --env-file=.env scripts/verify-expanded.mjs && npm run db:seed",
+    "verify:staging": "npm run db:migrate && npm run db:seed && npm run check && npm test && npm run verify:image-lock && npm run verify:local && npm run verify:security && npm run verify:logs && npm run verify:external-gates && npm run verify:auth && npm run db:seed && npm run verify:realtime && npm run verify:realtime:cluster && npm run verify:lifecycle && npm run verify:expanded"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

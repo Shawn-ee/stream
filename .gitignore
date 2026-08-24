@@ -1,0 +1,16 @@
+# Local credentials and generated state
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.dockerignore
+node_modules/
+dist/
+coverage/
+.turbo/
+work/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+*.docx

@@ -1,0 +1,4 @@
+ALTER TABLE live_rooms ADD COLUMN goal_target INTEGER NOT NULL DEFAULT 500;
+ALTER TABLE live_rooms ADD COLUMN goal_progress INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE room_actions (id UUID PRIMARY KEY, room_id UUID NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE, title TEXT NOT NULL, coin_cost INTEGER NOT NULL CHECK (coin_cost > 0), duration_label TEXT, is_active BOOLEAN NOT NULL DEFAULT TRUE, display_order INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE room_action_purchases (id UUID PRIMARY KEY, action_id UUID NOT NULL REFERENCES room_actions(id), viewer_id UUID NOT NULL REFERENCES users(id), coin_cost INTEGER NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
