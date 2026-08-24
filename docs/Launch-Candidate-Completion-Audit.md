@@ -4,7 +4,7 @@
 
 This audit evaluates the repository against `GOAL.md` without treating test names or prior claims as proof by themselves. The private launch-candidate software boundary is implemented and locally verified for the defined 100-active-user workload. The full goal is not yet closed because no Linux staging host, host access, secret/TLS/backup/monitoring choices, or deployment authorization has been supplied; therefore host deployment, soak, restore, and rollback evidence is missing by design.
 
-The exact owner-approved application-source candidate audited here is commit `3d0b0ca6198785aded7203043d1a153ec7360c3e`. The immutable tag `stream-launch-candidate-0.1.0` points to the earlier baseline and must not be used as a substitute for this commit.
+The exact local application-source candidate audited here is commit `4cadd6a631544377b826ea998dcd1102d5f5799c`. It has not yet been approved for publication or deployment. The immutable tag `stream-launch-candidate-0.1.0` points to the earlier baseline and must not be used as a substitute for this commit.
 
 ## Requirement evidence
 
@@ -13,7 +13,7 @@ The exact owner-approved application-source candidate audited here is commit `3d
 | Original bilingual audience, creator, room, and administrator product | Application source; focused API/realtime tests; `Launch-Acceptance-Checklist.md`; full staging gate | Proven locally |
 | Truthful video boundary with Cloudflare owning ingest/transcoding/delivery | Server-side playback authorization and lifecycle code/tests; `Camera-Audio-Test-Report.md` records owner-approved physical audio/video-track proof and offline recovery | Proven for the existing test input; no new Cloudflare action authorized |
 | Secure authentication and authorization | Hashed synthetic credentials, database sessions, CSRF/origin/cookie controls, server-derived WebSocket identity; auth/security/schema/realtime verifiers | Proven for private synthetic-account staging; real customer identity lifecycle intentionally excluded |
-| Reproducible packaging and environment safety | Digest-locked Dockerfiles/Compose, migrations, localhost gateway, readiness, production-environment validator, fresh random-secret verification projects, image-lock and supply-chain checks | Proven locally |
+| Reproducible packaging and environment safety | Digest-locked Dockerfiles/Compose, migrations, localhost gateway, readiness, production-environment validator, fresh random-secret verification projects, image-lock and supply-chain checks, and guarded POSIX staging operator | Proven locally |
 | Secrets absent from tracked/browser artifacts | Release preflight source scan, browser-source/build scan, placeholder templates, log-redaction verifier, server-only Cloudflare boundary | Proven for repository and tested artifacts; the previously shared Cloudflare token must be rotated before deployment |
 | Database backup and restore | Disposable backup/restore verifier and deployment runbook | Proven locally; encrypted off-host destination requires an approved host |
 | Realtime scale-out design | Redis Socket.IO adapter, cluster-aware presence, PostgreSQL pool, bounded events/results, two-process cluster verifier | Proven locally |

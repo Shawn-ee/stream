@@ -34,36 +34,34 @@ The check requires Linux on x86-64 or ARM64, Docker 24+, Docker Compose 2.20+, a
 
 Set `PRIVATE_SSH_TUNNEL=true` only for the recommended localhost-only SSH-tunnel boundary, with `WEB_ORIGIN=http://localhost:<APP_PORT>`. Otherwise keep it `false` and use the exact approved private HTTPS origin. Set `CLOUDFLARE_STREAM_ENABLED=false` and leave all four `CLOUDFLARE_*` values blank when media playback is excluded; when enabled, all four rotated values are required.
 
-Validate the completed file before Docker reads it. The command reports field names and modes only; it never prints secret values:
+On Linux, keep the completed environment file owner-only. The guarded operator runs the validator inside the locked Node container, so Node/npm is not required on the host. It reports field names and modes only and never prints secret values:
 
-```powershell
-npm run validate:production-env -- .env.production
+```sh
+chmod 600 /approved/secret/path/.env.production
+export STREAM_PRIVATE_STAGING_APPROVED=I_APPROVE_PRIVATE_STAGING
+export EXPECTED_RELEASE_COMMIT=4cadd6a631544377b826ea998dcd1102d5f5799c
+export PRODUCTION_ENV_FILE=/approved/secret/path/.env.production
+sh deploy/private-staging-operator.sh plan
 ```
 
-On Linux, the validator also rejects an environment file readable by group or other users. Use owner-only permissions (`chmod 600 .env.production`) before validation.
-
-Validate without starting services:
-
-```powershell
-docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
-```
+The `plan` action verifies the exact clean source commit, runs the read-only host admission check, validates the environment, and validates Compose without starting a service. These environment variables record operator intent for one shell; they are not a substitute for the owner's approval statement.
 
 ## Build and start privately
 
-```powershell
-$env:PRODUCTION_ENV_FILE='.env.production'
-docker compose --env-file .env.production -f docker-compose.production.yml build
-docker compose --env-file .env.production -f docker-compose.production.yml up -d
-docker compose --env-file .env.production -f docker-compose.production.yml ps
-Remove-Item Env:PRODUCTION_ENV_FILE
+After the approved `plan` passes, require a separate action-specific confirmation and start through the guarded operator:
+
+```sh
+export APPROVED_STAGING_ACTION=start
+sh deploy/private-staging-operator.sh start
+unset APPROVED_STAGING_ACTION
 ```
 
 The migration must exit successfully before the API starts. The API must report healthy before the web gateway starts. Verify the gateway at `http://127.0.0.1:8080/healthz` and readiness from inside the API container:
 
-```powershell
-$env:PRODUCTION_ENV_FILE='.env.production'
-docker compose --env-file .env.production -f docker-compose.production.yml exec -T api wget -qO- http://127.0.0.1:3001/ready
-Remove-Item Env:PRODUCTION_ENV_FILE
+`start` builds, runs migrations, starts services, then verifies the localhost-only published gateway, migration exit code, API readiness, and authenticated private metrics. A later read-only repeat is:
+
+```sh
+sh deploy/private-staging-operator.sh verify
 ```
 
 Do not seed synthetic demo users on a real deployment. Seeding is only part of disposable localhost validation.
@@ -99,10 +97,11 @@ The repository verifier creates and destroys only the exact disposable database 
 
 ## Shutdown and incident checks
 
-```powershell
-$env:PRODUCTION_ENV_FILE='.env.production'
-docker compose --env-file .env.production -f docker-compose.production.yml down
-Remove-Item Env:PRODUCTION_ENV_FILE
+```sh
+export APPROVED_STAGING_ACTION=stop
+sh deploy/private-staging-operator.sh stop
+unset APPROVED_STAGING_ACTION
+unset STREAM_PRIVATE_STAGING_APPROVED EXPECTED_RELEASE_COMMIT PRODUCTION_ENV_FILE
 ```
 
 `down` preserves named data volumes. Inspect structured API logs, `/ready`, the administrator-only operational counters, PostgreSQL health, Redis health, and reverse-proxy health. External alerts and a managed monitoring destination remain required before public launch.
