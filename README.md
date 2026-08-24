@@ -15,6 +15,10 @@ The current release is intended for private evaluation and an owner-approved Lin
 
 See the [documentation index](docs/Documentation-Index.md) for requirements, operations, architecture, verification evidence, and approval boundaries.
 
+## Version baseline
+
+The reviewed baseline, with Markdown-only documentation, is commit [`8aa41bf`](https://github.com/Shawn-ee/stream/commit/8aa41bf688336c1f8a0a8478e69d556d094477b5), with annotated tag [`stream-launch-candidate-0.1.0`](https://github.com/Shawn-ee/stream/tree/stream-launch-candidate-0.1.0). The tag identifies verified source and deployment definitions; an approved staging operator must additionally record the built application-image digests used on that host.
+
 ## Local development
 
 Prerequisites: Node.js 24, Docker Desktop/Engine, and Docker Compose.

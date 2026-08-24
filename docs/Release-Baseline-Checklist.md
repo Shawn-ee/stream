@@ -2,7 +2,16 @@
 
 ## Purpose
 
-This checklist prepares a reviewed, immutable local release baseline without implying permission to deploy, publish, or push it anywhere. Creating the initial commit/tag remains an owner decision.
+This checklist records the reviewed initial release baseline and remains the procedure for future release identifiers. A commit or tag never implies permission to deploy or expose the application.
+
+## Completed baseline record
+
+- Owner approval received: 2026-08-24.
+- Repository: `https://github.com/Shawn-ee/stream`.
+- Branch: `main`.
+- Commit: `8aa41bf688336c1f8a0a8478e69d556d094477b5`.
+- Annotated tag: `stream-launch-candidate-0.1.0`.
+- Documentation format: Markdown only. Project source was published; `.docx`, `.env`, credentials, generated builds, dependencies, and scratch files were excluded.
 
 ## Automated preflight
 
@@ -21,14 +30,14 @@ It performs only read-only Git operations and verifies:
 - browser-facing source/build output contains no server-only environment-variable names or local environment file;
 - no files are staged when the preflight runs.
 
-## Owner review before the initial commit
+## Review procedure for future release baselines
 
 1. Review `git add --dry-run --all` and confirm every proposed file belongs to the product or its operational evidence.
 2. Review the complete worktree diff after staging; because this repository has no existing baseline, treat every line as new.
 3. Confirm `.env` remains ignored and no real credential appears in staged content.
 4. Run `npm run verify:staging`, `npm run verify:production-compose`, `npm run verify:backup-restore`, and `npm run verify:load:100` as appropriate for the release evidence.
-5. Record a local initial commit with a descriptive message only after explicit owner approval.
-6. Create an immutable local annotated tag only after reviewing the commit ID and final checks.
+5. Record a release commit with a descriptive message only after explicit owner approval.
+6. Create an immutable annotated tag only after reviewing the commit ID and final checks.
 7. Do not push, publish images, deploy, or expose the service without separate explicit approval.
 
 ## Suggested identifiers

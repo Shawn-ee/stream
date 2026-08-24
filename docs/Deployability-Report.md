@@ -41,7 +41,7 @@ The repository is a secure, reproducibly packaged private launch candidate for t
 - Synthetic local accounts are production-shaped test identity, not a real customer account lifecycle. Email/OAuth, recovery, verification, deletion/export, MFA, and credential-abuse operations are not implemented.
 - The load proof is short, local, single-room, and uses repeated synthetic account identities; it is not a multi-hour internet soak with a production-sized dataset.
 - External monitoring/alert delivery, encrypted off-host backup storage, managed secrets, TLS certificates, and host hardening cannot be proven without an approved target environment. The scrape format, authentication boundary, signals, and alert thresholds are ready for that integration.
-- The current workspace has no versioned baseline: project files appear untracked. A reviewed initial commit and immutable release tag/image digest are required before the documented rollback procedure is operational.
+- The reviewed source baseline is versioned at commit `8aa41bf688336c1f8a0a8478e69d556d094477b5` with annotated tag `stream-launch-candidate-0.1.0` in the owner repository. Application-image digests must still be recorded after an approved staging build so host rollback identifies both source and deployed images.
 - Physical camera/microphone and actual Cloudflare signed audio/video tracks are verified. OBS-specific UI and a human visual/audio quality assessment remain unverified because OBS is not installed and the in-app browser blocked a fresh localhost reload during the short live window.
 - The previously shared Cloudflare test token must be revoked/rotated before any deployment. No token was used or modified in this work.
 - Payments/cashout, enforceable age verification, KYC, privacy/compliance policy, content governance, and jurisdiction-specific legal readiness remain intentionally excluded.
@@ -49,7 +49,6 @@ The repository is a secure, reproducibly packaged private launch candidate for t
 ## Owner-approval gates remaining
 
 1. Approve a specific private Linux staging host and secret/TLS/monitoring approach before any deployment action.
-2. Approve creation of a reviewed version-control baseline and immutable release identifier for rollback.
-3. Separately approve and obtain professional direction for real identity, payments, age/KYC, content policy, privacy, and legal/compliance work before public launch.
+2. Separately approve and obtain professional direction for real identity, payments, age/KYC, content policy, privacy, and legal/compliance work before public launch.
 
 The 100-user local application-readiness claim is demonstrated. Public-production readiness is not claimed until the remaining owner-gated evidence and operational controls are completed.

@@ -31,6 +31,7 @@
 - Upgraded the web gateway from Nginx 1.27 to official stable Nginx 1.30.4, locked Node/Nginx/PostgreSQL/Redis to verified multi-architecture digests, and added a staging-enforced image-lock verifier.
 - Added a one-command production-container 100-user verifier that builds the locked topology, seeds disposable accounts, runs the measured workload through the gateway, resets demo data, and shuts down without deleting volumes.
 - Prepared the GitHub baseline as Markdown-only documentation: added a documentation index, modernized the README to the verified launch-candidate state, excluded Word/lock files, and made release preflight reject `.docx` publication.
+- With owner approval, published the reviewed baseline commit `8aa41bf` and annotated tag `stream-launch-candidate-0.1.0` to `Shawn-ee/stream`; follow-up readiness records now treat version control as complete while keeping Linux deployment separately gated.
 
 ## 2026-08-23 - Harness loop stop-rule audit
 
