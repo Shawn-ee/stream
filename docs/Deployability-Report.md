@@ -25,6 +25,7 @@ The repository is a secure, reproducibly packaged private launch candidate for t
 - Focused authentication, security, schema, lifecycle, realtime, two-process realtime, expanded workflow, build, deployment-start, backup/restore, and 100-user checks.
 - Fresh-volume, random-secret, digest-locked production-container load result: 100 connected sockets, zero unexpected disconnects, all p95 targets passed, 20 pooled database connections with zero settled waiters/errors, 160 MiB RSS, 121% single-core-equivalent CPU, 1 MiB Redis memory, and exactly-once handling of a ten-request duplicate race.
 - All Node/Nginx/PostgreSQL/Redis foundations are multi-architecture digest-locked; the web gateway uses official stable Nginx 1.30.4, and a verifier rejects floating image references.
+- The npm lockfile is restricted to HTTPS registry artifacts with SHA-512 integrity, production install scripts are pinned to the two exact reviewed esbuild versions, an offline CycloneDX SBOM gate runs in staging, and the latest online production-dependency audit reported zero known vulnerabilities.
 - Synthetic demo data reset after verification.
 
 ## Operational requirements

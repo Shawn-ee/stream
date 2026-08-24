@@ -29,6 +29,8 @@ Before creating the first Git baseline, run `npm run verify:release-preflight` a
 
 For the protected metrics endpoint, initial 100-user alert thresholds, incident response order, structured-log verification, and local dependency-recovery drill, use `docs/Monitoring-Runbook.md`.
 
+Run `npm run verify:supply-chain` for the offline lockfile/integrity/install-script/SBOM gate. Run `npm run verify:supply-chain:online` before a release when registry access is available; it performs the live production-dependency vulnerability audit and does not modify dependencies.
+
 ## Verify Cloudflare live playback
 
 1. In Cloudflare Stream, open the existing local test Live Input and copy its RTMPS server URL and stream key into OBS. Keep the stream key private.

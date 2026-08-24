@@ -36,6 +36,7 @@
 - Added a secret-safe pre-start production-environment validator and staging-enforced failure tests for placeholders, weak or reused secrets, database/Redis mismatches, unsafe origins, Cloudflare partial configuration, unknown variables, and Linux file permissions.
 - Reworked production-package and 100-user verifiers to use ephemeral validator-approved environments with distinct random secrets and Cloudflare disabled, replacing the former placeholder-template runtime and deleting temporary files after every run.
 - Fixed hidden-state dependence found by that change: production verifiers now use uniquely named Docker projects with fresh disposable volumes and remove only those exact test resources, so an old database password or schema cannot influence release evidence.
+- Added supply-chain controls: exact-version npm install-script approvals for the two Linux esbuild packages, HTTPS npm-registry and SHA-512 lock integrity checks, an offline CycloneDX production SBOM gate, and a separate live audit command. The current production audit reports zero known vulnerabilities.
 
 ## 2026-08-23 - Harness loop stop-rule audit
 
