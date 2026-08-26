@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-08-26 - Professional Creator Broadcast Cockpit
+
+- Replaced the long creator feature dashboard with a compact creator-specific shell, video-first signed confidence monitor, clear OBS start flow, and responsive control rail.
+- Added truthful bilingual preview states, realtime lifecycle synchronization, deduplicated audience presence, and tabbed chat, gift/action support, and audience moderation surfaces.
+- Moved room, profile, private-show, action-menu, OBS help, local state simulation, and demo moderation controls into secondary expandable settings.
+- Added an owner-only lifecycle-backed current/latest session summary with duration, gift/action totals, action count, and top supporter; expanded lifecycle verification covers calculation and authorization.
+- Preserved the server-side Cloudflare boundary: no camera capture, automatic OBS control, stream-key display, external broadcast, payment, or deployment action was added.
+
+## 2026-08-26 - Public live-broadcast activation hardening
+
+- Added an explicit complete Cloudflare Stream enable/configuration gate instead of inferring readiness from individual values.
+- Removed the local fake-live selector from production and made its API route unavailable there while preserving local lifecycle tests.
+- Sanitized playback-token failures into a generic application response and added a creator-facing configured/unconfigured state without exposing provider details.
+- Added a dormant-by-default server lifecycle poller that automatically reconciles configured rooms every 15 seconds, isolates per-room failures, emits only real state transitions, and stops cleanly on shutdown.
+- Confirmed the existing enabled `stream-mvp-local-test` Live Input will be reused; no new input, DNS route, Tunnel, or subscription change is required.
+- Deployed the hardened Stream configuration and lifecycle poller to the existing Linux Stream project without restarting the VM, Tunnel, database, Redis, or unrelated Odoo services.
+- Replaced the exposed development credential with one active least-privilege production Stream token and, with owner approval, deleted both obsolete expiring development tokens.
+- Completed an owner-approved physical Logitech camera/microphone broadcast through the public site. Automatic lifecycle detection reached live, signed playback contained audio and video, a Linux-side audience client fetched the public signed HLS manifest, and the room returned offline after encoder stop.
+- Added restricted environment-handoff and remote-audience verification helpers; removed temporary credential files and reset demo data after the test.
+
+## 2026-08-26 - Cloudflare Tunnel root-domain cutover
+
+- Added a separately managed, digest-locked Cloudflare Tunnel Compose definition that joins only the Stream network and receives its rotatable token from an ignored owner-only environment file.
+- Documented the approved `holiwyn.online` HTTPS origin, root-hostname routing, preserved Namecheap email DNS, and independent connector lifecycle.
+- Activated the root hostname through the named tunnel without Cloudflare Access at the owner's direction. `www` is intentionally not configured, and Cloudflare Stream remains a separate activation gate.
+
 ## 2026-08-26 - Individual accounts deployed to private Linux staging
 
 - Backed up and restored the active private database before upgrading exact source from `e1f64ad` to `e32058d`.

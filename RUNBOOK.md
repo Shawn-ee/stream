@@ -51,9 +51,32 @@ This is the only test that uses Cloudflare Stream resources. Do not begin it unt
 5. In a local audience session, Codex verifies the authorized player appears. The creator confirms that video and audio are correct.
 6. The creator manually stops OBS. Codex verifies the lifecycle returns to `offline` and the player is hidden.
 
-This procedure does not authorize Cloudflare configuration changes, new Live Inputs, credential rotation, public deployment, recording, or any real payment action.
+This procedure does not authorize Cloudflare configuration changes, new Live Inputs, credential rotation, public deployment, recording deletion, or any real payment action.
 
-The owner-approved 2026-08-24 test used the already installed FFmpeg encoder because OBS was absent. It proved physical camera/microphone RTMPS ingest, current-state lifecycle, signed playback authorization, Cloudflare audio/video tracks, and offline recovery. See `docs/Camera-Audio-Test-Report.md`. Every future execution still requires fresh immediate owner approval and a one-execution flag:
+## Verify the Creator Broadcast Cockpit locally
+
+1. Sign in as `demo-streamer` and confirm the video stage is the first operational surface below the compact header.
+2. In the collapsed technical-help section, use the local development selector to verify `offline`, `connecting`, `live`, and `unavailable`; no Cloudflare call is made.
+3. Confirm each state changes the stage, status badge, and OBS operating guidance without claiming playback when unavailable.
+4. Confirm Chat, Gifts & support, and Audience tabs render independently and the displayed audience count uses unique audience identities.
+5. Confirm room/profile/private-show settings remain available in Room setup, actions remain under Earning tools, and OBS troubleshooting remains under Technical help.
+6. Transition `live` to `offline` locally and confirm the owner-only session summary appears. An audience request to the same summary endpoint must be rejected.
+7. Check English and Chinese at desktop width and inspect the mobile layout at 390 px when a resizable browser surface is available.
+8. Run `npm run verify:staging` and reset demo data. This local workflow does not authorize an encoder, Cloudflare usage, or Linux/public deployment.
+
+## Activate the approved public Stream input
+
+The public deployment must start with `CLOUDFLARE_STREAM_ENABLED=false`. Before activation, rotate any token that has appeared in chat or logs and create a least-privilege account token limited to Cloudflare Stream Write for the approved account. Reuse the existing approved Live Input; do not create another one for this milestone.
+
+Store the account ID, replacement token, customer subdomain, and existing Live Input ID only in the ignored owner-readable Linux `.env.production` file. Set `CLOUDFLARE_STREAM_ENABLED=true`, keep the file mode `600`, and run the production environment validator. Never print the values during inspection or handoff.
+
+Back up PostgreSQL before resetting the disposable demo data. Run the seed once so the configured existing Live Input is assigned to `demo-streamer`, then rebuild/recreate only the Stream API and web services. Do not stop the Tunnel, PostgreSQL, Redis, Windows host, VM, Odoo, or any unrelated Compose project. Verify `/healthz`, `/ready`, streamer status refresh, offline audience behavior, and sanitized playback failure before starting an encoder.
+
+After activation, the API automatically reconciles assigned Live Inputs every 15 seconds. Manual refresh remains a safe creator troubleshooting action, but normal audience state changes must occur without it. If the API is later scaled beyond one process, implement a single polling leader or distributed lock before enabling Stream on multiple API replicas.
+
+During the owner-approved physical test, use OBS when available. The existing FFmpeg verifier is an equivalent bounded encoder test, automatically stops, checks both audio and video tracks through signed playback, and verifies offline recovery. A human on a second device/network must still confirm picture and sound quality before the milestone is complete.
+
+The owner-approved 2026-08-26 public test used the already installed FFmpeg encoder because OBS was absent. It proved physical camera/microphone RTMPS ingest, automatic current-state lifecycle, signed playback authorization, Cloudflare audio/video tracks, Linux-side audience HLS access through `holiwyn.online`, and offline recovery. See `docs/Camera-Audio-Test-Report.md`. Every future execution still requires fresh immediate owner approval and a one-execution flag:
 
 ```powershell
 $env:OWNER_APPROVED_CAMERA_TEST='yes'

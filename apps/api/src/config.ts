@@ -14,6 +14,7 @@ export const config = {
     process.env.METRICS_TOKEN ?? "local-metrics-token-not-for-production",
   localDemoPassword: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
   cloudflare: {
+    enabled: process.env.CLOUDFLARE_STREAM_ENABLED === "true",
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
     apiToken: process.env.CLOUDFLARE_API_TOKEN,
     customerCode: process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE,
@@ -28,6 +29,18 @@ export const config = {
     ? process.env.LOCAL_BROADCAST_STATUS
     : "offline") as "live" | "connecting" | "offline" | "unavailable",
 };
+
+export function hasCloudflareStreamConfiguration(
+  cloudflare = config.cloudflare,
+): boolean {
+  return Boolean(
+    cloudflare.enabled &&
+      cloudflare.accountId &&
+      cloudflare.apiToken &&
+      cloudflare.customerCode &&
+      cloudflare.liveInputId,
+  );
+}
 
 if (!Number.isFinite(config.sessionTtlHours) || config.sessionTtlHours <= 0)
   throw new Error("SESSION_TTL_HOURS must be positive.");

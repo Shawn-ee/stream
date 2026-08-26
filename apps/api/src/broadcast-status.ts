@@ -1,4 +1,4 @@
-import { config, required } from "./config.js";
+import { config, hasCloudflareStreamConfiguration } from "./config.js";
 
 export type BroadcastState = "live" | "connecting" | "offline" | "unavailable";
 export type BroadcastStatus = { state: BroadcastState; message: string; source: "local" | "cloudflare" };
@@ -46,9 +46,11 @@ export function localBroadcastStatus(): BroadcastStatus {
 }
 
 export async function cloudflareBroadcastStatus(liveInputId: string): Promise<BroadcastStatus> {
+  if (!hasCloudflareStreamConfiguration())
+    return { state: "unavailable", message: "Broadcast status is temporarily unavailable.", source: "cloudflare" };
   try {
-    const accountId = required(config.cloudflare.accountId, "CLOUDFLARE_ACCOUNT_ID");
-    const token = required(config.cloudflare.apiToken, "CLOUDFLARE_API_TOKEN");
+    const accountId = config.cloudflare.accountId!;
+    const token = config.cloudflare.apiToken!;
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/live_inputs/${liveInputId}`, { headers: { authorization: `Bearer ${token}` } });
     if (!response.ok) return { state: "unavailable", message: "Broadcast status is temporarily unavailable.", source: "cloudflare" };
     const payload = await response.json() as { success?: boolean; result?: unknown };

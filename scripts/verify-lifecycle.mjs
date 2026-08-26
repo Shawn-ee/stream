@@ -60,6 +60,17 @@ for (const state of [
   );
 }
 await audience("/api/rooms/demo-streamer/playback", { expected: 409 });
+const sessionSummary = await streamer(
+  "/api/streamer/rooms/demo-streamer/session-summary",
+);
+assert.equal(sessionSummary.summary.status, "completed");
+assert.match(sessionSummary.summary.startedAt, /^\d{4}-\d{2}-\d{2}T/);
+assert.match(sessionSummary.summary.endedAt, /^\d{4}-\d{2}-\d{2}T/);
+assert.ok(sessionSummary.summary.durationSeconds >= 0);
+assert.equal(sessionSummary.summary.totalSupport, 0);
+await audience("/api/streamer/rooms/demo-streamer/session-summary", {
+  expected: 403,
+});
 console.log(
-  "Local broadcast lifecycle states and safe viewer status verified.",
+  "Local broadcast lifecycle states, creator session summary, authorization, and safe viewer status verified.",
 );

@@ -100,6 +100,25 @@ try {
   assert.equal((await fetch(`${gateway}/`)).status, 200);
   assert.equal((await fetch(`${gateway}/healthz`)).status, 200);
   assert.equal(
+    (
+      await fetch(
+        `${gateway}/api/streamer/rooms/demo-streamer/broadcast/local-status`,
+        {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            cookie: "stream_csrf=production-probe",
+            origin: temporaryEnvironment.environment.WEB_ORIGIN,
+            "x-csrf-token": "production-probe",
+          },
+          body: JSON.stringify({ state: "live" }),
+        },
+      )
+    ).status,
+    404,
+    "production must not expose the local fake-live control",
+  );
+  assert.equal(
     (await fetch(`${gateway}/internal/metrics`)).status,
     404,
     "internal metrics must not be exposed by the web gateway",

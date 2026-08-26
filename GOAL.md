@@ -8,6 +8,14 @@ The finished product can be deployed to an owner-controlled Linux environment an
 
 “Deployable” means a private or limited-access launch candidate with repeatable infrastructure, secure authentication, backups, monitoring, and recovery procedures. It does not mean that real-money or adult-content operations may launch without separately approved legal/compliance gates.
 
+## Completed milestone: Public End-to-End Live Broadcast
+
+Completed on 2026-08-26 on the approved `holiwyn.online` deployment. The demo streamer used the Logitech camera and microphone through the approved FFmpeg encoder, Cloudflare Stream performed ingest/transcoding/delivery, and a signed-in Linux-side audience client received truthful live state, signed playback authorization, and the public HLS manifest. The delivered media contained both video and audio tracks. Production hides local fake-live controls, fails closed when Stream is disabled or unavailable, and does not expose the Cloudflare API token, ingest URL, stream key, raw provider error, or signed playback URL in logs or source control. Subjective picture/sound quality and OBS-specific usability remain owner acceptance items, not failures of the technical path.
+
+## Completed milestone: Professional Creator Broadcast Cockpit
+
+Completed locally on 2026-08-26. The feature-heavy Creator Studio scroll is now a professional, video-first operating workspace. The creator immediately sees how to start in OBS, receives a truthful signed audience-feed preview when live, monitors deduplicated viewers/chat/gifts/actions/goal/test earnings in real time, manages secondary settings without clutter, and receives an accurate owner-only session summary after broadcasting. The redesign is bilingual, responsive, original, and secret-safe; it does not add browser capture, real payments, or automatic OBS/device control. Linux/public deployment remains a separate approval-gated action.
+
 ## Product scope
 
 - Discovery: live grid, categories, search, featured rooms, creator profiles, schedules, follows, and clear room status.

@@ -6,6 +6,7 @@ const files = [
   "apps/web/Dockerfile",
   "docker-compose.yml",
   "docker-compose.production.yml",
+  "deploy/cloudflare-tunnel.compose.yml",
 ];
 
 for (const file of files) {

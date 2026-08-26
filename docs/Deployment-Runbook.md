@@ -14,6 +14,8 @@ This package is a launch-candidate topology for private staging and localhost ve
 
 Cloudflare Stream remains outside this topology and carries all video ingest, transcoding, and playback bandwidth. The API returns authorization only; it never proxies video.
 
+For the owner-approved `holiwyn.online` preview, `deploy/cloudflare-tunnel.compose.yml` runs a separately managed, outbound-only Cloudflare Tunnel connector on the Stream Compose network. It routes to `http://web:80`; the application gateway remains bound to Linux localhost and no inbound Linux or Windows port-forwarding change is required. The owner chose an anonymously reachable preview without Cloudflare Access. Cloudflare Stream remains disabled until its separate media gate.
+
 All Dockerfile and Compose base/service images are locked to multi-architecture digests recorded in `deploy/Base-Image-Lock.md`. Run `npm run verify:image-lock` before a build. Digest updates are reviewed maintenance changes and require a fresh release verification cycle.
 
 ## Prepare an environment
@@ -33,6 +35,15 @@ The check requires Linux on x86-64 or ARM64, Git, Docker 24+, Docker Compose 2.2
 5. Rotate the previously exposed Cloudflare test token before any approved deployment. Cloudflare configuration is a separate owner gate.
 
 Set `PRIVATE_SSH_TUNNEL=true` only for the recommended localhost-only SSH-tunnel boundary, with `WEB_ORIGIN=http://localhost:<APP_PORT>`. Otherwise keep it `false` and use the exact approved private HTTPS origin. Set `CLOUDFLARE_STREAM_ENABLED=false` and leave all four `CLOUDFLARE_*` values blank when media playback is excluded; when enabled, all four rotated values are required.
+
+For the restricted `holiwyn.online` preview, set `WEB_ORIGIN=https://holiwyn.online`, `PRIVATE_SSH_TUNNEL=false`, and `TRUST_PROXY=true`. Preserve the existing Namecheap email-forwarding MX records and SPF TXT record when moving authoritative DNS. Store only `TUNNEL_TOKEN=<rotatable tunnel token>` in `.env.tunnel`, set mode `600`, and never commit or print it. Start the connector independently after the Stream network exists:
+
+```sh
+TUNNEL_ENV_FILE=/home/shawn/projects/stream/launch-candidate/.env.tunnel \
+  docker compose -f deploy/cloudflare-tunnel.compose.yml up -d
+```
+
+Configure the remotely managed public hostname `holiwyn.online` to service `http://web:80`. `www.holiwyn.online` is intentionally absent unless the owner later requests a canonical redirect. Verify `/healthz`, application API traffic, and Socket.IO before considering the cutover complete. Stop only the connector with the same Compose file and `docker compose down`; this does not stop Stream or any unrelated Compose project.
 
 On Linux, keep the completed environment file owner-only. The guarded operator runs the validator inside the locked Node container, so Node/npm is not required on the host. It reports field names and modes only and never prints secret values:
 

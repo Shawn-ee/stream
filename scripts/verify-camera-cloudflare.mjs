@@ -7,7 +7,7 @@ if (process.env.OWNER_APPROVED_CAMERA_TEST !== "yes")
     "Fresh owner approval is required. Set OWNER_APPROVED_CAMERA_TEST=yes only for the approved execution.",
   );
 
-const base = "http://127.0.0.1:3001";
+const base = process.env.STREAM_VERIFY_BASE_URL ?? "http://127.0.0.1:3001";
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const inputId = process.env.CLOUDFLARE_STREAM_LIVE_INPUT_ID;
@@ -44,26 +44,17 @@ async function login(handle) {
   };
 }
 
-async function refreshBroadcast(auth) {
-  const response = await fetch(
-    `${base}/api/streamer/rooms/demo-streamer/broadcast/refresh`,
-    {
-      method: "POST",
-      headers: {
-        cookie: auth.cookie,
-        "x-csrf-token": auth.csrf,
-      },
-    },
-  );
-  assert.equal(response.status, 200, "broadcast refresh failed");
+async function readBroadcast() {
+  const response = await fetch(`${base}/api/rooms/demo-streamer/broadcast`);
+  assert.equal(response.status, 200, "broadcast status read failed");
   return (await response.json()).broadcast;
 }
 
-async function waitForState(auth, expected, timeoutMilliseconds) {
+async function waitForState(expected, timeoutMilliseconds) {
   const deadline = Date.now() + timeoutMilliseconds;
   let lastState = "unknown";
   while (Date.now() < deadline) {
-    const broadcast = await refreshBroadcast(auth);
+    const broadcast = await readBroadcast();
     lastState = broadcast?.state ?? "unknown";
     if (lastState === expected) return broadcast;
     await new Promise((resolve) => setTimeout(resolve, 2_500));
@@ -117,7 +108,13 @@ if (!inputResponse.ok || !rtmps?.url || !rtmps?.streamKey)
 
 const streamer = await login("demo-streamer");
 const audience = await login("demo-audience");
-const initial = await refreshBroadcast(streamer);
+const studioResponse = await fetch(`${base}/api/streamer/studio`, {
+  headers: { cookie: streamer.cookie },
+});
+assert.equal(studioResponse.status, 200, "Creator Studio is unavailable");
+const studio = await studioResponse.json();
+assert.equal(studio.broadcastControls?.cloudflareConfigured, true);
+const initial = await readBroadcast();
 assert.equal(initial.state, "offline", "Cloudflare input must begin offline");
 
 const broadcast = spawn(
@@ -158,7 +155,7 @@ const broadcast = spawn(
 );
 
 try {
-  await waitForState(streamer, "live", 45_000);
+  await waitForState("live", 60_000);
   if (broadcast.exitCode !== null)
     throw new Error("Camera broadcast exited before playback verification.");
 
@@ -187,9 +184,11 @@ try {
   assert.ok(trackTypes.has("video"), "Cloudflare playback has no video track");
   assert.ok(trackTypes.has("audio"), "Cloudflare playback has no audio track");
   console.log(
-    "CAMERA_LIVE_READY: camera video and microphone audio reached signed Cloudflare playback.",
+    "CAMERA_LIVE_READY: public creator login, automatic live lifecycle, signed camera video, and microphone audio verified.",
   );
-  await new Promise((resolve) => setTimeout(resolve, 20_000));
+  await new Promise((resolve) =>
+    setTimeout(resolve, Number(process.env.BROADCAST_HOLD_MS ?? 45_000)),
+  );
 } finally {
   if (broadcast.exitCode === null) broadcast.kill();
   await new Promise((resolve) => {
@@ -199,5 +198,5 @@ try {
   });
 }
 
-await waitForState(streamer, "offline", 60_000);
+await waitForState("offline", 75_000);
 console.log("Camera broadcast stopped and Cloudflare lifecycle returned offline.");

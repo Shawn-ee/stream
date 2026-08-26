@@ -7,12 +7,17 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { createClient } from "redis";
 import { Server } from "socket.io";
 import { createPlaybackUrl } from "./cloudflare-stream.js";
+import { createBroadcastPoller } from "./broadcast-poller.js";
 import {
   cloudflareBroadcastStatus,
   localBroadcastStatus,
   type BroadcastStatus,
 } from "./broadcast-status.js";
-import { config, required } from "./config.js";
+import {
+  config,
+  hasCloudflareStreamConfiguration,
+  required,
+} from "./config.js";
 import {
   closeDatabasePool,
   database,
@@ -133,7 +138,7 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
           : previous.rows[0].broadcast_state === "live" && changed
             ? "broadcast_ended"
             : "broadcast_status_checked";
-    if (changed || status.state === "unavailable")
+    if (changed)
       await client.query(
         "INSERT INTO room_lifecycle_events (id,room_id,state,event_type,message) SELECT $1,id,$2::broadcast_lifecycle_state,$3,$4 FROM live_rooms WHERE slug=$5",
         [crypto.randomUUID(), status.state, eventType, status.message, slug],
@@ -728,6 +733,8 @@ export function buildApi() {
   }>(
     "/api/streamer/rooms/:slug/broadcast/local-status",
     async (request, reply) => {
+      if (config.nodeEnv === "production")
+        return reply.code(404).send({ error: "not_found" });
       const streamer = (await requireRole(request, reply, "streamer")) as
         DemoUser | undefined;
       if (!streamer) return;
@@ -795,10 +802,20 @@ export function buildApi() {
               .code(403)
               .send({ error: "private_show_access_required" });
         }
-        return {
-          iframeUrl: await createPlaybackUrl(room.cloudflare_live_input_id),
-          expiresInSeconds: 3600,
-        };
+        if (!hasCloudflareStreamConfiguration())
+          return reply
+            .code(503)
+            .send({ error: "broadcast_service_unavailable" });
+        try {
+          return {
+            iframeUrl: await createPlaybackUrl(room.cloudflare_live_input_id),
+            expiresInSeconds: 3600,
+          };
+        } catch {
+          return reply
+            .code(503)
+            .send({ error: "broadcast_service_unavailable" });
+        }
       } finally {
         await client.end();
       }
@@ -1411,7 +1428,14 @@ export function buildApi() {
         "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.bio,p.category,p.schedule_text,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
         [user.id],
       );
-      return { user, room: result.rows[0] ?? null };
+      return {
+        user,
+        room: result.rows[0] ?? null,
+        broadcastControls: {
+          localFallbackEnabled: config.nodeEnv !== "production",
+          cloudflareConfigured: hasCloudflareStreamConfiguration(),
+        },
+      };
     } finally {
       await client.end();
     }
@@ -1453,6 +1477,68 @@ export function buildApi() {
           stats: stats.rows[0],
           recent: recent.rows,
           topSupporter: top.rows[0] ?? null,
+        };
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.get<{ Params: { slug: string } }>(
+    "/api/streamer/rooms/:slug/session-summary",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        DemoUser | undefined;
+      if (!streamer) return;
+      const client = database();
+      await client.connect();
+      try {
+        const period = await client.query<{
+          id: string;
+          broadcast_state: string;
+          started_at: Date | null;
+          ended_at: Date | null;
+        }>(
+          "SELECT r.id,r.broadcast_state,started.created_at AS started_at,ended.created_at AS ended_at FROM live_rooms r LEFT JOIN LATERAL (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) started ON TRUE LEFT JOIN LATERAL (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.created_at>started.created_at AND e.state<>'live' ORDER BY e.created_at ASC LIMIT 1) ended ON started.created_at IS NOT NULL WHERE r.slug=$1 AND r.streamer_id=$2",
+          [request.params.slug, streamer.id],
+        );
+        const room = period.rows[0];
+        if (!room)
+          return reply.code(404).send({ error: "streamer_room_not_found" });
+        if (!room.started_at) return { summary: null };
+        const bounds = [room.id, room.started_at, room.ended_at];
+        const totals = await client.query<{
+          gift_total: number;
+          action_total: number;
+          action_count: number;
+        }>(
+          "SELECT COALESCE((SELECT SUM(g.coin_cost) FROM gifts g WHERE g.room_id=$1 AND g.created_at>=$2 AND ($3::timestamptz IS NULL OR g.created_at<$3)),0)::int AS gift_total,COALESCE((SELECT SUM(p.coin_cost) FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id WHERE a.room_id=$1 AND p.created_at>=$2 AND ($3::timestamptz IS NULL OR p.created_at<$3)),0)::int AS action_total,COALESCE((SELECT COUNT(*) FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id WHERE a.room_id=$1 AND p.created_at>=$2 AND ($3::timestamptz IS NULL OR p.created_at<$3)),0)::int AS action_count",
+          bounds,
+        );
+        const top = await client.query<{ sender: string; total: number }>(
+          "SELECT sender,SUM(coin_cost)::int AS total FROM (SELECT u.display_name AS sender,g.coin_cost FROM gifts g JOIN users u ON u.id=g.sender_id WHERE g.room_id=$1 AND g.created_at>=$2 AND ($3::timestamptz IS NULL OR g.created_at<$3) UNION ALL SELECT u.display_name AS sender,p.coin_cost FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id JOIN users u ON u.id=p.viewer_id WHERE a.room_id=$1 AND p.created_at>=$2 AND ($3::timestamptz IS NULL OR p.created_at<$3)) support GROUP BY sender ORDER BY total DESC,sender LIMIT 1",
+          bounds,
+        );
+        const stats = totals.rows[0];
+        const endedAt = room.ended_at?.toISOString() ?? null;
+        const durationEnd = room.ended_at?.getTime() ?? Date.now();
+        return {
+          summary: {
+            status:
+              room.broadcast_state === "live" && !room.ended_at
+                ? "live"
+                : "completed",
+            startedAt: room.started_at.toISOString(),
+            endedAt,
+            durationSeconds: Math.max(
+              0,
+              Math.round((durationEnd - room.started_at.getTime()) / 1000),
+            ),
+            giftTotal: stats.gift_total,
+            actionTotal: stats.action_total,
+            actionCount: stats.action_count,
+            totalSupport: stats.gift_total + stats.action_total,
+            topSupporter: top.rows[0] ?? null,
+          },
         };
       } finally {
         await client.end();
@@ -1967,10 +2053,40 @@ io.on("connection", (socket) => {
 });
 
 await api.listen({ port: config.apiPort, host: config.apiHost });
+const broadcastPoller = createBroadcastPoller({
+  enabled: hasCloudflareStreamConfiguration(),
+  listRooms: async () => {
+    const client = database();
+    await client.connect();
+    try {
+      const rooms = await client.query<{
+        slug: string;
+        cloudflare_live_input_id: string;
+      }>(
+        "SELECT slug,cloudflare_live_input_id FROM live_rooms WHERE cloudflare_live_input_id IS NOT NULL ORDER BY slug",
+      );
+      return rooms.rows.map((room) => ({
+        slug: room.slug,
+        liveInputId: room.cloudflare_live_input_id,
+      }));
+    } finally {
+      await client.end();
+    }
+  },
+  readStatus: cloudflareBroadcastStatus,
+  persistStatus: persistBroadcastStatus,
+  onError: (error, slug) =>
+    api.log.error(
+      { name: (error as Error).name, slug },
+      "Unable to refresh broadcast lifecycle",
+    ),
+});
+broadcastPoller.start();
 let shuttingDown = false;
 async function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
+  broadcastPoller.stop();
   api.log.info({ signal }, "Graceful shutdown started");
   await new Promise<void>((resolve) => io.close(() => resolve()));
   await api.close();

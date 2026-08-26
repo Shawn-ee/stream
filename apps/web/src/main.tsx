@@ -246,6 +246,27 @@ function broadcastLabel(
         ? t.stateUnavailable
         : t.stateOffline;
 }
+function creatorBroadcastMessage(
+  t: Record<string, string>,
+  state: string | null | undefined,
+) {
+  const zh = t.title !== "Stream MVP";
+  return state === "live"
+    ? zh
+      ? "直播已连接，观众现在可以观看。"
+      : "Your broadcast is connected and available to viewers."
+    : state === "connecting"
+      ? zh
+        ? "正在准备安全播放，请稍候。"
+        : "Secure playback is being prepared."
+      : state === "unavailable"
+        ? zh
+          ? "暂时无法确认直播状态，请稍后重试。"
+          : "Broadcast status cannot be confirmed right now."
+        : zh
+          ? "OBS 尚未推流，直播间目前离线。"
+          : "OBS is not streaming and your room is offline.";
+}
 function LanguagePicker({
   language,
   onChange,
@@ -467,7 +488,9 @@ function App() {
               autoComplete="username"
               minLength={3}
               maxLength={30}
-              pattern="[a-z0-9_]+"
+              pattern={
+                authMode === "register" ? "[a-z0-9_]+" : "[a-z0-9_-]+"
+              }
               required
             />
           </label>
@@ -518,7 +541,7 @@ function App() {
       </main>
     );
   return (
-    <main className="app">
+    <main className={`app role-${user.role}`}>
       <LanguagePicker language={language} onChange={setLanguage} />
       <header>
         <div>
@@ -641,11 +664,13 @@ function AudienceShelf({ t }: { t: typeof copy.en }) {
 }
 function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
   const [messages, setMessages] = useState<any[]>([]);
-  const [presence, setPresence] = useState(0);
   const [participants, setParticipants] = useState<any[]>([]);
   const [gifts, setGifts] = useState<any[]>([]);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
+  const [activeTab, setActiveTab] = useState<"chat" | "support" | "audience">(
+    "chat",
+  );
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   useEffect(() => {
     void request(`/api/rooms/${slug}/chat-history`).then((d) =>
@@ -654,9 +679,11 @@ function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
     const socket = io({ transports: ["websocket"] });
     socketRef.current = socket;
     socket.on("connect", () => socket.emit("room:join", slug));
-    socket.on("room:presence", (d: { count: number; users: any[] }) => {
-      setPresence(d.count);
-      setParticipants(d.users.filter((user) => user.role === "audience"));
+    socket.on("room:presence", (d: { users: any[] }) => {
+      const audience = d.users.filter((user) => user.role === "audience");
+      setParticipants(
+        Array.from(new Map(audience.map((user) => [user.id, user])).values()),
+      );
     });
     socket.on("chat:message", (d) =>
       setMessages((current) => [...current.slice(-39), d]),
@@ -703,85 +730,157 @@ function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
   }
   return (
     <div className="creator-monitor">
-      <h3>{zh ? "直播间监控" : "Live room monitor"}</h3>
-      <p className="muted">
-        {presence} {zh ? "人在直播间" : "in room"}
-      </p>
-      <div className="messages">
-        {messages.length ? (
-          messages.map((message) => (
-            <p key={message.id}>
-              <strong>{message.sender.displayName}</strong> {message.body}
-            </p>
-          ))
-        ) : (
-          <p className="muted">
-            {zh ? "暂无聊天记录。" : "No local chat yet."}
-          </p>
-        )}
+      <div className="creator-monitor-heading">
+        <div>
+          <p className="eyebrow">{zh ? "实时互动" : "Live activity"}</p>
+          <h3>{zh ? "与观众保持联系" : "Stay connected to your room"}</h3>
+        </div>
+        <span className="presence-pill">
+          <i /> {participants.length} {zh ? "位观众" : "viewers"}
+        </span>
       </div>
-      <form className="creator-chat-form" onSubmit={send}>
-        <input
-          value={draft}
-          maxLength={500}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={zh ? "发送测试消息" : "Send test message"}
-        />
-        <button>{zh ? "发送" : "Send"}</button>
-      </form>
-      {status && <p className="error">{status}</p>}
-      <div className="gift-activity">
-        <p className="eyebrow">{zh ? "最新测试礼物" : "Recent test gifts"}</p>
-        {gifts.length ? (
-          gifts.map((gift) => (
-            <p key={gift.id}>
-              <strong>{gift.sender}</strong> · {gift.name} · {gift.cost}{" "}
-              {t.coins}
-            </p>
-          ))
-        ) : (
-          <p className="muted">
-            {zh ? "暂时没有测试礼物。" : "No test gifts yet."}
-          </p>
-        )}
+      <div className="creator-monitor-tabs" role="tablist">
+        <button
+          type="button"
+          className={activeTab === "chat" ? "active" : ""}
+          onClick={() => setActiveTab("chat")}
+        >
+          {zh ? "聊天" : "Chat"}
+        </button>
+        <button
+          type="button"
+          className={activeTab === "support" ? "active" : ""}
+          onClick={() => setActiveTab("support")}
+        >
+          {zh ? "礼物与支持" : "Gifts & support"}
+          {gifts.length ? <span>{gifts.length}</span> : null}
+        </button>
+        <button
+          type="button"
+          className={activeTab === "audience" ? "active" : ""}
+          onClick={() => setActiveTab("audience")}
+        >
+          {zh ? "观众" : "Audience"}
+        </button>
       </div>
-      <div className="participant-roster">
-        <p className="eyebrow">{zh ? "当前观众" : "Current audience"}</p>
-        {participants.length ? (
-          participants.map((participant) => (
-            <p key={participant.id}>
-              <strong>{participant.displayName}</strong>{" "}
-              <button
-                type="button"
-                onClick={() => void moderate(participant.id, "mute")}
-              >
-                {zh ? "禁言" : "Mute"}
-              </button>{" "}
-              <button
-                type="button"
-                onClick={() => void moderate(participant.id, "unmute")}
-              >
-                {zh ? "解除禁言" : "Unmute"}
-              </button>
-            </p>
-          ))
-        ) : (
-          <p className="muted">
-            {zh ? "暂无其他观众。" : "No audience is currently present."}
-          </p>
-        )}
-      </div>
-      <CreatorSessionInsights slug={slug} presence={presence} t={t} />
+      {activeTab === "chat" ? (
+        <div className="creator-monitor-panel">
+          <div className="messages">
+            {messages.length ? (
+              messages.map((message) => (
+                <p key={message.id}>
+                  <strong>{message.sender.displayName}</strong> {message.body}
+                </p>
+              ))
+            ) : (
+              <div className="creator-empty-state">
+                <strong>{zh ? "聊天会显示在这里" : "Chat will appear here"}</strong>
+                <span>
+                  {zh
+                    ? "开播后向第一位观众打个招呼。"
+                    : "Say hello when your first viewer arrives."}
+                </span>
+              </div>
+            )}
+          </div>
+          <form className="creator-chat-form" onSubmit={send}>
+            <input
+              value={draft}
+              maxLength={500}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={zh ? "给直播间发送消息" : "Message your room"}
+            />
+            <button>{zh ? "发送" : "Send"}</button>
+          </form>
+          {status && <p className="error">{status}</p>}
+        </div>
+      ) : null}
+      {activeTab === "support" ? (
+        <div className="creator-monitor-panel support-timeline">
+          {gifts.length ? (
+            gifts.map((gift) => (
+              <article key={gift.id}>
+                <span className={gift.action ? "support-icon action" : "support-icon"}>
+                  {gift.action ? "⚡" : "◆"}
+                </span>
+                <div>
+                  <strong>{gift.sender}</strong>
+                  <p>
+                    {gift.action
+                      ? zh
+                        ? "购买了互动动作"
+                        : "purchased an action"
+                      : zh
+                        ? "送出了礼物"
+                        : "sent a gift"}{" "}
+                    · {gift.name}
+                  </p>
+                </div>
+                <b>
+                  +{gift.cost} {t.coins}
+                </b>
+              </article>
+            ))
+          ) : (
+            <div className="creator-empty-state">
+              <strong>{zh ? "等待第一份支持" : "Waiting for your first support"}</strong>
+              <span>
+                {zh
+                  ? "礼物和互动动作会实时出现在这里。"
+                  : "Gifts and action purchases appear here in real time."}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : null}
+      {activeTab === "audience" ? (
+        <div className="creator-monitor-panel participant-roster">
+          {participants.length ? (
+            participants.map((participant) => (
+              <article key={participant.id}>
+                <span className="viewer-avatar">
+                  {participant.displayName.slice(0, 1).toUpperCase()}
+                </span>
+                <strong>{participant.displayName}</strong>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => void moderate(participant.id, "mute")}
+                  >
+                    {zh ? "禁言" : "Mute"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void moderate(participant.id, "unmute")}
+                  >
+                    {zh ? "解除" : "Unmute"}
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="creator-empty-state">
+              <strong>{zh ? "直播间里还没有观众" : "No viewers in the room yet"}</strong>
+              <span>{zh ? "观众加入后会显示在这里。" : "Viewers appear here as they join."}</span>
+            </div>
+          )}
+        </div>
+      ) : null}
+      <CreatorSessionInsights
+        slug={slug}
+        audienceCount={participants.length}
+        t={t}
+      />
     </div>
   );
 }
 function CreatorSessionInsights({
   slug,
-  presence,
+  audienceCount,
   t,
 }: {
   slug: string;
-  presence: number;
+  audienceCount: number;
   t: typeof copy.en;
 }) {
   const [insights, setInsights] = useState<any>(null);
@@ -820,7 +919,7 @@ function CreatorSessionInsights({
       <div className="insight-metrics">
         <div>
           <span>{zh ? "\u5f53\u524d\u89c2\u4f17" : "Audience now"}</span>
-          <strong>{Math.max(0, presence - 1)}</strong>
+          <strong>{audienceCount}</strong>
         </div>
         <div>
           <span>{zh ? "\u793c\u7269\u652f\u6301" : "Gift support"}</span>
@@ -1121,6 +1220,189 @@ function ObsReadiness({ state, t }: { state?: string; t: typeof copy.en }) {
     </section>
   );
 }
+
+function CreatorBroadcastPreview({
+  slug,
+  state,
+  configured,
+  t,
+}: {
+  slug: string;
+  state: "live" | "connecting" | "offline" | "unavailable";
+  configured: boolean;
+  t: typeof copy.en;
+}) {
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
+  const [previewUnavailable, setPreviewUnavailable] = useState(false);
+  const zh = t.title !== "Stream MVP";
+  useEffect(() => {
+    setIframeUrl(null);
+    setPreviewUnavailable(false);
+    if (state !== "live" || !configured) return;
+    let active = true;
+    void request(`/api/rooms/${slug}/playback`)
+      .then((result) => {
+        if (active) setIframeUrl(result.iframeUrl);
+      })
+      .catch(() => {
+        if (active) setPreviewUnavailable(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug, state, configured]);
+
+  return (
+    <section className={`creator-preview state-${state}`}>
+      <div className="creator-preview-toolbar">
+        <div>
+          <span className={`broadcast-dot state-${state}`} />
+          <strong>{zh ? "您的观众画面" : "Your audience feed"}</strong>
+        </div>
+        <span>{zh ? "安全延迟预览" : "Secure delayed preview"}</span>
+      </div>
+      {state === "live" && iframeUrl ? (
+        <iframe
+          src={iframeUrl}
+          title={zh ? "主播实时观众画面" : "Creator live audience feed"}
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        <div className="creator-preview-placeholder">
+          <div className="preview-orbit" aria-hidden="true">
+            <span>●</span>
+          </div>
+          <strong>
+            {state === "connecting"
+              ? zh
+                ? "正在准备您的直播画面"
+                : "Preparing your live feed"
+              : state === "unavailable" || previewUnavailable
+                ? zh
+                  ? "暂时无法确认预览"
+                  : "Preview is temporarily unavailable"
+                : state === "live"
+                  ? zh
+                    ? "直播已连接，正在加载预览"
+                    : "Broadcast connected—loading preview"
+                  : zh
+                    ? "开播后，您的观众画面会显示在这里"
+                    : "Your audience feed will appear here when you go live"}
+          </strong>
+          <p>
+            {state === "offline"
+              ? zh
+                ? "在 OBS 中选择相机和麦克风，然后点击“开始推流”。"
+                : "Choose your camera and microphone in OBS, then select Start Streaming."
+              : state === "connecting"
+                ? zh
+                  ? "Cloudflare 正在准备安全播放，通常需要片刻。"
+                  : "Cloudflare is preparing secure playback. This usually takes a moment."
+                : zh
+                  ? "预览不会显示推流密钥或基础设施信息。"
+                  : "The preview never exposes stream keys or infrastructure details."}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CreatorSessionSummary({
+  slug,
+  state,
+  t,
+}: {
+  slug: string;
+  state: string;
+  t: typeof copy.en;
+}) {
+  const [summary, setSummary] = useState<any>(null);
+  const [now, setNow] = useState(Date.now());
+  const zh = t.title !== "Stream MVP";
+  useEffect(() => {
+    void request(`/api/streamer/rooms/${slug}/session-summary`)
+      .then((result) => setSummary(result.summary))
+      .catch(() => setSummary(null));
+  }, [slug, state]);
+  useEffect(() => {
+    if (summary?.status !== "live") return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [summary?.status]);
+  if (!summary) return null;
+  const durationSeconds =
+    summary.status === "live"
+      ? Math.max(
+          0,
+          Math.round((now - new Date(summary.startedAt).getTime()) / 1000),
+        )
+      : summary.durationSeconds;
+  const duration = `${Math.floor(durationSeconds / 3600)
+    .toString()
+    .padStart(2, "0")}:${Math.floor((durationSeconds % 3600) / 60)
+    .toString()
+    .padStart(2, "0")}:${Math.floor(durationSeconds % 60)
+    .toString()
+    .padStart(2, "0")}`;
+  return (
+    <section className="creator-session-summary">
+      <div className="session-summary-heading">
+        <div>
+          <p className="eyebrow">
+            {summary.status === "live"
+              ? zh
+                ? "本场直播"
+                : "Current session"
+              : zh
+                ? "最近一场直播"
+                : "Latest session"}
+          </p>
+          <h3>
+            {summary.status === "live"
+              ? zh
+                ? "直播进行中"
+                : "Session in progress"
+              : zh
+                ? "直播总结"
+                : "Session summary"}
+          </h3>
+        </div>
+        <span>
+          {new Date(summary.startedAt).toLocaleString(zh ? "zh-CN" : "en-US")}
+        </span>
+      </div>
+      <div className="session-summary-metrics">
+        <div>
+          <span>{zh ? "直播时长" : "Duration"}</span>
+          <strong>{duration}</strong>
+        </div>
+        <div>
+          <span>{zh ? "支持总额" : "Total support"}</span>
+          <strong>
+            {summary.totalSupport} <small>{t.coins}</small>
+          </strong>
+        </div>
+        <div>
+          <span>{zh ? "礼物" : "Gifts"}</span>
+          <strong>{summary.giftTotal}</strong>
+        </div>
+        <div>
+          <span>{zh ? "互动动作" : "Actions"}</span>
+          <strong>{summary.actionCount}</strong>
+        </div>
+        <div>
+          <span>{zh ? "最佳支持者" : "Top supporter"}</span>
+          <strong>
+            {summary.topSupporter?.sender ?? (zh ? "暂无" : "None yet")}
+          </strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function StreamerStudio({ t }: { t: typeof copy.en }) {
   const [studio, setStudio] = useState<any>(null);
   const [notice, setNotice] = useState("");
@@ -1147,6 +1429,36 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       setPerMinuteCost(d.room?.private_show_per_minute_cost ?? 10);
     });
   useEffect(refresh, []);
+  useEffect(() => {
+    const slug = studio?.room?.slug;
+    if (!slug) return;
+    const socket = io({ transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("room:join", slug));
+    socket.on(
+      "broadcast:state",
+      (event: {
+        slug: string;
+        state: "live" | "connecting" | "offline" | "unavailable";
+        message: string;
+        checkedAt: string;
+      }) => {
+        if (event.slug !== slug) return;
+        setStudio((current: any) => ({
+          ...current,
+          room: {
+            ...current.room,
+            status: event.state === "live" ? "live" : "offline",
+            broadcast_state: event.state,
+            broadcast_status_message: event.message,
+            broadcast_checked_at: event.checkedAt,
+          },
+        }));
+      },
+    );
+    return () => {
+      socket.disconnect();
+    };
+  }, [studio?.room?.slug]);
   async function toggle(active: boolean) {
     const result = await request(
       `/api/streamer/rooms/${studio.room.slug}/private-show`,
@@ -1216,208 +1528,293 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
   }
   if (!studio) return <section className="workspace">{t.preparing}</section>;
   const room = studio.room;
+  const zh = t.title !== "Stream MVP";
+  if (!room)
+    return (
+      <section className="workspace creator-studio">
+        <h2>{t.studio}</h2>
+        <p>{t.noRoom}</p>
+      </section>
+    );
+  const broadcastState = room.broadcast_state ?? "offline";
+  const goalPercent = Math.min(
+    100,
+    Math.round((room.goal_progress / Math.max(1, room.goal_target)) * 100),
+  );
   return (
-    <section className="workspace">
-      <h2>{t.studio}</h2>
-      <p>{t.studioText}</p>
-      {room && (
-        <section className="live-session">
+    <section className="workspace creator-studio">
+      <div className="creator-studio-heading">
+        <div>
+          <p className="eyebrow">{zh ? "主播控制台" : "Creator cockpit"}</p>
+          <h2>{zh ? "准备并管理您的直播" : "Run your live session"}</h2>
+          <p>
+            {zh
+              ? "画面、观众互动与收益集中在一个清晰的工作区。"
+              : "Your broadcast, audience activity, and support in one focused workspace."}
+          </p>
+        </div>
+        <div className={`creator-live-badge state-${broadcastState}`}>
+          <span />
           <div>
-            <p className="eyebrow">
-              {t.title === "Stream MVP"
-                ? "Live session"
-                : "\u76f4\u64ad\u4f1a\u8bdd"}
-            </p>
-            <h3>{broadcastLabel(t, room.broadcast_state)}</h3>
-            <p className="muted">{room.broadcast_status_message}</p>
+            <small>{zh ? "直播状态" : "Broadcast status"}</small>
+            <strong>{broadcastLabel(t, broadcastState)}</strong>
           </div>
-          <div className="goal-progress">
-            <p className="eyebrow">
-              {t.title === "Stream MVP"
-                ? "Live contribution goal"
-                : "\u5b9e\u65f6\u652f\u6301\u76ee\u6807"}
+        </div>
+      </div>
+
+      <div className="creator-broadcast-layout">
+        <div className="creator-stage-column">
+          <CreatorBroadcastPreview
+            slug={room.slug}
+            state={broadcastState}
+            configured={studio.broadcastControls?.cloudflareConfigured}
+            t={t}
+          />
+          <div className="creator-session-metrics">
+            <div>
+              <span>{zh ? "当前状态" : "Current state"}</span>
+              <strong>{broadcastLabel(t, broadcastState)}</strong>
+            </div>
+            <div>
+              <span>{zh ? "本地测试收益" : "Test earnings"}</span>
+              <strong>
+                {room.test_earnings} <small>{t.coins}</small>
+              </strong>
+            </div>
+            <div>
+              <span>{zh ? "目标进度" : "Goal progress"}</span>
+              <strong>{goalPercent}%</strong>
+            </div>
+            <div>
+              <span>{zh ? "关注者" : "Followers"}</span>
+              <strong>{room.followers}</strong>
+            </div>
+          </div>
+        </div>
+
+        <aside className="creator-control-rail">
+          <div className="control-rail-section">
+            <p className="eyebrow">{zh ? "开播流程" : "Go live"}</p>
+            <h3>
+              {broadcastState === "live"
+                ? zh
+                  ? "您的直播已上线"
+                  : "Your broadcast is live"
+                : zh
+                  ? "在 OBS 中开始推流"
+                  : "Start streaming in OBS"}
+            </h3>
+            <p className="muted">
+              {creatorBroadcastMessage(t, broadcastState)}
             </p>
-            <strong>{room.goal_text}</strong>
+            <ol className="go-live-steps">
+              <li className="complete">
+                <span>1</span>
+                {zh ? "打开 OBS 场景" : "Open your OBS scene"}
+              </li>
+              <li className="complete">
+                <span>2</span>
+                {zh ? "检查相机和麦克风" : "Check camera and microphone"}
+              </li>
+              <li className={broadcastState === "live" ? "complete" : ""}>
+                <span>3</span>
+                {broadcastState === "live"
+                  ? zh
+                    ? "观众已可观看"
+                    : "Audience playback ready"
+                  : zh
+                    ? "点击 OBS 的“开始推流”"
+                    : "Select Start Streaming in OBS"}
+              </li>
+            </ol>
+            <button
+              type="button"
+              className="creator-primary-action"
+              onClick={() => void refreshBroadcast()}
+              disabled={!studio.broadcastControls?.cloudflareConfigured}
+            >
+              {broadcastState === "live"
+                ? zh
+                  ? "确认直播状态"
+                  : "Confirm live status"
+                : zh
+                  ? "我已在 OBS 开始推流"
+                  : "I started streaming in OBS"}
+            </button>
+            {!studio.broadcastControls?.cloudflareConfigured ? (
+              <p className="control-note">
+                {zh
+                  ? "此本地环境未连接直播服务；仍可测试全部界面状态。"
+                  : "This local environment is not connected to the broadcast service; all interface states remain testable."}
+              </p>
+            ) : null}
+          </div>
+
+          <form className="control-rail-section quick-goal" onSubmit={(e) => void save(e)}>
+            <div className="section-title-row">
+              <div>
+                <p className="eyebrow">{zh ? "直播目标" : "Live goal"}</p>
+                <h3>{room.goal_text}</h3>
+              </div>
+              <strong>{goalPercent}%</strong>
+            </div>
             <div className="progress-track">
-              <span
-                style={{
-                  width: `${Math.min(100, Math.round((room.goal_progress / room.goal_target) * 100))}%`,
-                }}
-              />
+              <span style={{ width: `${goalPercent}%` }} />
             </div>
             <small>
               {room.goal_progress} / {room.goal_target} {t.coins}
             </small>
-          </div>
-          <div>
-            <p className="eyebrow">
-              {t.title === "Stream MVP"
-                ? "Session earnings"
-                : "\u4f1a\u8bdd\u6d4b\u8bd5\u6536\u76ca"}
-            </p>
-            <strong>
-              {room.test_earnings} {t.coins}
-            </strong>
-            <p className="muted">
-              {room.followers} {t.followers}
-            </p>
-          </div>
-        </section>
-      )}
-      <ObsReadiness state={room?.broadcast_state} t={t} />
-      <div className="shelves">
-        <div>
-          <h3>{t.room}</h3>
-          <p>
-            {room?.title ?? t.noRoom} · {room?.status}
-          </p>
-          <p>
-            {t.followers}: {room?.followers ?? 0}
-          </p>
-          <p>
-            {t.earnings}: {room?.test_earnings ?? 0} {t.coins}
-          </p>
-          <form className="studio-form" onSubmit={(e) => void save(e)}>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t.roomTitle}
-            />
-            <input
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              placeholder={t.goal}
-            />
-            <input
-              type="number"
-              min="1"
-              value={goalTarget}
-              onChange={(e) => setGoalTarget(Number(e.target.value))}
-              aria-label={
-                t.title === "Stream MVP"
-                  ? "Goal target in test coins"
-                  : "\u6d4b\u8bd5\u91d1\u5e01\u76ee\u6807"
-              }
-            />
-            <button>{t.saveRoom}</button>
+            <label>
+              {zh ? "目标标题" : "Goal title"}
+              <input value={goal} onChange={(e) => setGoal(e.target.value)} maxLength={160} />
+            </label>
+            <label>
+              {zh ? "目标测试金币" : "Target test coins"}
+              <input
+                type="number"
+                min="1"
+                value={goalTarget}
+                onChange={(e) => setGoalTarget(Number(e.target.value))}
+              />
+            </label>
+            <button>{zh ? "更新直播目标" : "Update live goal"}</button>
           </form>
-          <form className="studio-form" onSubmit={(e) => void saveProfile(e)}>
-            <input
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder={t.title === "Stream MVP" ? "Public bio" : "公开简介"}
-              maxLength={500}
-            />
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder={t.title === "Stream MVP" ? "Category" : "分类"}
-              maxLength={60}
-            />
-            <input
-              value={schedule}
-              onChange={(e) => setSchedule(e.target.value)}
-              placeholder={t.title === "Stream MVP" ? "Schedule" : "直播时间"}
-              maxLength={160}
-            />
-            <button>
-              {t.title === "Stream MVP"
-                ? "Save public profile"
-                : "保存公开主页"}
-            </button>
-          </form>
-        </div>
-        <div className="broadcast-panel">
-          <h3>{t.broadcast}</h3>
-          <p
-            className={`broadcast-state state-${room?.broadcast_state ?? "offline"}`}
-          >
-            {broadcastLabel(t, room?.broadcast_state)}
-          </p>
-          <p className="muted">{room?.broadcast_status_message}</p>
-          <p className="muted">
-            {t.lastChecked}:{" "}
-            {room?.broadcast_checked_at
-              ? new Date(room.broadcast_checked_at).toLocaleString()
-              : "—"}
-          </p>
-          <p className="muted">{t.broadcastGuidance}</p>
-          <button type="button" onClick={() => void refreshBroadcast()}>
-            {t.refreshBroadcast}
-          </button>
-          <label className="muted">{t.localBroadcast}</label>
-          <select
-            value={room?.broadcast_state ?? "offline"}
-            onChange={(e) =>
-              void setLocalBroadcast(
-                e.target.value as
-                  "live" | "connecting" | "offline" | "unavailable",
-              )
-            }
-          >
-            <option value="live">live</option>
-            <option value="connecting">connecting</option>
-            <option value="offline">offline</option>
-            <option value="unavailable">unavailable</option>
-          </select>
-        </div>
-        <div>
-          <h3>{t.privateShow}</h3>
-          <p>{room?.private_show_enabled ? t.active : t.inactive}</p>
-          <div className="studio-form">
-            <select
-              value={mode}
-              onChange={(e) =>
-                setMode(e.target.value as "ticket" | "per_minute")
-              }
-            >
-              <option value="ticket">{t.ticket}</option>
-              <option value="per_minute">{t.perMinute}</option>
-            </select>
-            <input
-              type="number"
-              min="1"
-              value={ticketCost}
-              onChange={(e) => setTicketCost(Number(e.target.value))}
-              aria-label={t.ticketCost}
-            />
-            <input
-              type="number"
-              min="1"
-              value={perMinuteCost}
-              onChange={(e) => setPerMinuteCost(Number(e.target.value))}
-              aria-label={t.minuteCost}
-            />
-            <button
-              type="button"
-              onClick={() => void toggle(!room?.private_show_enabled)}
-            >
-              {room?.private_show_enabled ? t.endPrivate : t.startPrivate}
-            </button>
+
+          <div className="control-rail-section broadcast-health">
+            <div>
+              <span>{zh ? "上次状态检查" : "Last status check"}</span>
+              <strong>
+                {room.broadcast_checked_at
+                  ? new Date(room.broadcast_checked_at).toLocaleTimeString()
+                  : "—"}
+              </strong>
+            </div>
+            <a href="#obs-setup">{zh ? "查看 OBS 设置帮助" : "View OBS setup help"}</a>
           </div>
-        </div>
-        <div>
-          <h3>
-            {t.title === "Stream MVP"
-              ? "Local room moderation"
-              : "本地直播间管理"}
-          </h3>
-          <p className="muted">
-            {t.title === "Stream MVP" ? "Demo Audience only" : "仅限演示观众"}
-          </p>
-          <div className="admin-actions">
-            <button type="button" onClick={() => void moderate("mute")}>
-              {t.title === "Stream MVP" ? "Mute audience" : "禁言观众"}
-            </button>
-            <button type="button" onClick={() => void moderate("unmute")}>
-              {t.title === "Stream MVP" ? "Unmute audience" : "解除观众禁言"}
-            </button>
-          </div>
-        </div>
+        </aside>
       </div>
-      {room?.slug && <ActionMenuManager slug={room.slug} t={t} />}
-      {room?.slug && <CreatorLiveMonitor slug={room.slug} t={t} />}
-      {notice && <p>{notice}</p>}
+
+      <CreatorLiveMonitor slug={room.slug} t={t} />
+      <CreatorSessionSummary slug={room.slug} state={broadcastState} t={t} />
+
+      <details className="creator-settings" open>
+        <summary>
+          <div>
+            <p className="eyebrow">{zh ? "直播间设置" : "Room setup"}</p>
+            <strong>{zh ? "标题、主页与私密直播" : "Title, profile, and private show"}</strong>
+          </div>
+          <span>{zh ? "展开 / 收起" : "Expand / collapse"}</span>
+        </summary>
+        <div className="creator-settings-grid">
+          <section>
+            <h3>{zh ? "直播间信息" : "Room details"}</h3>
+            <form className="studio-form" onSubmit={(e) => void save(e)}>
+              <label>
+                {t.roomTitle}
+                <input value={title} onChange={(e) => setTitle(e.target.value)} />
+              </label>
+              <button>{t.saveRoom}</button>
+            </form>
+          </section>
+          <section>
+            <h3>{zh ? "公开主页" : "Public profile"}</h3>
+            <form className="studio-form" onSubmit={(e) => void saveProfile(e)}>
+              <label>
+                {zh ? "简介" : "Bio"}
+                <input value={bio} onChange={(e) => setBio(e.target.value)} maxLength={500} />
+              </label>
+              <label>
+                {zh ? "分类" : "Category"}
+                <input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={60} />
+              </label>
+              <label>
+                {zh ? "直播时间" : "Schedule"}
+                <input value={schedule} onChange={(e) => setSchedule(e.target.value)} maxLength={160} />
+              </label>
+              <button>{zh ? "保存公开主页" : "Save public profile"}</button>
+            </form>
+          </section>
+          <section>
+            <h3>{t.privateShow}</h3>
+            <p className="muted">
+              {room.private_show_enabled ? t.active : t.inactive}
+            </p>
+            <div className="studio-form">
+              <label>
+                {zh ? "访问模式" : "Access mode"}
+                <select value={mode} onChange={(e) => setMode(e.target.value as "ticket" | "per_minute")}>
+                  <option value="ticket">{t.ticket}</option>
+                  <option value="per_minute">{t.perMinute}</option>
+                </select>
+              </label>
+              <label>
+                {t.ticketCost}
+                <input type="number" min="1" value={ticketCost} onChange={(e) => setTicketCost(Number(e.target.value))} />
+              </label>
+              <label>
+                {t.minuteCost}
+                <input type="number" min="1" value={perMinuteCost} onChange={(e) => setPerMinuteCost(Number(e.target.value))} />
+              </label>
+              <button type="button" onClick={() => void toggle(!room.private_show_enabled)}>
+                {room.private_show_enabled ? t.endPrivate : t.startPrivate}
+              </button>
+            </div>
+          </section>
+          <section>
+            <h3>{zh ? "快速管理" : "Quick moderation"}</h3>
+            <p className="muted">{zh ? "仅限演示观众" : "Demo Audience only"}</p>
+            <div className="admin-actions">
+              <button type="button" onClick={() => void moderate("mute")}>
+                {zh ? "禁言观众" : "Mute audience"}
+              </button>
+              <button type="button" onClick={() => void moderate("unmute")}>
+                {zh ? "解除观众禁言" : "Unmute audience"}
+              </button>
+            </div>
+          </section>
+        </div>
+      </details>
+
+      <details className="creator-settings creator-action-settings">
+        <summary>
+          <div>
+            <p className="eyebrow">{zh ? "收益工具" : "Earning tools"}</p>
+            <strong>{zh ? "礼物互动动作菜单" : "Viewer-supported action menu"}</strong>
+          </div>
+          <span>{zh ? "管理动作" : "Manage actions"}</span>
+        </summary>
+        <ActionMenuManager slug={room.slug} t={t} />
+      </details>
+
+      <details className="creator-settings obs-settings" id="obs-setup">
+        <summary>
+          <div>
+            <p className="eyebrow">{zh ? "技术帮助" : "Technical help"}</p>
+            <strong>{zh ? "OBS 相机与麦克风设置" : "OBS camera and microphone setup"}</strong>
+          </div>
+          <span>{zh ? "查看指南" : "View guide"}</span>
+        </summary>
+        <ObsReadiness state={broadcastState} t={t} />
+        {studio.broadcastControls?.localFallbackEnabled ? (
+          <div className="local-state-tool">
+            <label>{t.localBroadcast}</label>
+            <select
+              value={broadcastState}
+              onChange={(e) =>
+                void setLocalBroadcast(
+                  e.target.value as "live" | "connecting" | "offline" | "unavailable",
+                )
+              }
+            >
+              <option value="live">live</option>
+              <option value="connecting">connecting</option>
+              <option value="offline">offline</option>
+              <option value="unavailable">unavailable</option>
+            </select>
+          </div>
+        ) : null}
+      </details>
+      {notice && <p className="creator-toast">{notice}</p>}
     </section>
   );
 }

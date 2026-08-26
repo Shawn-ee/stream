@@ -1,5 +1,23 @@
 # Architecture Decisions
 
+## 2026-08-26 - Video-first creator cockpit (P0)
+
+Creator Studio is an operating surface, not an administration dashboard. Its primary hierarchy is: signed audience-feed confidence monitor, truthful lifecycle/start guidance, realtime audience/support activity, then secondary configuration. The site does not claim it can start OBS or capture devices; the primary offline action confirms that the creator started streaming in OBS and performs a safe status refresh.
+
+Creator preview reuses the existing role-authenticated signed playback endpoint and never reveals the playback token outside the iframe URL already required by the player. Audience count is based on deduplicated audience identities rather than raw Socket.IO connection count. Session summaries are server-calculated from persisted lifecycle boundaries and room-scoped support records and are restricted to the room owner.
+
+## 2026-08-26 - Explicit production media activation boundary (P0)
+
+Cloudflare Stream is enabled only when `CLOUDFLARE_STREAM_ENABLED=true` and every required server-side field is present. Production never exposes the local broadcast-state simulator. Status and playback fail closed with non-sensitive application messages, while playback-token failures are converted to a generic service-unavailable response. The first public proof reuses the existing `stream-mvp-local-test` Live Input; it does not create another input or change DNS/Tunnel configuration.
+
+When fully configured, the single launch-candidate API process polls assigned Live Inputs every 15 seconds so viewers do not depend on a creator pressing refresh. Polling is dormant when Stream is disabled, processes rooms independently, and persists/emits only actual lifecycle transitions. Multi-process polling leadership remains part of the later horizontal-scaling gate.
+
+## 2026-08-26 - Public physical media proof and credential retirement (P0)
+
+The public deployment uses one account-owned, least-privilege Cloudflare Stream Write token named `stream-holiwyn-production`. Both duplicate expiring development tokens were deleted after explicit owner confirmation. The secret was transferred through restricted temporary files, installed only in the ignored Linux production environment, and the temporary files were removed after the test.
+
+The owner-approved physical proof reused the existing Live Input and the installed FFmpeg encoder because OBS is unavailable. Automatic polling—not a manual fake-live state—reported the Logitech camera/microphone stream live. The public signed manifest contained video and audio, a Linux-side audience client authenticated through `holiwyn.online` and fetched the signed HLS manifest, and the lifecycle returned offline after encoder stop. This is technical delivery evidence; subjective picture/sound quality and OBS workflow acceptance remain human checks.
+
 ## 2026-08-23 - Local-first monorepo
 
 The MVP uses TypeScript workspaces: a React/Vite client, Fastify API, PostgreSQL, Redis, and Docker for stateful services. Applications run on the Windows host during development; PostgreSQL and Redis bind only to localhost.

@@ -1,5 +1,22 @@
 # Stream MVP Backlog
 
+## Completed P0 - Professional Creator Broadcast Cockpit
+
+- Completed locally: compact creator-specific shell, large signed self-monitoring stage, truthful offline/connecting/live/unavailable preview states, and a focused OBS start checklist.
+- Completed locally: realtime broadcast-state synchronization, deduplicated audience count, tabbed chat/support/audience activity, goal controls, session metrics, and secondary collapsible room/profile/private/action/moderation settings.
+- Completed locally: owner-only lifecycle-backed current/latest session summary with duration, gift/action test support, action count, and top supporter.
+- Completed verification: full staging gate, English/Chinese desktop review, real 390×844 responsive browser review with no horizontal overflow, lifecycle state checks, owner-only session-summary authorization, and final demo reset.
+- Pending separate owner decision: reviewed commit/GitHub publication and Linux/public deployment. No external broadcast was started for this milestone.
+- Deliberately excluded: browser camera capture, automatic OBS launch/control, stream-key display, real earnings/payment, production notification sounds, and subjective camera/audio quality claims.
+
+## Completed P0 - Public End-to-End Live Broadcast
+
+- Completed: explicit Stream enable/configuration gate, production removal of fake-live controls, sanitized failures, and automatic 15-second lifecycle reconciliation.
+- Completed with owner approval: created and installed one least-privilege production Stream token, verified it against the existing input, and deleted both obsolete expiring development tokens.
+- Completed: activated the existing Live Input in the ignored mode-600 Linux environment, deployed only the Stream API/web changes, and verified public offline/readiness behavior without secret exposure.
+- Completed with owner approval on 2026-08-26: physical Logitech camera/microphone ingest, automatic live/offline transitions, signed public playback, video/audio track proof, Linux-side audience HLS access, encoder stop, and demo reset.
+- Remaining owner acceptance: view and listen from a separate human-controlled device/network if subjective picture and sound quality evidence is desired; OBS-specific usability remains untested because OBS is not installed.
+
 ## Completed milestone: 0 - Control plane and foundations
 
 Control files, local runbook, PostgreSQL migration system, initial core schema, service connectivity check, schema test, API request/error logging, Cloudflare credential verifier, and local smoke check are in place. Exit gate passed on 2026-08-23.
