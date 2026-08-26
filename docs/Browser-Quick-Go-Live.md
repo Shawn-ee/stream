@@ -38,6 +38,7 @@ A button click never proves live status. The existing Cloudflare lifecycle polle
 - Full local staging gate: passed.
 - English/Chinese Creator Studio browser review: passed without granting real media permission.
 - Production Compose build/migration/readiness/gateway/artifact gate: passed.
+- Git/Linux deployment: commit `6aa776d` deployed; migration `012` applied; API/web healthy; public HTTPS bundle and camera/microphone policy headers verified; demo data reset.
 - Physical camera/audio WHIP-to-WHEP proof: pending fresh owner confirmation.
 
 ## Current limitation

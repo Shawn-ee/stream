@@ -8,13 +8,26 @@ The existing applications on the host were not restarted or modified. Stream rem
 
 ## Exact source and host admission
 
-- Current application source: `2a0ac1ef1a7ad6c52f573a3b530944a75ee7d4ee` on local branch `main`. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
+- Current application source: `6aa776def4b6f13da7d4ad237e6f9732aaa6caa5` on local branch `main`. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
 - Host: Ubuntu 20.04.6 LTS virtual machine, Linux AMD64.
 - Admission result: 8 logical CPUs, 11,964 MiB memory, 52 GiB free workspace disk, Git 2.25.1, Docker 26.1.3, Docker Compose 2.27.1, synchronized clock, and private gateway port available.
 - Production environment: mode `600`, generated distinct random secrets, public HTTPS origin through Cloudflare Tunnel, and an existing configured Cloudflare Stream Live Input.
 - Published gateway: `127.0.0.1:8080` only.
 
 The initial immutable tag remains historical and was not moved. The deployment uses the later exact application commit because it contains the production-environment, supply-chain, broadcast, and creator-cockpit hardening.
+
+## Browser-native Quick Go Live deployment
+
+The owner-approved inactive upgrade moved the public launch candidate to `6aa776def4b6f13da7d4ad237e6f9732aaa6caa5` using a reviewed GitHub push and fast-forward-only Linux pull. It did not request camera/microphone permission or start a Cloudflare broadcast.
+
+- Host-only rollback artifacts were created at `backups/pre-quick-go-live-20260826T230203Z.*`: database dump SHA-256 `6ea1f137ef13e0bc18ec770b5d5857ea20a576973e3f554b864c195e88717a51`, empty tracked-source patch SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, project archive SHA-256 `15a4d09c10895a390090badeefb41eedff1ece0104c2f346a796eb91aee73482`, and state record SHA-256 `088f09b73fee42d493f57a4cdc05f28d575d6beccb1920b21f1519d9fea13ffc`.
+- An earlier database-only rollback dump at `backups/pre-quick-go-live-20260826T230128Z.dump` was also retained, validated with the PostgreSQL 16 restore tool, and restricted to mode `600`; SHA-256 `17c99c4e97da1e90b1af2f60ddbf756375e209564cee664c55677fcbeae3ebd2`.
+- Migration `012_browser_quick_live.sql` applied and the `broadcast_transport` column plus `broadcast_sessions` table were verified.
+- Only the Stream API and web containers were recreated. PostgreSQL, Redis, Cloudflare Tunnel, and the unrelated Odoo containers were not recreated or restarted.
+- Current images are migration `sha256:0c511e59c4d1a5a0806fee55ff08d73ad41867b93e80951472fe1024b4a3f133`, API `sha256:ee49399b27d1d509f98921b9b583dd747ea02febbb25445cad6285eb7a948444`, and web `sha256:c2d8aabcea4ebca9c5efcf81e37672a7c6953ee282568ac5b077a7ae8dbe1263`.
+- Production readiness remained fail-closed and secret-safe. Creator Studio reported browser Quick Go Live available while retaining `obs_hls` as the reset default. The existing Live Input reported HTTPS WHIP and WHEP capability in a read-only check; provider URLs were withheld.
+- `https://holiwyn.online` returned HTTP 200 through Cloudflare, served the new Quick Go Live bundle, and returned `Permissions-Policy: camera=(self), microphone=(self), geolocation=()`. A read-only browser smoke test loaded the bilingual sign-in shell with no console errors.
+- Synthetic demo data was reset after deployment. Physical camera/audio WHIP-to-WHEP proof remains a separate owner-confirmed acceptance test.
 
 ## Creator cockpit public upgrade
 

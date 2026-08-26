@@ -2,11 +2,12 @@
 
 ## Active P0 - Browser-Native Quick Go Live
 
-- Implemented locally: explicit device permission, private preview, camera/microphone selection, microphone level, mute/camera controls, WHIP start, safe stop, and error recovery.
-- Implemented locally: server-only Cloudflare WebRTC endpoint discovery and signaling proxy; fixed WHIP/WHEP URLs, Stream token, account identifier, and SDP are excluded from browser logs and persistent browser storage.
-- Implemented locally: room transport/session persistence, single-active-publisher enforcement, stale-session recovery, creator ownership, CSRF/rate limits, private-show-aware WHEP authorization, and OBS/HLS fallback.
+- Implemented and deployed: explicit device permission, private preview, camera/microphone selection, microphone level, mute/camera controls, WHIP start, safe stop, and error recovery.
+- Implemented and deployed: server-only Cloudflare WebRTC endpoint discovery and signaling proxy; fixed WHIP/WHEP URLs, Stream token, account identifier, and SDP are excluded from browser logs and persistent browser storage.
+- Implemented and deployed: room transport/session persistence, single-active-publisher enforcement, stale-session recovery, creator ownership, CSRF/rate limits, private-show-aware WHEP authorization, and OBS/HLS fallback.
 - Verified: existing production Live Input advertises WHIP and WHEP without modification; provider/client unit tests, schema and role tests, expanded workflows, full staging gate, English/Chinese browser review, and production Compose gate pass.
-- Pending owner-assisted evidence: physical camera/microphone permission, short WHIP broadcast, provider-confirmed live state, WHEP audience audio/video, mute/camera controls, stop/offline recovery, then reviewed Git/Linux deployment.
+- Published and deployed with owner approval as GitHub commit `6aa776d`; migration `012`, healthy API/web, public HTTPS assets and security headers, creator availability, read-only WHIP/WHEP capability, safe OBS default, and demo reset were verified.
+- Pending owner-assisted evidence: physical camera/microphone permission, short WHIP broadcast, provider-confirmed live state, WHEP audience audio/video, mute/camera controls, and stop/offline recovery.
 - Known gate: Cloudflare WHIP/WHEP remains beta and must be monitored; OBS/HLS remains the stable fallback.
 
 ## Completed P0 - Professional Creator Broadcast Cockpit

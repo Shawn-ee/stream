@@ -18,9 +18,9 @@ Completed locally on 2026-08-26. The feature-heavy Creator Studio scroll is now 
 
 ## Active milestone: Browser-Native Quick Go Live
 
-The local launch candidate now includes an explicit creator-only camera/microphone permission flow, private preview, device selection, microphone level, mute/camera controls, WHIP publishing, WHEP audience playback, safe stop, transport-aware lifecycle, and an OBS/HLS fallback. The existing production Live Input passed a read-only WHIP/WHEP capability check. Fixed provider publishing and playback endpoints remain server-side because the Linux API proxies signaling only; audio/video media continues directly between browser and Cloudflare.
+The deployed launch candidate now includes an explicit creator-only camera/microphone permission flow, private preview, device selection, microphone level, mute/camera controls, WHIP publishing, WHEP audience playback, safe stop, transport-aware lifecycle, and an OBS/HLS fallback. The existing production Live Input passed a read-only WHIP/WHEP capability check. Fixed provider publishing and playback endpoints remain server-side because the Linux API proxies signaling only; audio/video media continues directly between browser and Cloudflare.
 
-Automated tests, the complete Cloudflare-free staging gate, bilingual browser review, and the production Compose gate pass. Completion still requires fresh owner approval for one short physical camera/audio broadcast, separate-device audience confirmation, clean stop/offline recovery, reviewed Git publication, and controlled Linux deployment.
+Automated tests, the complete Cloudflare-free staging gate, bilingual browser review, production Compose gate, reviewed Git publication, migration `012`, controlled Linux deployment, public HTTPS checks, and inactive creator capability checks pass. Completion still requires fresh owner approval for one short physical camera/audio broadcast, separate-device audience confirmation, and clean stop/offline recovery.
 
 ## Product scope
 

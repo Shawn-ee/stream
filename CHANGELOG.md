@@ -8,7 +8,9 @@
 - Added migration `012` for explicit room transport and lifecycle-backed browser broadcast sessions, including one active publisher per room and stale-session recovery.
 - Added creator ownership, audience/private-show playback authorization, CSRF, rate limits, SDP/log redaction, no-store responses, safe cross-origin resource rejection, and transport-mismatch denial.
 - Added deduplicated provider-endpoint caching, authenticated session heartbeats, bounded orphan cleanup, and answer-application recovery so failed or abandoned tabs do not strand publisher/viewer resources.
-- Passed read-only capability verification on the existing production input, focused provider/client/schema/role tests, the complete local staging gate, bilingual browser review, and the production Compose gate. Physical media proof and deployment remain owner-gated.
+- Passed read-only capability verification on the existing production input, focused provider/client/schema/role tests, the complete local staging gate, bilingual browser review, and the production Compose gate.
+- Published commit `6aa776d` and deployed it to the existing isolated Linux Stream project after creating host-only rollback artifacts. Migration `012` applied, only the Stream API/web containers were recreated, demo data was reset, and the public Cloudflare origin plus creator capability checks passed.
+- Physical camera/audio WHIP-to-WHEP proof remains a separate owner-assisted acceptance test; deployment did not request device permission or start a broadcast.
 
 ## 2026-08-26 - Creator cockpit public Linux deployment
 
