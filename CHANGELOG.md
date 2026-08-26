@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-26 - Individual accounts deployed to private Linux staging
+
+- Backed up and restored the active private database before upgrading exact source from `e1f64ad` to `e32058d`.
+- Built and applied migration `011`, recreated only the changed Stream migration/API/web containers, and preserved PostgreSQL, Redis, named volumes, localhost-only access, and the unrelated Odoo project.
+- Verified healthy services, private readiness/metrics, zero restart counts, unique case-folded handle index, tunneled registration/session/age identity, hashed credentials, exact temporary-account cleanup, and English/Chinese Linux browser rendering.
+- Recorded the guarded operator's live-port limitation for a future upgrade-aware action. No public exposure, DNS, Cloudflare, video, real payment, KYC, or compliance action occurred.
+
 ## 2026-08-26 - Individual audience account foundation
 
 - Added self-service, test-safe audience registration using case-folded unique handles, display names, strong local passwords, and an English/Chinese onboarding interface.
@@ -7,7 +14,7 @@
 - Corrected age acknowledgement so a newly registered account retains its own identity instead of resolving to the first seeded user with the same role.
 - Added per-IP registration throttling, trimmed-name validation, reserved demo-handle protection, duplicate-race handling, and zero initial test-coin behavior.
 - Added a cleanup-safe registration verifier to the complete staging gate and browser-smoked both language variants. The full Cloudflare-free staging gate passed and demo data was reset.
-- Added the ordered non-video completion plan. No Linux, public exposure, DNS, Cloudflare, real email/OAuth, payment, KYC, or compliance change occurred in this implementation step.
+- Added the ordered non-video completion plan. The initial implementation step made no Linux, public exposure, DNS, Cloudflare, real email/OAuth, payment, KYC, or compliance change; the separately recorded private Linux upgrade followed after verification.
 - Made the disposable production-Compose smoke verifier allocate an unused localhost port so it can coexist with the persistent Linux SSH tunnel instead of failing on fixed port `18080`.
 
 ## 2026-08-26 - Owner-approved private Linux staging

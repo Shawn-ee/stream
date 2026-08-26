@@ -64,7 +64,7 @@ The project-owned verifier sends a 25-second synthetic FFmpeg broadcast to the e
 
 ## Deployable 100-user roadmap
 
-The active product goal and phase gates are in `GOAL.md` and `docs/100-User-Deployment-Plan.md`. Local product, security, packaging, physical media, operational, and 100-concurrent-user evidence are complete, including a repeatable human browser acceptance checklist. The reviewed baseline and environment/supply-chain hardening are published; the guarded private-staging operator and aligned Git host admission are recorded in local application-source candidate `e1f64ad73e26792a84a94460afba50e0e16d5db3` and await publication approval. The following work remains owner-gated: publish that exact code commit, then select and approve a private Linux staging target and host-specific secret/TLS/monitoring approach. Cloudflare configuration/cost, public exposure, payment, real identity, age/KYC, and compliance actions remain separate explicit approval gates.
+The active product goal and phase gates are in `GOAL.md` and `docs/100-User-Deployment-Plan.md`. Local product, security, packaging, physical media, operational, and 100-concurrent-user evidence are complete. Private Linux staging is running exact source `e32058df1abc76c08e0bdc041206fa7a98f81c8c` behind a localhost-only SSH tunnel and now includes individual test-safe audience registration. Cloudflare configuration/cost, public exposure, payment, external identity, age/KYC, and compliance actions remain separate explicit approval gates.
 
 ### Production-readiness audit queue
 
@@ -95,3 +95,4 @@ The ordered plan is maintained in `docs/Non-Video-Completion-Plan.md`.
 3. P0: test-only creator application, administrator decision, and transactional creator profile/offline-room provisioning.
 4. P1: user blocking, notification read state, reconnect/error polish, and persistent moderation boundary tests.
 5. Owner-gated: deploy an exact reviewed commit to the existing private Linux Stream Compose project and repeat migration/readiness/backup evidence. Public access and video remain separate.
+6. P1 operational debt: add a guarded in-place `upgrade` action that recognizes the existing Compose project's localhost gateway instead of failing host admission because its own port is live.

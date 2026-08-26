@@ -8,7 +8,7 @@ The existing applications on the host were not restarted or modified. Stream was
 
 ## Exact source and host admission
 
-- Application source: `e1f64ad73e26792a84a94460afba50e0e16d5db3` in detached-HEAD state.
+- Current application source: `e32058df1abc76c08e0bdc041206fa7a98f81c8c` in detached-HEAD state. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
 - Host: Ubuntu 20.04.6 LTS virtual machine, Linux AMD64.
 - Admission result: 8 logical CPUs, 11,964 MiB memory, 52 GiB free workspace disk, Git 2.25.1, Docker 26.1.3, Docker Compose 2.27.1, synchronized clock, and private gateway port available.
 - Production environment: mode `600`, generated distinct random secrets, private SSH-tunnel origin, and Cloudflare Stream disabled.
@@ -33,6 +33,21 @@ Recorded application image IDs:
 - API: `sha256:b292dfb47604d983e38511dfd42dc5fbded4e5480bbebe37e71b94894f2f0df0`
 - Web: `sha256:1d717f152b1ff137c3e2bdb9c1c8b250749c2b8d8e34d2b790b6df78b016ab1d`
 
+## Individual-account upgrade evidence
+
+The first private in-place upgrade moved the application from `e1f64ad73e26792a84a94460afba50e0e16d5db3` to `e32058df1abc76c08e0bdc041206fa7a98f81c8c` without recreating PostgreSQL or Redis and without touching the separate Odoo Compose project.
+
+- A mode-`600` pre-upgrade custom-format backup was created at the ignored host-only backup path. SHA-256: `ab0249f1d0de9765900d80c8a40f3f054bbb489f5cef99ec93f5bb2e7a61aeee`.
+- The backup restored into the exact disposable database `stream_mvp_restore_check`, where four users and two rooms were verified; the disposable database was then removed.
+- Migration `011_individual_accounts.sql` and index `users_handle_casefold_unique_idx` are present on the active database.
+- Current API image: `sha256:48978b765bb14841927a8803d87166e3a718979b9df306897478ffa406a823e4`.
+- Current web image: `sha256:a927e4f2c019d11fd248b360735bb00a5b0b287c67ba29cb1bcf1c41758ffb2b`.
+- All four Stream services are healthy with zero restart counts after the upgrade; PostgreSQL and Redis retained their original container images.
+- A generated temporary audience account registered through the SSH-tunneled Linux gateway, retained its identity through session and age acknowledgement, stored a password hash, remained audience-only, and was deleted. The database returned to four synthetic users and two rooms.
+- English and Chinese registration views rendered successfully through `http://localhost:18080/`.
+
+The guarded operator's initial-deployment `plan/start` path currently treats the live Stream-owned gateway port as a host conflict, so it cannot directly perform an in-place upgrade. The upgrade therefore used the same validated Compose file and secret environment after a guarded read-only verification, followed by explicit `build` and `up -d`. Add an upgrade-aware operator action before the next host upgrade.
+
 ## Private staging data
 
 Because this is a private test environment with no public customer identity system, the owner-approved staging instance contains only the four predefined synthetic accounts, two test rooms, fake gifts/actions, and test coins. Audience, streamer, and administrator authentication passed using the randomly generated host-only test password. No real user, payment, payout, KYC, or age-verification data was added.
@@ -55,4 +70,4 @@ The Windows operator uses a local SSH tunnel from `localhost:18080` to the Linux
 - The host observation was short. No 100-user load test was run on this shared host because it could compete with another application; the separate local digest-locked 100-user evidence remains authoritative.
 - Cloudflare Stream is disabled on Linux. Enabling playback requires a rotated, narrowly scoped token and fresh owner approval.
 - No public exposure, DNS, public TLS, external monitoring/alerts, real identity, payments/cashout, KYC/age enforcement, or legal/compliance readiness is approved.
-- The first deployment has no prior Stream application image to exercise as a rollback target. Source/image identifiers and verified database backups are recorded for the next upgrade drill.
+- The previous Stream source and application-image IDs are now recorded as a rollback target, but an intentional rollback was not exercised because the upgrade passed. The operator still needs an upgrade-aware guarded action.
