@@ -1,20 +1,32 @@
-# Private Linux Staging Deployment Report
+# Linux Launch-Candidate Deployment Report
 
 ## Outcome
 
-On 2026-08-26, the owner approved and the launch candidate was deployed to an owner-controlled private Linux virtual machine. The deployment remains reachable only through an SSH tunnel; no public listener, DNS record, TLS certificate, Cloudflare resource, payment service, identity provider, or compliance system was created or changed.
+On 2026-08-26, the owner approved and the launch candidate was deployed to an owner-controlled Linux virtual machine. The original deployment was private; the current Stream web gateway is published at `https://holiwyn.online` through the separately managed Cloudflare Tunnel. Cloudflare Stream handles video delivery separately. No real payment, identity provider, KYC, or compliance system was added.
 
-The existing applications on the host were not restarted or modified. Stream was installed in a new isolated subdirectory and uses the separate Compose project `stream-launch-candidate`.
+The existing applications on the host were not restarted or modified. Stream remains in its isolated project directory and uses the separate Compose project `stream-launch-candidate`.
 
 ## Exact source and host admission
 
-- Current application source: `e32058df1abc76c08e0bdc041206fa7a98f81c8c` in detached-HEAD state. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
+- Current application source: `2a0ac1ef1a7ad6c52f573a3b530944a75ee7d4ee` on local branch `main`. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
 - Host: Ubuntu 20.04.6 LTS virtual machine, Linux AMD64.
 - Admission result: 8 logical CPUs, 11,964 MiB memory, 52 GiB free workspace disk, Git 2.25.1, Docker 26.1.3, Docker Compose 2.27.1, synchronized clock, and private gateway port available.
-- Production environment: mode `600`, generated distinct random secrets, private SSH-tunnel origin, and Cloudflare Stream disabled.
+- Production environment: mode `600`, generated distinct random secrets, public HTTPS origin through Cloudflare Tunnel, and an existing configured Cloudflare Stream Live Input.
 - Published gateway: `127.0.0.1:8080` only.
 
-The initial immutable tag remains historical and was not moved. The deployment uses the later exact application commit because it contains the production-environment, supply-chain, guarded-operator, and host-admission hardening.
+The initial immutable tag remains historical and was not moved. The deployment uses the later exact application commit because it contains the production-environment, supply-chain, broadcast, and creator-cockpit hardening.
+
+## Creator cockpit public upgrade
+
+The owner-approved upgrade moved the public launch candidate to `2a0ac1ef1a7ad6c52f573a3b530944a75ee7d4ee` using a reviewed GitHub push and a fast-forward-only pull on Linux.
+
+- Recovery artifacts were created before the pull and kept outside Git in the host-only `backups` directory: database dump SHA-256 `3d5b63582ab025d22f2476e2bbfb34203850416a8c7bc5fa3f75557afbad53a6`, tracked-source patch SHA-256 `953b2228d9051c050dda075fc193970d3feb7a7ba905f88dedd72aeec394f4cd`, and project-tree archive SHA-256 `3b54be3968b3eca7b75465d22d1f99148c195f5deee322bbdae3388d743106be`.
+- The pre-upgrade tracked source changes remain available in the host recovery stash `pre-creator-cockpit-github-upgrade`; it was not reapplied because the reviewed commit contains the intended changes.
+- Ordered migrations completed, then only the Stream API and web containers were recreated. PostgreSQL, Redis, Cloudflare Tunnel, and the unrelated Odoo containers were left running.
+- Current application images are API `sha256:a3fe6128ec32e74515e832113654a8a7641d8ea70d0991704bb7a1320b97e844` and web `sha256:91b2fe9255d4ab95b126e724bce95993f68e1db149a09c3ccceefd94d3810354`.
+- API and web are healthy with zero restart counts. PostgreSQL and Redis remain healthy. The three Odoo containers remained running after the upgrade.
+- The synthetic demo dataset was reset. The production readiness verifier confirmed the configured creator, truthful offline lifecycle, fail-closed playback, absent fake-live production route, and no Stream credential exposure.
+- The public origin returned HTTP 200 and served the new Creator Studio/Live Session application bundle.
 
 ## Deployment evidence
 
@@ -50,7 +62,7 @@ The guarded operator's initial-deployment `plan/start` path currently treats the
 
 ## Private staging data
 
-Because this is a private test environment with no public customer identity system, the owner-approved staging instance contains only the four predefined synthetic accounts, two test rooms, fake gifts/actions, and test coins. Audience, streamer, and administrator authentication passed using the randomly generated host-only test password. No real user, payment, payout, KYC, or age-verification data was added.
+Although the launch-candidate URL is public, the application remains a test-only environment with no public customer identity system. It contains only the predefined synthetic accounts, two test rooms, fake gifts/actions, and test coins. Audience, streamer, and administrator authentication passed using the randomly generated host-only test password. No real user, payment, payout, KYC, or age-verification data was added.
 
 Two mode-`600` PostgreSQL custom-format backups were created under the ignored host-only `work/staging-backups` directory:
 
@@ -61,13 +73,13 @@ Each backup was restored into the exact disposable database `stream_mvp_restore_
 
 ## Access
 
-The Windows operator uses a local SSH tunnel from `localhost:18080` to the Linux gateway at `127.0.0.1:8080`. The browser URL is `http://localhost:18080/`. Closing the SSH tunnel removes access without stopping the Linux containers.
+The primary browser URL is `https://holiwyn.online`. Cloudflare Tunnel forwards that hostname to the Linux gateway, which remains bound to `127.0.0.1:8080`; the gateway is not exposed directly on the VM network. An operator may still use an SSH tunnel to `localhost:18080` for private diagnostics.
 
 ## Remaining limitations and gates
 
 - Ubuntu 20.04 is outside standard support; upgrade or extended security maintenance is required before any broader or long-lived production use.
 - Backups currently remain on the same VM. Encrypted off-host backup storage is not yet configured.
 - The host observation was short. No 100-user load test was run on this shared host because it could compete with another application; the separate local digest-locked 100-user evidence remains authoritative.
-- Cloudflare Stream is disabled on Linux. Enabling playback requires a rotated, narrowly scoped token and fresh owner approval.
-- No public exposure, DNS, public TLS, external monitoring/alerts, real identity, payments/cashout, KYC/age enforcement, or legal/compliance readiness is approved.
+- Cloudflare Stream is configured and its lifecycle is verified, but each physical camera/microphone broadcast remains an owner-started action that consumes Stream resources.
+- Public DNS/TLS and Tunnel routing are active. External monitoring/alerts, real identity, payments/cashout, KYC/age enforcement, and legal/compliance readiness remain incomplete.
 - The previous Stream source and application-image IDs are now recorded as a rollback target, but an intentional rollback was not exercised because the upgrade passed. The operator still needs an upgrade-aware guarded action.

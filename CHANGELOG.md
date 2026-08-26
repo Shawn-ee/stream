@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-26 - Creator cockpit public Linux deployment
+
+- Published the reviewed creator-cockpit implementation as GitHub commit `2a0ac1e` and fast-forwarded the isolated Linux checkout to that exact source.
+- Created host-only database, source-diff, and project-tree recovery artifacts before the pull; preserved the pre-upgrade tracked changes in a recovery Git stash.
+- Built the migration, API, and web images on Linux, ran the ordered migration, and recreated only the Stream API and web containers. PostgreSQL, Redis, Cloudflare Tunnel, and the unrelated Odoo stack were not recreated or restarted.
+- Reset the synthetic demo dataset and passed the production Stream readiness check: configured creator, truthful Cloudflare-offline state, fail-closed signed playback, absent fake-live route, and no secret exposure.
+- Verified `https://holiwyn.online` returns HTTP 200 with the new Creator Studio and Live Session bundle; the API and web containers are healthy with zero restarts.
+
 ## 2026-08-26 - Professional Creator Broadcast Cockpit
 
 - Replaced the long creator feature dashboard with a compact creator-specific shell, video-first signed confidence monitor, clear OBS start flow, and responsive control rail.

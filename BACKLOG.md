@@ -2,11 +2,11 @@
 
 ## Completed P0 - Professional Creator Broadcast Cockpit
 
-- Completed locally: compact creator-specific shell, large signed self-monitoring stage, truthful offline/connecting/live/unavailable preview states, and a focused OBS start checklist.
-- Completed locally: realtime broadcast-state synchronization, deduplicated audience count, tabbed chat/support/audience activity, goal controls, session metrics, and secondary collapsible room/profile/private/action/moderation settings.
-- Completed locally: owner-only lifecycle-backed current/latest session summary with duration, gift/action test support, action count, and top supporter.
+- Completed and deployed: compact creator-specific shell, large signed self-monitoring stage, truthful offline/connecting/live/unavailable preview states, and a focused OBS start checklist.
+- Completed and deployed: realtime broadcast-state synchronization, deduplicated audience count, tabbed chat/support/audience activity, goal controls, session metrics, and secondary collapsible room/profile/private/action/moderation settings.
+- Completed and deployed: owner-only lifecycle-backed current/latest session summary with duration, gift/action test support, action count, and top supporter.
 - Completed verification: full staging gate, English/Chinese desktop review, real 390×844 responsive browser review with no horizontal overflow, lifecycle state checks, owner-only session-summary authorization, and final demo reset.
-- Pending separate owner decision: reviewed commit/GitHub publication and Linux/public deployment. No external broadcast was started for this milestone.
+- Published and deployed with owner approval as GitHub commit `2a0ac1e`; public HTTP, container health, production readiness, and synthetic demo reset passed. No external broadcast was started for this milestone.
 - Deliberately excluded: browser camera capture, automatic OBS launch/control, stream-key display, real earnings/payment, production notification sounds, and subjective camera/audio quality claims.
 
 ## Completed P0 - Public End-to-End Live Broadcast
