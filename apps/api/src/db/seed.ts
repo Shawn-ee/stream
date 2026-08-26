@@ -101,6 +101,9 @@ try {
     [accounts[0][0], accounts[1][0], accounts[2][0]],
   );
   await client.query(
+    "DELETE FROM broadcast_sessions WHERE room_id IN ('20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002')",
+  );
+  await client.query(
     "DELETE FROM room_lifecycle_events WHERE room_id IN ('20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002')",
   );
   await client.query(
@@ -137,7 +140,7 @@ try {
     [accounts[0][0]],
   );
   await client.query(
-    "UPDATE live_rooms SET goal_text='Test goal: enjoy the stream.',goal_target=500,goal_progress=0 WHERE id='20000000-0000-4000-8000-000000000001'",
+    "UPDATE live_rooms SET goal_text='Test goal: enjoy the stream.',goal_target=500,goal_progress=0,broadcast_transport='obs_hls' WHERE id='20000000-0000-4000-8000-000000000001'",
   );
   await client.query(
     "INSERT INTO room_actions (id,room_id,title,coin_cost,duration_label,display_order) VALUES ('50000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','Wave hello',25,'Quick action',1),('50000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','Creator choice',75,'5 min',2)",

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently --names api,web --prefix-colors blue,green \"npm run dev --workspace=@stream-mvp/api\" \"npm run dev --workspace=@stream-mvp/web\"",
     "check": "npm run check --workspaces --if-present",
-    "test": "node --env-file=.env --import tsx --test apps/api/tests/schema.test.ts apps/api/tests/broadcast-status.test.ts apps/api/tests/broadcast-poller.test.ts",
+    "test": "node --env-file=.env --import tsx --test apps/api/tests/schema.test.ts apps/api/tests/broadcast-status.test.ts apps/api/tests/broadcast-poller.test.ts apps/api/tests/cloudflare-webrtc.test.ts apps/api/tests/browser-webrtc-client.test.ts",
     "db:migrate": "node --env-file=.env --import tsx apps/api/src/db/migrate.ts",
     "db:seed": "node --env-file=.env --import tsx apps/api/src/db/seed.ts",
     "verify:local": "node --env-file=.env --import tsx scripts/verify-local.ts",

@@ -1,6 +1,12 @@
 import { StrictMode, useEffect, useRef, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { io } from "socket.io-client";
+import {
+  createWhepPlayer,
+  createWhipPublisher,
+  stopMediaStream,
+  type WebRtcController,
+} from "./webrtc";
 import "./styles.css";
 
 type Role = "audience" | "streamer" | "admin";
@@ -26,6 +32,7 @@ type Room = {
   broadcast_state?: "live" | "connecting" | "offline" | "unavailable";
   broadcast_checked_at?: string | null;
   broadcast_status_message?: string;
+  broadcast_transport?: "obs_hls" | "browser_webrtc";
 };
 type StreamerProfile = {
   display_name: string;
@@ -210,12 +217,15 @@ const copy: Record<Language, Record<string, string>> = {
     stateUnavailable: "\u72b6\u6001\u6682\u65f6\u4e0d\u53ef\u7528",
   },
 };
-async function request(path: string, options?: RequestInit) {
-  const csrf = document.cookie
+function csrfToken() {
+  return document.cookie
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith("stream_csrf="))
     ?.slice("stream_csrf=".length);
+}
+async function request(path: string, options?: RequestInit) {
+  const csrf = csrfToken();
   const response = await fetch(path, {
     credentials: "include",
     headers: {
@@ -264,8 +274,8 @@ function creatorBroadcastMessage(
           ? "暂时无法确认直播状态，请稍后重试。"
           : "Broadcast status cannot be confirmed right now."
         : zh
-          ? "OBS 尚未推流，直播间目前离线。"
-          : "OBS is not streaming and your room is offline.";
+          ? "尚未开始推流，直播间目前离线。"
+          : "No broadcast is active and your room is offline.";
 }
 function LanguagePicker({
   language,
@@ -329,6 +339,7 @@ function App() {
         state: "live" | "connecting" | "offline" | "unavailable";
         message: string;
         checkedAt: string;
+        transport?: "obs_hls" | "browser_webrtc";
       }) => {
         setRooms((current) =>
           current.map((item) =>
@@ -1139,7 +1150,17 @@ function ActionMenuManager({ slug, t }: { slug: string; t: typeof copy.en }) {
     </section>
   );
 }
-function ObsReadiness({ state, t }: { state?: string; t: typeof copy.en }) {
+function ObsReadiness({
+  slug,
+  state,
+  t,
+  onChanged,
+}: {
+  slug: string;
+  state?: string;
+  t: typeof copy.en;
+  onChanged: () => void;
+}) {
   const zh = t.title !== "Stream MVP";
   const stateGuide: Record<string, string> = zh
     ? {
@@ -1188,6 +1209,19 @@ function ObsReadiness({ state, t }: { state?: string; t: typeof copy.en }) {
       <p className={`obs-state state-${state ?? "offline"}`}>
         {stateGuide[state ?? "offline"]}
       </p>
+      <button
+        type="button"
+        className="secondary"
+        disabled={state === "live"}
+        onClick={() =>
+          void request(`/api/streamer/rooms/${slug}/broadcast/transport`, {
+            method: "PUT",
+            body: JSON.stringify({ transport: "obs_hls" }),
+          }).then(onChanged)
+        }
+      >
+        {zh ? "切换到专业 OBS 模式" : "Switch to professional OBS mode"}
+      </button>
       <details>
         <summary>
           {zh
@@ -1221,14 +1255,346 @@ function ObsReadiness({ state, t }: { state?: string; t: typeof copy.en }) {
   );
 }
 
+type QuickLivePhase =
+  | "idle"
+  | "requesting"
+  | "preview"
+  | "connecting"
+  | "live"
+  | "error";
+
+function QuickGoLive({
+  slug,
+  available,
+  broadcastState,
+  transport,
+  t,
+  onChanged,
+}: {
+  slug: string;
+  available: boolean;
+  broadcastState: string;
+  transport?: "obs_hls" | "browser_webrtc";
+  t: typeof copy.en;
+  onChanged: () => void;
+}) {
+  const zh = t.title !== "Stream MVP";
+  const [phase, setPhase] = useState<QuickLivePhase>("idle");
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [cameraId, setCameraId] = useState("");
+  const [microphoneId, setMicrophoneId] = useState("");
+  const [micLevel, setMicLevel] = useState(0);
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [error, setError] = useState("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controllerRef = useRef<WebRtcController | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    streamRef.current = stream;
+    if (videoRef.current) videoRef.current.srcObject = stream;
+  }, [stream]);
+  useEffect(() => {
+    if (broadcastState === "live" && transport === "browser_webrtc")
+      setPhase("live");
+    else if (phase === "live" && broadcastState !== "live")
+      setPhase(stream ? "preview" : "idle");
+  }, [broadcastState, transport, phase, stream]);
+  useEffect(() => {
+    if (!stream?.getAudioTracks()[0]) {
+      setMicLevel(0);
+      return;
+    }
+    const context = new AudioContext();
+    void context.resume();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    const source = context.createMediaStreamSource(stream);
+    source.connect(analyser);
+    const samples = new Uint8Array(analyser.frequencyBinCount);
+    let frame = 0;
+    const measure = () => {
+      analyser.getByteFrequencyData(samples);
+      setMicLevel(Math.min(100, Math.round(samples.reduce((a, b) => a + b, 0) / samples.length)));
+      frame = requestAnimationFrame(measure);
+    };
+    measure();
+    return () => {
+      cancelAnimationFrame(frame);
+      source.disconnect();
+      void context.close();
+    };
+  }, [stream]);
+  useEffect(
+    () => () => {
+      controllerRef.current?.close();
+      stopMediaStream(streamRef.current);
+      const sessionId = sessionIdRef.current;
+      const csrf = csrfToken();
+      if (sessionId && csrf)
+        void fetch(`/api/streamer/rooms/${slug}/webrtc/publish/${sessionId}`, {
+          method: "DELETE",
+          credentials: "include",
+          keepalive: true,
+          headers: { "x-csrf-token": csrf },
+        });
+    },
+    [slug],
+  );
+  useEffect(() => {
+    const heartbeat = window.setInterval(() => {
+      const sessionId = sessionIdRef.current;
+      if (!sessionId) return;
+      void request(
+        `/api/streamer/rooms/${slug}/webrtc/publish/${sessionId}`,
+        { method: "PATCH" },
+      ).catch(() => {
+        setPhase("error");
+        setError(
+          zh
+            ? "直播会话已失去联系。请结束后重新开始。"
+            : "The broadcast session lost contact. End it before trying again.",
+        );
+      });
+    }, 60_000);
+    return () => window.clearInterval(heartbeat);
+  }, [slug, zh]);
+
+  async function enableDevices(nextCamera = cameraId, nextMicrophone = microphoneId) {
+    setPhase("requesting");
+    setError("");
+    try {
+      const next = await navigator.mediaDevices.getUserMedia({
+        video: nextCamera ? { deviceId: { exact: nextCamera } } : true,
+        audio: nextMicrophone ? { deviceId: { exact: nextMicrophone } } : true,
+      });
+      stopMediaStream(streamRef.current);
+      setStream(next);
+      const availableDevices = await navigator.mediaDevices.enumerateDevices();
+      setDevices(availableDevices);
+      setCameraId(next.getVideoTracks()[0]?.getSettings().deviceId ?? nextCamera);
+      setMicrophoneId(next.getAudioTracks()[0]?.getSettings().deviceId ?? nextMicrophone);
+      setCameraEnabled(true);
+      setMicrophoneEnabled(true);
+      setPhase("preview");
+    } catch (caught) {
+      setPhase("error");
+      setError(
+        (caught as DOMException).name === "NotAllowedError"
+          ? zh
+            ? "相机或麦克风权限被拒绝。请在浏览器地址栏中允许后重试。"
+            : "Camera or microphone permission was denied. Allow it in the browser address bar and try again."
+          : zh
+            ? "无法打开相机或麦克风。请检查设备是否被其他程序占用。"
+            : "The camera or microphone could not be opened. Check whether another application is using it.",
+      );
+    }
+  }
+  async function goLive() {
+    if (!stream || !available) return;
+    setPhase("connecting");
+    setError("");
+    try {
+      const controller = await createWhipPublisher(
+        stream,
+        async (sdp) => {
+          const result = await request(`/api/streamer/rooms/${slug}/webrtc/publish`, {
+            method: "POST",
+            body: JSON.stringify({ sdp }),
+          });
+          sessionIdRef.current = result.sessionId;
+          return result;
+        },
+        (state) => {
+          if (state === "failed" || state === "disconnected") {
+            setPhase("error");
+            setError(
+              zh
+                ? "直播连接已中断。请结束后重试。"
+                : "The broadcast connection was interrupted. End it and try again.",
+            );
+          }
+        },
+      );
+      controllerRef.current = controller;
+      sessionIdRef.current = controller.sessionId;
+      onChanged();
+    } catch {
+      setPhase("error");
+      setError(
+        zh
+          ? "无法连接直播服务。相机尚未对观众开放。"
+          : "The broadcast service could not connect. Your camera was not made available to viewers.",
+      );
+    }
+  }
+  async function endBroadcast() {
+    const sessionId = sessionIdRef.current;
+    controllerRef.current?.close();
+    controllerRef.current = null;
+    sessionIdRef.current = null;
+    if (sessionId)
+      await request(`/api/streamer/rooms/${slug}/webrtc/publish/${sessionId}`, {
+        method: "DELETE",
+      }).catch(() => undefined);
+    stopMediaStream(streamRef.current);
+    setStream(null);
+    setPhase("idle");
+    onChanged();
+  }
+  function toggleCamera() {
+    const track = stream?.getVideoTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    setCameraEnabled(track.enabled);
+  }
+  function toggleMicrophone() {
+    const track = stream?.getAudioTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    setMicrophoneEnabled(track.enabled);
+  }
+  const cameras = devices.filter((device) => device.kind === "videoinput");
+  const microphones = devices.filter((device) => device.kind === "audioinput");
+  return (
+    <section className={`quick-live-panel phase-${phase}`} id="quick-go-live">
+      <div className="quick-live-heading">
+        <div>
+          <p className="eyebrow">{zh ? "快速开播" : "Quick Go Live"}</p>
+          <h3>{zh ? "直接使用浏览器开播" : "Broadcast directly from your browser"}</h3>
+        </div>
+        <span>{phase === "live" ? (zh ? "直播中" : "LIVE") : zh ? "私密预览" : "Private preview"}</span>
+      </div>
+      {stream ? (
+        <video ref={videoRef} className="quick-live-preview" autoPlay muted playsInline />
+      ) : (
+        <div className="quick-live-empty">
+          <strong>{zh ? "您的预览仅在授权后显示" : "Your preview appears only after permission"}</strong>
+          <p>{zh ? "浏览器不会在您点击之前访问设备。" : "The browser will not access devices until you click."}</p>
+        </div>
+      )}
+      {stream ? (
+        <>
+          <div className="device-grid">
+            <label>
+              {zh ? "相机" : "Camera"}
+              <select value={cameraId} onChange={(event) => void enableDevices(event.target.value, microphoneId)} disabled={phase === "connecting" || phase === "live"}>
+                {cameras.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${zh ? "相机" : "Camera"} ${index + 1}`}</option>)}
+              </select>
+            </label>
+            <label>
+              {zh ? "麦克风" : "Microphone"}
+              <select value={microphoneId} onChange={(event) => void enableDevices(cameraId, event.target.value)} disabled={phase === "connecting" || phase === "live"}>
+                {microphones.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${zh ? "麦克风" : "Microphone"} ${index + 1}`}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="microphone-meter" aria-label={zh ? "麦克风音量" : "Microphone level"}>
+            <span style={{ width: `${microphoneEnabled ? micLevel : 0}%` }} />
+          </div>
+          <div className="quick-live-controls">
+            <button type="button" className="secondary" onClick={toggleCamera}>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</button>
+            <button type="button" className="secondary" onClick={toggleMicrophone}>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</button>
+            {phase === "connecting" || phase === "live" || phase === "error" ? (
+              <button type="button" className="danger" onClick={() => void endBroadcast()}>{zh ? "结束直播" : "End broadcast"}</button>
+            ) : (
+              <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview"}>{zh ? "开始直播" : "Go Live"}</button>
+            )}
+          </div>
+        </>
+      ) : (
+        <button type="button" className="creator-primary-action" onClick={() => void enableDevices()} disabled={phase === "requesting"}>{phase === "requesting" ? (zh ? "正在请求权限…" : "Requesting permission…") : zh ? "启用相机和麦克风" : "Enable camera and microphone"}</button>
+      )}
+      {!available ? <p className="control-note">{zh ? "此本地环境可测试预览，但未连接浏览器直播服务。" : "This local environment can test preview, but browser broadcasting is not connected."}</p> : null}
+      {error ? <p className="quick-live-error" role="alert">{error}</p> : null}
+    </section>
+  );
+}
+
+function WhepPlayer({ slug, active, t }: { slug: string; active: boolean; t: typeof copy.en }) {
+  const zh = t.title !== "Stream MVP";
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controllerRef = useRef<WebRtcController | null>(null);
+  const [state, setState] = useState<"idle" | "connecting" | "playing" | "error">("idle");
+  useEffect(() => {
+    if (!active) {
+      setState("idle");
+      return;
+    }
+    let cancelled = false;
+    let sessionId: string | null = null;
+    const heartbeat = window.setInterval(() => {
+      if (!sessionId) return;
+      void request(`/api/rooms/${slug}/webrtc/play/${sessionId}`, {
+        method: "PATCH",
+      }).catch(() => setState("error"));
+    }, 60_000);
+    setState("connecting");
+    void createWhepPlayer(
+      async (sdp) => {
+        const result = await request(`/api/rooms/${slug}/webrtc/play`, {
+          method: "POST",
+          body: JSON.stringify({ sdp }),
+        });
+        sessionId = result.sessionId;
+        return result;
+      },
+      (stream) => {
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      },
+      (connection) => {
+        if (!cancelled && connection === "connected") setState("playing");
+        if (!cancelled && (connection === "failed" || connection === "disconnected")) setState("error");
+      },
+    ).then((controller) => {
+      if (cancelled) {
+        controller.close();
+        return;
+      }
+      controllerRef.current = controller;
+      sessionId = controller.sessionId;
+    }).catch(() => {
+      if (!cancelled) setState("error");
+      const csrf = csrfToken();
+      if (sessionId && csrf)
+        void fetch(`/api/rooms/${slug}/webrtc/play/${sessionId}`, {
+          method: "DELETE",
+          credentials: "include",
+          keepalive: true,
+          headers: { "x-csrf-token": csrf },
+        });
+    });
+    return () => {
+      cancelled = true;
+      window.clearInterval(heartbeat);
+      controllerRef.current?.close();
+      controllerRef.current = null;
+      const csrf = csrfToken();
+      if (sessionId && csrf)
+        void fetch(`/api/rooms/${slug}/webrtc/play/${sessionId}`, { method: "DELETE", credentials: "include", keepalive: true, headers: { "x-csrf-token": csrf } });
+    };
+  }, [slug, active]);
+  return (
+    <div className="whep-player-shell">
+      <video ref={videoRef} className="player" autoPlay playsInline controls />
+      {state !== "playing" ? <div className="whep-status">{state === "error" ? (zh ? "直播连接暂时不可用。" : "Live connection is temporarily unavailable.") : zh ? "正在连接实时画面…" : "Connecting to the live feed…"}</div> : null}
+    </div>
+  );
+}
+
 function CreatorBroadcastPreview({
   slug,
   state,
+  transport,
   configured,
   t,
 }: {
   slug: string;
   state: "live" | "connecting" | "offline" | "unavailable";
+  transport?: "obs_hls" | "browser_webrtc";
   configured: boolean;
   t: typeof copy.en;
 }) {
@@ -1238,7 +1604,7 @@ function CreatorBroadcastPreview({
   useEffect(() => {
     setIframeUrl(null);
     setPreviewUnavailable(false);
-    if (state !== "live" || !configured) return;
+    if (state !== "live" || !configured || transport === "browser_webrtc") return;
     let active = true;
     void request(`/api/rooms/${slug}/playback`)
       .then((result) => {
@@ -1250,7 +1616,7 @@ function CreatorBroadcastPreview({
     return () => {
       active = false;
     };
-  }, [slug, state, configured]);
+  }, [slug, state, configured, transport]);
 
   return (
     <section className={`creator-preview state-${state}`}>
@@ -1261,7 +1627,9 @@ function CreatorBroadcastPreview({
         </div>
         <span>{zh ? "安全延迟预览" : "Secure delayed preview"}</span>
       </div>
-      {state === "live" && iframeUrl ? (
+      {state === "live" && transport === "browser_webrtc" ? (
+        <WhepPlayer slug={slug} active t={t} />
+      ) : state === "live" && iframeUrl ? (
         <iframe
           src={iframeUrl}
           title={zh ? "主播实时观众画面" : "Creator live audience feed"}
@@ -1293,8 +1661,8 @@ function CreatorBroadcastPreview({
           <p>
             {state === "offline"
               ? zh
-                ? "在 OBS 中选择相机和麦克风，然后点击“开始推流”。"
-                : "Choose your camera and microphone in OBS, then select Start Streaming."
+                ? "使用上方快速开播，或在技术帮助中选择 OBS。"
+                : "Use Quick Go Live above, or choose OBS in Technical help."
               : state === "connecting"
                 ? zh
                   ? "Cloudflare 正在准备安全播放，通常需要片刻。"
@@ -1441,6 +1809,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
         state: "live" | "connecting" | "offline" | "unavailable";
         message: string;
         checkedAt: string;
+        transport?: "obs_hls" | "browser_webrtc";
       }) => {
         if (event.slug !== slug) return;
         setStudio((current: any) => ({
@@ -1451,6 +1820,8 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
             broadcast_state: event.state,
             broadcast_status_message: event.message,
             broadcast_checked_at: event.checkedAt,
+            broadcast_transport:
+              event.transport ?? current.room.broadcast_transport,
           },
         }));
       },
@@ -1564,9 +1935,18 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
 
       <div className="creator-broadcast-layout">
         <div className="creator-stage-column">
+          <QuickGoLive
+            slug={room.slug}
+            available={Boolean(studio.broadcastControls?.browserQuickLiveAvailable)}
+            broadcastState={broadcastState}
+            transport={room.broadcast_transport}
+            t={t}
+            onChanged={refresh}
+          />
           <CreatorBroadcastPreview
             slug={room.slug}
             state={broadcastState}
+            transport={room.broadcast_transport}
             configured={studio.broadcastControls?.cloudflareConfigured}
             t={t}
           />
@@ -1601,8 +1981,8 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
                   ? "您的直播已上线"
                   : "Your broadcast is live"
                 : zh
-                  ? "在 OBS 中开始推流"
-                  : "Start streaming in OBS"}
+                  ? "使用浏览器快速开播"
+                  : "Go live from your browser"}
             </h3>
             <p className="muted">
               {creatorBroadcastMessage(t, broadcastState)}
@@ -1610,11 +1990,11 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
             <ol className="go-live-steps">
               <li className="complete">
                 <span>1</span>
-                {zh ? "打开 OBS 场景" : "Open your OBS scene"}
+                {zh ? "允许相机和麦克风" : "Allow camera and microphone"}
               </li>
               <li className="complete">
                 <span>2</span>
-                {zh ? "检查相机和麦克风" : "Check camera and microphone"}
+                {zh ? "检查私密预览和音量" : "Check your private preview and audio"}
               </li>
               <li className={broadcastState === "live" ? "complete" : ""}>
                 <span>3</span>
@@ -1623,23 +2003,21 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
                     ? "观众已可观看"
                     : "Audience playback ready"
                   : zh
-                    ? "点击 OBS 的“开始推流”"
-                    : "Select Start Streaming in OBS"}
+                    ? "点击“开始直播”"
+                    : "Select Go Live"}
               </li>
             </ol>
-            <button
-              type="button"
-              className="creator-primary-action"
-              onClick={() => void refreshBroadcast()}
-              disabled={!studio.broadcastControls?.cloudflareConfigured}
-            >
+            <a className="creator-primary-action" href="#quick-go-live">
               {broadcastState === "live"
                 ? zh
-                  ? "确认直播状态"
-                  : "Confirm live status"
+                  ? "查看直播控制"
+                  : "View live controls"
                 : zh
-                  ? "我已在 OBS 开始推流"
-                  : "I started streaming in OBS"}
+                  ? "打开快速开播"
+                  : "Open Quick Go Live"}
+            </a>
+            <button type="button" className="secondary" onClick={() => void refreshBroadcast()} disabled={!studio.broadcastControls?.cloudflareConfigured}>
+              {zh ? "刷新直播状态" : "Refresh broadcast status"}
             </button>
             {!studio.broadcastControls?.cloudflareConfigured ? (
               <p className="control-note">
@@ -1794,7 +2172,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
           </div>
           <span>{zh ? "查看指南" : "View guide"}</span>
         </summary>
-        <ObsReadiness state={broadcastState} t={t} />
+        <ObsReadiness slug={room.slug} state={broadcastState} t={t} onChanged={refresh} />
         {studio.broadcastControls?.localFallbackEnabled ? (
           <div className="local-state-tool">
             <label>{t.localBroadcast}</label>
@@ -2040,6 +2418,7 @@ function RoomView({
     state: room.broadcast_state ?? "offline",
     message: room.broadcast_status_message ?? t.offline,
     checkedAt: room.broadcast_checked_at ?? null,
+    transport: room.broadcast_transport ?? "obs_hls",
   });
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const refreshShow = () =>
@@ -2066,6 +2445,8 @@ function RoomView({
   const refreshPlayback = () =>
     broadcast.state !== "live"
       ? setIframeUrl(null)
+      : broadcast.transport === "browser_webrtc"
+        ? setIframeUrl(null)
       : void request(`/api/rooms/${room.slug}/playback`)
           .then((d) => setIframeUrl(d.iframeUrl))
           .catch((e) =>
@@ -2148,11 +2529,13 @@ function RoomView({
       (d: {
         state: "live" | "connecting" | "offline" | "unavailable";
         message: string;
+        transport?: "obs_hls" | "browser_webrtc";
       }) => {
         setBroadcast({
           state: d.state,
           message: d.message,
           checkedAt: new Date().toISOString(),
+          transport: d.transport ?? broadcast.transport,
         });
         if (d.state !== "live") setIframeUrl(null);
       },
@@ -2226,7 +2609,16 @@ function RoomView({
       <button className="secondary" onClick={back}>
         {t.back}
       </button>
-      {iframeUrl && broadcast.state === "live" ? (
+      {broadcast.state === "live" && broadcast.transport === "browser_webrtc" ? (
+        <>
+          <p className="watching-live">
+            {t.title === "Stream MVP"
+              ? "You are watching the creator’s browser broadcast."
+              : "您正在观看主播的浏览器直播。"}
+          </p>
+          <WhepPlayer slug={room.slug} active t={t} />
+        </>
+      ) : iframeUrl && broadcast.state === "live" ? (
         <>
           <p className="watching-live">
             {t.title === "Stream MVP"

@@ -7,6 +7,11 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { createClient } from "redis";
 import { Server } from "socket.io";
 import { createPlaybackUrl } from "./cloudflare-stream.js";
+import {
+  endWebRtcResource,
+  exchangeWebRtcOffer,
+  readWebRtcEndpoints,
+} from "./cloudflare-webrtc.js";
 import { createBroadcastPoller } from "./broadcast-poller.js";
 import {
   cloudflareBroadcastStatus,
@@ -42,6 +47,14 @@ type DemoUser = {
   role: Role;
   locale: "en" | "zh";
   ageAcknowledged: boolean;
+};
+type BroadcastTransport = "obs_hls" | "browser_webrtc";
+type WebRtcResource = {
+  resourceUrl: string | null;
+  roomSlug: string;
+  userId: string;
+  kind: "publish" | "playback";
+  expiresAt: number;
 };
 const roles: Role[] = ["audience", "streamer", "admin"];
 let realtime: Server | null = null;
@@ -117,8 +130,11 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
   await client.connect();
   try {
     await client.query("BEGIN");
-    const previous = await client.query<{ broadcast_state: string }>(
-      "SELECT broadcast_state FROM live_rooms WHERE slug=$1 FOR UPDATE",
+    const previous = await client.query<{
+      broadcast_state: string;
+      broadcast_transport: BroadcastTransport;
+    }>(
+      "SELECT broadcast_state,broadcast_transport FROM live_rooms WHERE slug=$1 FOR UPDATE",
       [slug],
     );
     if (!previous.rows[0]) {
@@ -148,6 +164,7 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
       const event = {
         slug,
         state: status.state,
+        transport: previous.rows[0].broadcast_transport,
         message: status.message,
         checkedAt: new Date().toISOString(),
       };
@@ -170,6 +187,7 @@ export function buildApi() {
           "req.headers.authorization",
           "req.headers.cookie",
           "req.body.password",
+          "req.body.sdp",
           "res.headers.set-cookie",
         ],
         censor: "[REDACTED]",
@@ -179,6 +197,24 @@ export function buildApi() {
     trustProxy: config.trustProxy,
   });
   const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+  const webRtcResources = new Map<string, WebRtcResource>();
+  const webRtcResourcePruner = setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, resource] of webRtcResources) {
+      if (resource.expiresAt > now) continue;
+      webRtcResources.delete(sessionId);
+      void endWebRtcResource(resource.resourceUrl);
+    }
+  }, 60_000);
+  webRtcResourcePruner.unref();
+  api.addHook("onClose", async () => {
+    clearInterval(webRtcResourcePruner);
+    const resources = [...webRtcResources.values()];
+    webRtcResources.clear();
+    await Promise.allSettled(
+      resources.map((resource) => endWebRtcResource(resource.resourceUrl)),
+    );
+  });
   const requestStartedAt = new WeakMap<object, number>();
   void api.register(cors, {
     origin: config.webOrigin,
@@ -568,7 +604,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.cloudflare_live_input_id, u.display_name AS streamer_name, p.category, p.bio, p.schedule_text FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_transport, r.cloudflare_live_input_id, u.display_name AS streamer_name, p.category, p.bio, p.schedule_text FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -675,7 +711,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT broadcast_state,broadcast_checked_at,broadcast_status_message FROM live_rooms WHERE slug=$1",
+          "SELECT broadcast_state,broadcast_checked_at,broadcast_status_message,broadcast_transport FROM live_rooms WHERE slug=$1",
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -686,11 +722,216 @@ export function buildApi() {
             checkedAt:
               result.rows[0].broadcast_checked_at?.toISOString() ?? null,
             message: result.rows[0].broadcast_status_message,
+            transport: result.rows[0].broadcast_transport,
           },
         };
       } finally {
         await client.end();
       }
+    },
+  );
+  api.put<{
+    Params: { slug: string };
+    Body: { transport?: BroadcastTransport };
+  }>(
+    "/api/streamer/rooms/:slug/broadcast/transport",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+      const transport = request.body?.transport;
+      if (!transport || !["obs_hls", "browser_webrtc"].includes(transport))
+        return reply.code(400).send({ error: "invalid_broadcast_transport" });
+      const client = database();
+      await client.connect();
+      try {
+        const result = await client.query(
+          "UPDATE live_rooms SET broadcast_transport=$1::broadcast_transport_mode,updated_at=NOW() WHERE slug=$2 AND streamer_id=$3 AND broadcast_state<>'live' RETURNING broadcast_transport",
+          [transport, request.params.slug, streamer.id],
+        );
+        if (!result.rows[0])
+          return reply.code(409).send({ error: "broadcast_transport_locked" });
+        return { transport };
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.post<{
+    Params: { slug: string };
+    Body: { sdp?: string };
+  }>(
+    "/api/streamer/rooms/:slug/webrtc/publish",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+      if (!hasCloudflareStreamConfiguration())
+        return reply.code(503).send({ error: "webrtc_service_unavailable" });
+      const offerSdp = request.body?.sdp;
+      if (typeof offerSdp !== "string" || offerSdp.length > 60_000)
+        return reply.code(400).send({ error: "invalid_webrtc_offer" });
+      const client = database();
+      await client.connect();
+      let sessionId = "";
+      let inputId = "";
+      try {
+        await client.query("BEGIN");
+        const room = await client.query<{
+          id: string;
+          cloudflare_live_input_id: string | null;
+          broadcast_state: string;
+        }>(
+          "SELECT id,cloudflare_live_input_id,broadcast_state FROM live_rooms WHERE slug=$1 AND streamer_id=$2 FOR UPDATE",
+          [request.params.slug, streamer.id],
+        );
+        if (!room.rows[0]) {
+          await client.query("ROLLBACK");
+          return reply.code(404).send({ error: "streamer_room_not_found" });
+        }
+        if (!room.rows[0].cloudflare_live_input_id) {
+          await client.query("ROLLBACK");
+          return reply.code(503).send({ error: "webrtc_service_unavailable" });
+        }
+        if (room.rows[0].broadcast_state === "live") {
+          await client.query("ROLLBACK");
+          return reply.code(409).send({ error: "broadcast_already_live" });
+        }
+        sessionId = crypto.randomUUID();
+        inputId = room.rows[0].cloudflare_live_input_id;
+        await client.query(
+          "UPDATE broadcast_sessions SET state='ended',ended_at=NOW(),failure_code='stale_session',updated_at=NOW() WHERE room_id=$1 AND state IN ('connecting','active') AND updated_at<NOW()-INTERVAL '2 minutes'",
+          [room.rows[0].id],
+        );
+        await client.query(
+          "INSERT INTO broadcast_sessions (id,room_id,creator_id,transport,state) VALUES ($1,$2,$3,'browser_webrtc','connecting')",
+          [sessionId, room.rows[0].id, streamer.id],
+        );
+        await client.query(
+          "UPDATE live_rooms SET broadcast_transport='browser_webrtc',updated_at=NOW() WHERE id=$1",
+          [room.rows[0].id],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        if ((error as { code?: string }).code === "23505")
+          return reply.code(409).send({ error: "broadcast_session_active" });
+        throw error;
+      } finally {
+        await client.end();
+      }
+      await persistBroadcastStatus(request.params.slug, {
+        state: "connecting",
+        message: "Browser broadcast is connecting.",
+        source: "cloudflare",
+      });
+      try {
+        const endpoints = await readWebRtcEndpoints(inputId);
+        const exchange = await exchangeWebRtcOffer(endpoints.publishUrl, offerSdp);
+        webRtcResources.set(sessionId, {
+          resourceUrl: exchange.resourceUrl,
+          roomSlug: request.params.slug,
+          userId: streamer.id,
+          kind: "publish",
+          expiresAt: Date.now() + 3 * 60_000,
+        });
+        const update = database();
+        await update.connect();
+        try {
+          await update.query(
+            "UPDATE broadcast_sessions SET state='active',updated_at=NOW() WHERE id=$1",
+            [sessionId],
+          );
+        } finally {
+          await update.end();
+        }
+        reply.header("cache-control", "no-store");
+        return { sessionId, answerSdp: exchange.answerSdp };
+      } catch {
+        const failed = database();
+        await failed.connect();
+        try {
+          await failed.query(
+            "UPDATE broadcast_sessions SET state='failed',failure_code='negotiation_failed',ended_at=NOW(),updated_at=NOW() WHERE id=$1",
+            [sessionId],
+          );
+        } finally {
+          await failed.end();
+        }
+        await persistBroadcastStatus(request.params.slug, {
+          state: "unavailable",
+          message: "Browser broadcast could not connect.",
+          source: "cloudflare",
+        });
+        return reply.code(503).send({ error: "webrtc_service_unavailable" });
+      }
+    },
+  );
+  api.delete<{ Params: { slug: string; sessionId: string } }>(
+    "/api/streamer/rooms/:slug/webrtc/publish/:sessionId",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+      const client = database();
+      await client.connect();
+      try {
+        const result = await client.query(
+          "UPDATE broadcast_sessions s SET state='ended',ended_at=NOW(),updated_at=NOW() FROM live_rooms r WHERE s.id=$1 AND s.room_id=r.id AND r.slug=$2 AND s.creator_id=$3 AND s.state IN ('connecting','active') RETURNING s.id",
+          [request.params.sessionId, request.params.slug, streamer.id],
+        );
+        if (!result.rows[0])
+          return reply.code(404).send({ error: "broadcast_session_not_found" });
+        await client.query(
+          "UPDATE live_rooms SET broadcast_transport='obs_hls',updated_at=NOW() WHERE slug=$1",
+          [request.params.slug],
+        );
+      } finally {
+        await client.end();
+      }
+      const resource = webRtcResources.get(request.params.sessionId);
+      if (resource?.userId === streamer.id && resource.kind === "publish") {
+        webRtcResources.delete(request.params.sessionId);
+        await endWebRtcResource(resource.resourceUrl);
+      }
+      await persistBroadcastStatus(request.params.slug, {
+        state: "offline",
+        message: "Broadcast ended.",
+        source: "cloudflare",
+      });
+      return reply.code(204).send();
+    },
+  );
+  api.patch<{ Params: { slug: string; sessionId: string } }>(
+    "/api/streamer/rooms/:slug/webrtc/publish/:sessionId",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+      const resource = webRtcResources.get(request.params.sessionId);
+      if (
+        !resource ||
+        resource.kind !== "publish" ||
+        resource.roomSlug !== request.params.slug ||
+        resource.userId !== streamer.id
+      )
+        return reply.code(404).send({ error: "broadcast_session_not_found" });
+      resource.expiresAt = Date.now() + 3 * 60_000;
+      const client = database();
+      await client.connect();
+      try {
+        await client.query(
+          "UPDATE broadcast_sessions SET updated_at=NOW() WHERE id=$1 AND creator_id=$2 AND state IN ('connecting','active')",
+          [request.params.sessionId, streamer.id],
+        );
+      } finally {
+        await client.end();
+      }
+      return reply.code(204).send();
     },
   );
   api.post<{ Params: { slug: string } }>(
@@ -768,6 +1009,114 @@ export function buildApi() {
       };
     },
   );
+  api.post<{
+    Params: { slug: string };
+    Body: { sdp?: string };
+  }>(
+    "/api/rooms/:slug/webrtc/play",
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user)
+        return reply.code(401).send({ error: "demo_session_required" });
+      if (!hasCloudflareStreamConfiguration())
+        return reply.code(503).send({ error: "webrtc_service_unavailable" });
+      const offerSdp = request.body?.sdp;
+      if (typeof offerSdp !== "string" || offerSdp.length > 60_000)
+        return reply.code(400).send({ error: "invalid_webrtc_offer" });
+      const client = database();
+      await client.connect();
+      let inputId = "";
+      try {
+        const result = await client.query<{
+          id: string;
+          cloudflare_live_input_id: string | null;
+          broadcast_state: string;
+          broadcast_transport: BroadcastTransport;
+        }>(
+          "SELECT id,cloudflare_live_input_id,broadcast_state,broadcast_transport FROM live_rooms WHERE slug=$1",
+          [request.params.slug],
+        );
+        const room = result.rows[0];
+        if (!room) return reply.code(404).send({ error: "room_not_found" });
+        if (
+          room.broadcast_state !== "live" ||
+          room.broadcast_transport !== "browser_webrtc" ||
+          !room.cloudflare_live_input_id
+        )
+          return reply.code(409).send({ error: "webrtc_room_not_live" });
+        const privateShow = await client.query<{ id: string }>(
+          "SELECT s.id FROM private_show_sessions s WHERE s.room_id=$1 AND s.status='live'",
+          [room.id],
+        );
+        if (privateShow.rows[0] && user.role === "audience") {
+          const access = await client.query(
+            "SELECT id FROM private_show_access WHERE session_id=$1 AND viewer_id=$2 AND (expires_at IS NULL OR expires_at>NOW())",
+            [privateShow.rows[0].id, user.id],
+          );
+          if (!access.rows[0])
+            return reply
+              .code(403)
+              .send({ error: "private_show_access_required" });
+        }
+        inputId = room.cloudflare_live_input_id;
+      } finally {
+        await client.end();
+      }
+      try {
+        const endpoints = await readWebRtcEndpoints(inputId);
+        const exchange = await exchangeWebRtcOffer(endpoints.playbackUrl, offerSdp);
+        const sessionId = crypto.randomUUID();
+        webRtcResources.set(sessionId, {
+          resourceUrl: exchange.resourceUrl,
+          roomSlug: request.params.slug,
+          userId: user.id,
+          kind: "playback",
+          expiresAt: Date.now() + 3 * 60_000,
+        });
+        reply.header("cache-control", "no-store");
+        return { sessionId, answerSdp: exchange.answerSdp };
+      } catch {
+        return reply.code(503).send({ error: "webrtc_service_unavailable" });
+      }
+    },
+  );
+  api.delete<{ Params: { slug: string; sessionId: string } }>(
+    "/api/rooms/:slug/webrtc/play/:sessionId",
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user)
+        return reply.code(401).send({ error: "demo_session_required" });
+      const resource = webRtcResources.get(request.params.sessionId);
+      if (
+        !resource ||
+        resource.kind !== "playback" ||
+        resource.roomSlug !== request.params.slug ||
+        resource.userId !== user.id
+      )
+        return reply.code(404).send({ error: "playback_session_not_found" });
+      webRtcResources.delete(request.params.sessionId);
+      await endWebRtcResource(resource.resourceUrl);
+      return reply.code(204).send();
+    },
+  );
+  api.patch<{ Params: { slug: string; sessionId: string } }>(
+    "/api/rooms/:slug/webrtc/play/:sessionId",
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user)
+        return reply.code(401).send({ error: "demo_session_required" });
+      const resource = webRtcResources.get(request.params.sessionId);
+      if (
+        !resource ||
+        resource.kind !== "playback" ||
+        resource.roomSlug !== request.params.slug ||
+        resource.userId !== user.id
+      )
+        return reply.code(404).send({ error: "playback_session_not_found" });
+      resource.expiresAt = Date.now() + 3 * 60_000;
+      return reply.code(204).send();
+    },
+  );
   api.get<{ Params: { slug: string } }>(
     "/api/rooms/:slug/playback",
     async (request, reply) => {
@@ -780,14 +1129,17 @@ export function buildApi() {
         const result = await client.query<{
           cloudflare_live_input_id: string | null;
           broadcast_state: string;
+          broadcast_transport: BroadcastTransport;
         }>(
-          "SELECT cloudflare_live_input_id, broadcast_state FROM live_rooms WHERE slug = $1",
+          "SELECT cloudflare_live_input_id,broadcast_state,broadcast_transport FROM live_rooms WHERE slug=$1",
           [request.params.slug],
         );
         const room = result.rows[0];
         if (!room) return reply.code(404).send({ error: "room_not_found" });
         if (room.broadcast_state !== "live" || !room.cloudflare_live_input_id)
           return reply.code(409).send({ error: "room_not_live" });
+        if (room.broadcast_transport !== "obs_hls")
+          return reply.code(409).send({ error: "webrtc_playback_required" });
         const privateShow = await client.query<{ id: string }>(
           "SELECT s.id FROM private_show_sessions s JOIN live_rooms r ON r.id=s.room_id WHERE r.slug=$1 AND s.status='live'",
           [request.params.slug],
@@ -1425,7 +1777,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.bio,p.category,p.schedule_text,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
+        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.bio,p.category,p.schedule_text,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
         [user.id],
       );
       return {
@@ -1434,6 +1786,7 @@ export function buildApi() {
         broadcastControls: {
           localFallbackEnabled: config.nodeEnv !== "production",
           cloudflareConfigured: hasCloudflareStreamConfiguration(),
+          browserQuickLiveAvailable: hasCloudflareStreamConfiguration(),
         },
       };
     } finally {

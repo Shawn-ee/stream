@@ -1,5 +1,15 @@
 # Architecture Decisions
 
+## 2026-08-26 - Browser-native Quick Go Live with signaling proxy (P0)
+
+Creators receive an explicit browser permission and private-preview flow before any camera or microphone is accessed. Quick Go Live uses Cloudflare Stream WHIP publishing and WHEP playback; OBS continues to use RTMPS ingest and signed HLS playback. A room stores the selected transport so viewers never receive the wrong player. The two transports cannot publish simultaneously to one room.
+
+The API fetches fixed WebRTC endpoints using the server-only Stream token and proxies only SDP signaling. Provider endpoint URLs and upstream resource locations never enter browser responses, logs, cookies, local storage, or the database. Media flows directly between browser and Cloudflare, so Linux does not relay video bandwidth. Publishing is room-owner-only, single-session, CSRF-protected, rate-limited, no-store, and auditable. Audience WHEP signaling reuses room/private-show authorization.
+
+Endpoint discovery is cached and concurrent requests are deduplicated so audience joins do not create a Cloudflare API request stampede. Authenticated one-minute heartbeats keep legitimate publisher/viewer resources alive; resources without a heartbeat are terminated after three minutes. This bounds abandoned server memory and upstream sessions without imposing a fixed duration on a valid broadcast.
+
+Cloudflare WebRTC is beta and currently requires WHIP ingest to pair with WHEP playback. OBS/HLS therefore remains a visible professional fallback. A physical camera/audio broadcast and Linux deployment remain fresh owner-approval gates.
+
 ## 2026-08-26 - Video-first creator cockpit (P0)
 
 Creator Studio is an operating surface, not an administration dashboard. Its primary hierarchy is: signed audience-feed confidence monitor, truthful lifecycle/start guidance, realtime audience/support activity, then secondary configuration. The site does not claim it can start OBS or capture devices; the primary offline action confirms that the creator started streaming in OBS and performs a safe status refresh.

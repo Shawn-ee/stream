@@ -53,6 +53,20 @@ This is the only test that uses Cloudflare Stream resources. Do not begin it unt
 
 This procedure does not authorize Cloudflare configuration changes, new Live Inputs, credential rotation, public deployment, recording deletion, or any real payment action.
 
+## Owner-assisted Browser Quick Go Live test
+
+This test uses the existing Cloudflare Stream input and requires fresh owner confirmation immediately before **Go Live** is selected. It does not require OBS and must not create or modify a Cloudflare resource.
+
+1. Sign in as `demo-streamer` and open **Quick Go Live**.
+2. Select **Enable camera and microphone**, approve the intended devices, verify the private preview, and confirm that the microphone meter moves. Permission alone does not broadcast.
+3. Confirm camera-off, camera-on, mute, and unmute work in the private preview.
+4. After the owner confirms, select **Go Live** once. Verify the creator state moves through connecting to provider-confirmed live; never treat the button click alone as live evidence.
+5. In a separate signed-in audience browser or device, open the room and confirm WHEP video and audible sound. Verify chat, presence, one test gift, and goal progress remain functional.
+6. Return to Creator Studio and select **End broadcast**. Verify browser media indicators turn off, the room returns offline, and the audience player closes.
+7. Reset demo data with `npm run db:seed`. Inspect logs for only generic WebRTC errors; fixed publish/playback URLs, SDP, API tokens, and resource locations must be absent.
+
+If WebRTC is unavailable, stop and use **Switch to professional OBS mode**. Do not silently mix browser WHIP publishing with HLS playback because Cloudflare currently requires WHIP/WHEP pairing.
+
 ## Verify the Creator Broadcast Cockpit locally
 
 1. Sign in as `demo-streamer` and confirm the video stage is the first operational surface below the compact header.

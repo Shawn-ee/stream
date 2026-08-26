@@ -31,6 +31,7 @@ test("schema contains the full local prototype data model", async () => {
       "room_visits",
       "content_reports",
       "room_lifecycle_events",
+      "broadcast_sessions",
       "schema_migrations",
     ]) {
       assert.ok(tables.has(table), `Expected ${table} to exist`);

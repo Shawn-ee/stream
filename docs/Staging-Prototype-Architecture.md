@@ -20,6 +20,13 @@ Streamer test encoder (OBS or synthetic FFmpeg)
   -> Cloudflare Stream Live Input
   -> Cloudflare ingest, transcoding, playback delivery
   -> signed playback iframe returned by the Fastify API
+
+Creator browser Quick Go Live
+  -> explicit getUserMedia camera/microphone permission and private preview
+  -> API-proxied WHIP signaling (fixed provider URL remains server-side)
+  -> direct browser-to-Cloudflare WebRTC media
+  -> API-authorized WHEP signaling
+  -> direct Cloudflare-to-audience WebRTC media
 ```
 
 ## Ownership boundaries
@@ -29,9 +36,10 @@ Streamer test encoder (OBS or synthetic FFmpeg)
 | Web UI, demo sessions, discovery, chat, gifts, private-show rules, moderation | This application |
 | Demo records, append-only test ledger, reports, room state | PostgreSQL |
 | Live ingest, transcoding, video delivery, player iframe | Cloudflare Stream |
+| WHIP/WHEP endpoint discovery and protected signaling authorization | This application API |
 | Video bandwidth and segments | Cloudflare Stream, never the local API |
 
-Cloudflare credentials remain in `.env` and are used only by the API. The React client receives only an authorized playback URL; it never receives the Cloudflare API token.
+Cloudflare credentials remain in `.env` and are used only by the API. OBS viewers receive only an authorized playback URL. Browser-native creators/viewers receive SDP answers and opaque local session identifiers; they never receive the Cloudflare API token, fixed WHIP/WHEP endpoint, or upstream resource URL.
 
 ## Essential request paths
 

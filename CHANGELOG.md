@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-26 - Browser-Native Quick Go Live launch candidate
+
+- Added creator-initiated browser camera/microphone permission, private preview, device selectors, microphone level, mute/camera controls, Go Live, and safe End Broadcast controls with full English/Chinese copy.
+- Added Cloudflare WHIP publishing and WHEP audience/self-monitor playback while preserving the existing OBS/RTMPS/signed-HLS workflow.
+- Added server-only WebRTC endpoint discovery and signaling exchange so fixed provider URLs and upstream resource locations are not exposed to browsers and media does not traverse Linux.
+- Added migration `012` for explicit room transport and lifecycle-backed browser broadcast sessions, including one active publisher per room and stale-session recovery.
+- Added creator ownership, audience/private-show playback authorization, CSRF, rate limits, SDP/log redaction, no-store responses, safe cross-origin resource rejection, and transport-mismatch denial.
+- Added deduplicated provider-endpoint caching, authenticated session heartbeats, bounded orphan cleanup, and answer-application recovery so failed or abandoned tabs do not strand publisher/viewer resources.
+- Passed read-only capability verification on the existing production input, focused provider/client/schema/role tests, the complete local staging gate, bilingual browser review, and the production Compose gate. Physical media proof and deployment remain owner-gated.
+
 ## 2026-08-26 - Creator cockpit public Linux deployment
 
 - Published the reviewed creator-cockpit implementation as GitHub commit `2a0ac1e` and fast-forwarded the isolated Linux checkout to that exact source.

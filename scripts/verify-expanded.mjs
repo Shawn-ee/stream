@@ -86,6 +86,42 @@ await streamer("/api/auth/login", {
     password: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
   },
 });
+const testSdp = "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=test\r\nt=0 0\r\n";
+await audience(`/api/streamer/rooms/${room.slug}/webrtc/publish`, {
+  method: "POST",
+  body: { sdp: testSdp },
+  expected: 403,
+});
+await streamer(`/api/streamer/rooms/${room.slug}/broadcast/transport`, {
+  method: "PUT",
+  body: { transport: "browser_webrtc" },
+});
+assert.equal(
+  (await streamer("/api/streamer/studio")).room.broadcast_transport,
+  "browser_webrtc",
+);
+await streamer(`/api/streamer/rooms/${room.slug}/webrtc/publish`, {
+  method: "POST",
+  body: { sdp: testSdp },
+  expected: 503,
+});
+await streamer(`/api/streamer/rooms/${room.slug}/webrtc/publish/${crypto.randomUUID()}`, {
+  method: "PATCH",
+  expected: 404,
+});
+await streamer(`/api/streamer/rooms/${room.slug}/broadcast/transport`, {
+  method: "PUT",
+  body: { transport: "obs_hls" },
+});
+await audience(`/api/rooms/${room.slug}/webrtc/play`, {
+  method: "POST",
+  body: { sdp: testSdp },
+  expected: 503,
+});
+await audience(`/api/rooms/${room.slug}/webrtc/play/${crypto.randomUUID()}`, {
+  method: "PATCH",
+  expected: 404,
+});
 await streamer(`/api/streamer/rooms/${room.slug}`, {
   method: "PUT",
   body: {
@@ -199,6 +235,11 @@ await admin("/api/auth/login", {
     handle: "demo-admin",
     password: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
   },
+});
+await admin(`/api/streamer/rooms/${room.slug}/webrtc/publish`, {
+  method: "POST",
+  body: { sdp: testSdp },
+  expected: 403,
 });
 const reports = await admin("/api/admin/reports");
 const report = reports.reports.find(

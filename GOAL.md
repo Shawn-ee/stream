@@ -16,12 +16,18 @@ Completed on 2026-08-26 on the approved `holiwyn.online` deployment. The demo st
 
 Completed locally on 2026-08-26. The feature-heavy Creator Studio scroll is now a professional, video-first operating workspace. The creator immediately sees how to start in OBS, receives a truthful signed audience-feed preview when live, monitors deduplicated viewers/chat/gifts/actions/goal/test earnings in real time, manages secondary settings without clutter, and receives an accurate owner-only session summary after broadcasting. The redesign is bilingual, responsive, original, and secret-safe; it does not add browser capture, real payments, or automatic OBS/device control. Linux/public deployment remains a separate approval-gated action.
 
+## Active milestone: Browser-Native Quick Go Live
+
+The local launch candidate now includes an explicit creator-only camera/microphone permission flow, private preview, device selection, microphone level, mute/camera controls, WHIP publishing, WHEP audience playback, safe stop, transport-aware lifecycle, and an OBS/HLS fallback. The existing production Live Input passed a read-only WHIP/WHEP capability check. Fixed provider publishing and playback endpoints remain server-side because the Linux API proxies signaling only; audio/video media continues directly between browser and Cloudflare.
+
+Automated tests, the complete Cloudflare-free staging gate, bilingual browser review, and the production Compose gate pass. Completion still requires fresh owner approval for one short physical camera/audio broadcast, separate-device audience confirmation, clean stop/offline recovery, reviewed Git publication, and controlled Linux deployment.
+
 ## Product scope
 
 - Discovery: live grid, categories, search, featured rooms, creator profiles, schedules, follows, and clear room status.
 - Audience: English/Chinese UI, authenticated accounts, room chat, presence, notifications, report/block tools, and safe viewing states.
 - Rooms: Cloudflare Stream playback authorization, goals, original gift/action interactions, private-room access rules, and realtime activity.
-- Creator Studio: OBS/Cloudflare broadcast readiness, title/category/goal controls, action menu, supporter insights, private-show configuration, and room moderation.
+- Creator Studio: browser-native Quick Go Live, optional OBS/Cloudflare broadcast mode, title/category/goal controls, action menu, supporter insights, private-show configuration, and room moderation.
 - Admin: user/creator review, reports, moderation, audit history, and operational visibility.
 - Operations: Docker-based deployment, HTTPS, secrets management, database migrations/backups, health checks, structured logs, metrics, rate limits, and 100-user load testing.
 
