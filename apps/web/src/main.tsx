@@ -7,6 +7,7 @@ type Role = "audience" | "streamer" | "admin";
 type Language = "en" | "zh";
 type User = {
   id: string;
+  handle: string;
   displayName: string;
   role: Role;
   ageAcknowledged: boolean;
@@ -278,8 +279,10 @@ function App() {
   const [category, setCategory] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
   const [handle, setHandle] = useState("demo-audience");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const t = copy[language];
   const loadRooms = () =>
     void request(
@@ -346,6 +349,38 @@ function App() {
       );
     }
   }
+  async function register(e: FormEvent) {
+    e.preventDefault();
+    setLoginError("");
+    try {
+      setUser(
+        (
+          await request("/api/auth/register", {
+            method: "POST",
+            body: JSON.stringify({
+              handle,
+              displayName,
+              password,
+              locale: language,
+            }),
+          })
+        ).user,
+      );
+      setPassword("");
+      setDisplayName("");
+    } catch (error) {
+      const status = error instanceof Error ? error.message : "";
+      setLoginError(
+        language === "en"
+          ? status === "409"
+            ? "That account handle is already in use."
+            : "Could not create the account. Use 3–30 lowercase letters, numbers, or underscores and a 12+ character password with uppercase, lowercase, and a number."
+          : status === "409"
+            ? "该账户名已被使用。"
+            : "无法创建账户。账户名请使用 3–30 个小写字母、数字或下划线；密码至少 12 位并包含大小写字母和数字。",
+      );
+    }
+  }
   async function acknowledge() {
     setUser(
       (
@@ -359,6 +394,7 @@ function App() {
   async function logout() {
     await request("/api/auth/session", { method: "DELETE" });
     setHandle("");
+    setDisplayName("");
     setPassword("");
     setLoginError("");
     setUser(null);
@@ -371,44 +407,112 @@ function App() {
         <p className="eyebrow">{t.local}</p>
         <h1>{t.title}</h1>
         <p className="notice">{t.test}</p>
-        <h2>
-          {language === "en"
-            ? "Sign in to a synthetic local account"
-            : "\u767b\u5f55\u672c\u5730\u6d4b\u8bd5\u8d26\u6237"}
-        </h2>
-        <div className="account-shortcuts">
-          {(["audience", "streamer", "admin"] as Role[]).map((role) => (
-            <button
-              type="button"
-              className="secondary"
-              key={role}
-              onClick={() => setHandle(`demo-${role}`)}
-            >
-              {roleLabel(t, role)}
-            </button>
-          ))}
+        <div className="auth-tabs" role="tablist">
+          <button
+            type="button"
+            className={authMode === "login" ? "active" : ""}
+            onClick={() => {
+              setAuthMode("login");
+              setLoginError("");
+            }}
+          >
+            {language === "en" ? "Sign in" : "登录"}
+          </button>
+          <button
+            type="button"
+            className={authMode === "register" ? "active" : ""}
+            onClick={() => {
+              setAuthMode("register");
+              setHandle("");
+              setLoginError("");
+            }}
+          >
+            {language === "en" ? "Create audience account" : "创建观众账户"}
+          </button>
         </div>
-        <form className="login-form" onSubmit={(e) => void login(e)}>
+        <h2>
+          {authMode === "login"
+            ? language === "en"
+              ? "Sign in"
+              : "登录"
+            : language === "en"
+              ? "Join as an audience member"
+              : "注册观众账户"}
+        </h2>
+        {authMode === "login" && (
+          <div className="account-shortcuts">
+            {(["audience", "streamer", "admin"] as Role[]).map((role) => (
+              <button
+                type="button"
+                className="secondary"
+                key={role}
+                onClick={() => setHandle(`demo-${role}`)}
+              >
+                {roleLabel(t, role)}
+              </button>
+            ))}
+          </div>
+        )}
+        <form
+          className="login-form"
+          onSubmit={(e) =>
+            void (authMode === "login" ? login(e) : register(e))
+          }
+        >
           <label>
-            {language === "en" ? "Account handle" : "\u8d26\u6237\u540d"}
+            {language === "en" ? "Account handle" : "账户名"}
             <input
               value={handle}
-              onChange={(e) => setHandle(e.target.value)}
+              onChange={(e) => setHandle(e.target.value.toLowerCase())}
               autoComplete="username"
+              minLength={3}
+              maxLength={30}
+              pattern="[a-z0-9_]+"
+              required
             />
           </label>
+          {authMode === "register" && (
+            <label>
+              {language === "en" ? "Display name" : "显示名称"}
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                autoComplete="nickname"
+                minLength={2}
+                maxLength={50}
+                required
+              />
+            </label>
+          )}
           <label>
-            {language === "en"
-              ? "Local test password"
-              : "\u672c\u5730\u6d4b\u8bd5\u5bc6\u7801"}
+            {language === "en" ? "Password" : "密码"}
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
+              autoComplete={
+                authMode === "register" ? "new-password" : "current-password"
+              }
+              minLength={authMode === "register" ? 12 : 8}
+              required
             />
           </label>
-          <button>{language === "en" ? "Sign in" : "\u767b\u5f55"}</button>
+          {authMode === "register" && (
+            <p className="form-help">
+              {language === "en"
+                ? "Test environment only. Do not use a real password or personal information. New accounts begin with zero test coins."
+                : "仅限测试环境。请勿使用真实密码或个人信息。新账户初始测试金币为零。"}
+            </p>
+          )}
+          <button>
+            {authMode === "login"
+              ? language === "en"
+                ? "Sign in"
+                : "登录"
+              : language === "en"
+                ? "Create account"
+                : "创建账户"}
+          </button>
         </form>
         {loginError && <p className="error">{loginError}</p>}
       </main>

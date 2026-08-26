@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-26 - Individual audience account foundation
+
+- Added self-service, test-safe audience registration using case-folded unique handles, display names, strong local passwords, and an English/Chinese onboarding interface.
+- Reused the hardened scrypt credential, opaque server-session, strict cookie, and CSRF architecture; self-registration cannot assign creator or administrator privileges.
+- Corrected age acknowledgement so a newly registered account retains its own identity instead of resolving to the first seeded user with the same role.
+- Added per-IP registration throttling, trimmed-name validation, reserved demo-handle protection, duplicate-race handling, and zero initial test-coin behavior.
+- Added a cleanup-safe registration verifier to the complete staging gate and browser-smoked both language variants. The full Cloudflare-free staging gate passed and demo data was reset.
+- Added the ordered non-video completion plan. No Linux, public exposure, DNS, Cloudflare, real email/OAuth, payment, KYC, or compliance change occurred in this implementation step.
+- Made the disposable production-Compose smoke verifier allocate an unused localhost port so it can coexist with the persistent Linux SSH tunnel instead of failing on fixed port `18080`.
+
 ## 2026-08-26 - Owner-approved private Linux staging
 
 - Deployed exact application source `e1f64ad73e26792a84a94460afba50e0e16d5db3` to an isolated subdirectory and Compose project on the owner-controlled Linux VM without restarting or modifying existing applications.

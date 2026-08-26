@@ -126,6 +126,28 @@ p {
   gap: 0.55rem;
   margin: 0.75rem 0;
 }
+.auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 430px;
+  padding: 0.35rem;
+  border: 1px solid #2b3655;
+  border-radius: 0.85rem;
+  background: #10162a;
+}
+.auth-tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: #aab4cc;
+  padding: 0.7rem;
+  font-weight: 750;
+}
+.auth-tabs button.active {
+  background: #7c5cfc;
+  color: #fff;
+}
 .login-form {
   display: grid;
   gap: 0.8rem;
@@ -155,6 +177,12 @@ p {
   color: #fff;
   font-weight: 800;
   padding: 0.75rem;
+}
+.form-help {
+  margin: 0;
+  color: #aab4cc;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 .roles button,
 .workspace,

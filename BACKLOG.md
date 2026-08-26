@@ -85,3 +85,13 @@ Completed 2026-08-24: items 3, 4, and 5. The repository now has a tested private
 3. Completed P0 with owner approval: reviewed baseline commit `8aa41bf688336c1f8a0a8478e69d556d094477b5`, with Markdown-only documentation, and annotated tag `stream-launch-candidate-0.1.0` were pushed to the owner repository. Local Word files, secrets, builds, and scratch data remain excluded.
 4. P0 before public launch: rotate the exposed Cloudflare test token and replace synthetic account lifecycle with an approved real identity design.
 5. P0 before public launch: professional legal/privacy/content/age/KYC direction and separately approved payment/cashout design.
+
+## Non-video completion queue
+
+The ordered plan is maintained in `docs/Non-Video-Completion-Plan.md`.
+
+1. Completed P0 locally: individual audience registration with case-insensitive unique handles, strong hashed passwords, database sessions, CSRF, bilingual UI, identity isolation, and zero initial test coins.
+2. P0 next: authenticated account profile/password/session lifecycle controls without external email or OAuth.
+3. P0: test-only creator application, administrator decision, and transactional creator profile/offline-room provisioning.
+4. P1: user blocking, notification read state, reconnect/error polish, and persistent moderation boundary tests.
+5. Owner-gated: deploy an exact reviewed commit to the existing private Linux Stream Compose project and repeat migration/readiness/backup evidence. Public access and video remain separate.

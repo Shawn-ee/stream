@@ -139,3 +139,11 @@ This removes only the predefined local demo accounts' room interactions and rest
 ## Verify creator session insights
 
 Creator session insights and the public support feed are covered by `npm run verify:expanded`; realtime support activity is covered by `npm run verify:realtime`. Both commands remain local-only and use only the test ledger.
+
+## Verify individual audience registration
+
+```powershell
+npm run verify:registration
+```
+
+This creates one uniquely named temporary audience account, verifies validation, password hashing, session/CSRF behavior, identity isolation, role denial, zero test-coin balance, logout, and case-insensitive login, then deletes only that temporary account. It does not send email, contact an identity provider, or retain personal data. The command is included in `npm run verify:staging`.

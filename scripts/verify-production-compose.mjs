@@ -1,19 +1,35 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createServer } from "node:net";
 import { createTemporaryProductionEnvironment } from "./temporary-production-environment.mjs";
 
 const composeFile = "docker-compose.production.yml";
-const gateway = "http://127.0.0.1:18080";
+async function availableLocalPort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+  return String(address.port);
+}
+
+const appPort = await availableLocalPort();
+const gateway = `http://127.0.0.1:${appPort}`;
 const projectName = `stream-lc-package-verify-${process.pid}`;
 const temporaryEnvironment = createTemporaryProductionEnvironment({
-  appPort: "18080",
+  appPort,
 });
 const environmentFile = temporaryEnvironment.path;
 const environment = {
   ...process.env,
   ...temporaryEnvironment.environment,
   PRODUCTION_ENV_FILE: environmentFile,
-  APP_PORT: "18080",
+  APP_PORT: appPort,
 };
 
 function compose(...args) {

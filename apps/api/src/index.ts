@@ -1,6 +1,6 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import { createConnection } from "node:net";
 import { createAdapter } from "@socket.io/redis-adapter";
@@ -21,6 +21,8 @@ import {
 import {
   authenticateCredentials,
   createSession,
+  registerAudienceAccount,
+  RegistrationError,
   revokeSession,
   sessionTokenFromCookieHeader,
   userForSessionToken,
@@ -155,39 +157,6 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
     await client.end();
   }
 }
-async function userForRole(role: Role): Promise<DemoUser> {
-  const client = database();
-  await client.connect();
-  try {
-    const result = await client.query<{
-      id: string;
-      handle: string;
-      display_name: string;
-      role: Role;
-      locale: "en" | "zh";
-      test_age_acknowledged_at: Date | null;
-    }>(
-      "SELECT id, handle, display_name, role, locale, test_age_acknowledged_at FROM users WHERE role = $1 ORDER BY id LIMIT 1",
-      [role],
-    );
-    const user = result.rows[0];
-    if (!user)
-      throw new Error(
-        `Seeded demo ${role} user is missing. Run npm run db:seed.`,
-      );
-    return {
-      id: user.id,
-      handle: user.handle,
-      displayName: user.display_name,
-      role: user.role,
-      locale: user.locale,
-      ageAcknowledged: Boolean(user.test_age_acknowledged_at),
-    };
-  } finally {
-    await client.end();
-  }
-}
-
 export function buildApi() {
   const api = Fastify({
     logger: {
@@ -218,7 +187,9 @@ export function buildApi() {
   api.addHook("preHandler", async (request, reply) => {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return;
     const baseLimit =
-      request.url === "/api/auth/login"
+      request.url === "/api/auth/register"
+        ? 5
+        : request.url === "/api/auth/login"
         ? 15
         : request.url.includes("/reports")
           ? 20
@@ -357,7 +328,7 @@ export function buildApi() {
   api.addHook("preHandler", async (request, reply) => {
     if (
       !["POST", "PUT", "PATCH", "DELETE"].includes(request.method) ||
-      request.url === "/api/auth/login"
+      ["/api/auth/login", "/api/auth/register"].includes(request.url)
     )
       return;
     if (!request.url.startsWith("/api/")) return;
@@ -373,6 +344,51 @@ export function buildApi() {
   api.get("/api/auth/session", async (request) => ({
     user: await currentUser(request),
   }));
+  function setSessionCookies(
+    reply: FastifyReply,
+    session: Awaited<ReturnType<typeof createSession>>,
+  ) {
+    const secure = config.nodeEnv === "production";
+    reply.setCookie("stream_session", session.token, {
+      httpOnly: true,
+      secure,
+      sameSite: "strict",
+      expires: session.expiresAt,
+      path: "/",
+    });
+    reply.setCookie("stream_csrf", session.csrfToken, {
+      httpOnly: false,
+      secure,
+      sameSite: "strict",
+      expires: session.expiresAt,
+      path: "/",
+    });
+  }
+  api.post<{
+    Body: {
+      handle: string;
+      displayName: string;
+      password: string;
+      locale: "en" | "zh";
+    };
+  }>(
+    "/api/auth/register",
+    { schema: { body: mutationSchemas.register } },
+    async (request, reply) => {
+      try {
+        const user = await registerAudienceAccount(request.body);
+        const session = await createSession(user.id);
+        setSessionCookies(reply, session);
+        return reply.code(201).send({ user });
+      } catch (error) {
+        if (error instanceof RegistrationError) {
+          const status = error.code === "handle_unavailable" ? 409 : 400;
+          return reply.code(status).send({ error: error.code });
+        }
+        throw error;
+      }
+    },
+  );
   api.post<{ Body: { handle?: string; password?: string } }>(
     "/api/auth/login",
     { schema: { body: mutationSchemas.login } },
@@ -387,21 +403,7 @@ export function buildApi() {
         `${request.ip}:POST:/api/auth/login:${handle.toLowerCase()}`,
       );
       const session = await createSession(user.id);
-      const secure = config.nodeEnv === "production";
-      reply.setCookie("stream_session", session.token, {
-        httpOnly: true,
-        secure,
-        sameSite: "strict",
-        expires: session.expiresAt,
-        path: "/",
-      });
-      reply.setCookie("stream_csrf", session.csrfToken, {
-        httpOnly: false,
-        secure,
-        sameSite: "strict",
-        expires: session.expiresAt,
-        path: "/",
-      });
+      setSessionCookies(reply, session);
       return { user };
     },
   );
@@ -425,7 +427,7 @@ export function buildApi() {
       await client.end();
     }
     return {
-      user: { ...(await userForRole(user.role)), ageAcknowledged: true },
+      user: { ...user, ageAcknowledged: true },
     };
   });
   api.get("/api/audience/home", async (request, reply) => {

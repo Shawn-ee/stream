@@ -10,6 +10,7 @@ All published project documentation is Markdown so it remains searchable, review
 - [`CHANGELOG.md`](../CHANGELOG.md) — implementation and verification history.
 - [`Harness-Engineer-Loop.md`](Harness-Engineer-Loop.md) — bounded feature-review and implementation loop.
 - [`Autonomous-Development-Charter.md`](Autonomous-Development-Charter.md) — control-file and verification discipline.
+- [`Non-Video-Completion-Plan.md`](Non-Video-Completion-Plan.md) — ordered application/account/safety/operations milestones independent from video delivery.
 
 ## Setup and operations
 

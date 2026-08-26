@@ -73,3 +73,7 @@ The API uses a 20-connection PostgreSQL pool and Redis-backed Socket.IO coordina
 ## 2026-08-24 - Private operational telemetry boundary
 
 Machine-readable metrics use a constant-time bearer-token check and a non-proxied `/internal/metrics` route. The endpoint exposes bounded process, HTTP, realtime, PostgreSQL-pool, and Redis signals without user, wallet, credential, or Cloudflare data. Initial alert thresholds are documented but no external monitoring or notification service is connected without owner approval.
+
+## 2026-08-26 - Individual audience registration boundary
+
+Private staging may create individual audience accounts using a non-email ASCII handle, display name, and scrypt-hashed password. Handles are normalized to lowercase and uniquely enforced by the database; registration is rate-limited by source address and always assigns the audience role. New accounts receive no test coins automatically. Creator/admin elevation, email delivery, OAuth, recovery, MFA, real personal-data collection, public exposure, and commercial identity claims remain separate approval-gated milestones.

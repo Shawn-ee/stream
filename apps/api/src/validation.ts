@@ -5,6 +5,17 @@ const boundedString = (maxLength: number, minLength = 1) => ({
 });
 
 export const mutationSchemas = {
+  register: {
+    type: "object",
+    additionalProperties: false,
+    required: ["handle", "displayName", "password", "locale"],
+    properties: {
+      handle: boundedString(30, 3),
+      displayName: boundedString(50, 2),
+      password: boundedString(256, 12),
+      locale: { type: "string", enum: ["en", "zh"] },
+    },
+  },
   login: {
     type: "object",
     additionalProperties: false,
