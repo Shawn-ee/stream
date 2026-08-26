@@ -50,9 +50,10 @@ The repository is a secure, reproducibly packaged private launch candidate for t
 
 ## Owner-approval gates remaining
 
-1. Approve a specific private Linux staging host and secret/TLS/monitoring approach before any deployment action.
-2. Separately approve and obtain professional direction for real identity, payments, age/KYC, content policy, privacy, and legal/compliance work before public launch.
+1. Completed: owner-approved private Linux staging is running behind a localhost-only SSH tunnel with host admission, migrations, readiness, role authentication, backup/restore, and initial stability evidence recorded in `Linux-Staging-Deployment-Report.md`.
+2. Before broader staging: upgrade the unsupported host OS or enable an approved security-maintenance path, configure encrypted off-host backups and external alert delivery, and run a separately approved longer soak/load check that cannot interfere with co-hosted applications.
+3. Separately approve and obtain professional direction for real identity, payments, age/KYC, content policy, privacy, and legal/compliance work before public launch.
 
 Use `Private-Staging-Approval-Checklist.md` for the recommended localhost-bound SSH-tunnel option and the exact information/authorization required for item 1.
 
-The 100-user local application-readiness claim is demonstrated. Public-production readiness is not claimed until the remaining owner-gated evidence and operational controls are completed.
+The 100-user local application-readiness claim and private Linux deployability are demonstrated. Public-production readiness is not claimed until the remaining owner-gated evidence and operational controls are completed.

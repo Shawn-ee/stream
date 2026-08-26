@@ -27,6 +27,7 @@ All published project documentation is Markdown so it remains searchable, review
 - [`Production-Readiness-Audit.md`](Production-Readiness-Audit.md) — original findings and closure status.
 - [`Deployability-Report.md`](Deployability-Report.md) — consolidated launch-candidate result, evidence, risks, and remaining approvals.
 - [`Launch-Candidate-Completion-Audit.md`](Launch-Candidate-Completion-Audit.md) — requirement-by-requirement evidence and the exact remaining owner-gated host proof.
+- [`Linux-Staging-Deployment-Report.md`](Linux-Staging-Deployment-Report.md) — owner-approved private Linux deployment, host evidence, image IDs, restore proof, access boundary, and remaining risks.
 - [`100-User-Load-Report.md`](100-User-Load-Report.md) — thresholds, locked-container measurements, workload model, and limitations.
 - [`Camera-Audio-Test-Report.md`](Camera-Audio-Test-Report.md) — owner-approved physical-device Cloudflare playback proof and limitations.
 - [`Base-Image-Lock.md`](../deploy/Base-Image-Lock.md) — immutable official container foundation references and update policy.

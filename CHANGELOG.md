@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-26 - Owner-approved private Linux staging
+
+- Deployed exact application source `e1f64ad73e26792a84a94460afba50e0e16d5db3` to an isolated subdirectory and Compose project on the owner-controlled Linux VM without restarting or modifying existing applications.
+- Passed host admission with 8 logical CPUs, 11,964 MiB RAM, 52 GiB free disk, supported Git/Docker/Compose, synchronized clock, and an available private port.
+- Generated distinct owner-only staging secrets, kept Cloudflare disabled, built digest-locked images, migrated PostgreSQL, and verified healthy services, localhost-only gateway, readiness, private metrics, and HTTP access through an SSH tunnel.
+- Seeded only the four predefined synthetic accounts and two test rooms; verified audience, streamer, and administrator authentication without exposing the random password.
+- Created pre-seed and post-seed host-only backups, restored each into an exact disposable database, verified the post-seed four-user/two-room state, and removed the restore database.
+- Recorded zero initial Stream container restarts and confirmed the existing host Compose project remained running. No host load test, public exposure, DNS, Cloudflare, real identity, payment, or compliance action occurred.
+
 ## 2026-08-24 - Secure synthetic-account identity
 
 - Added scrypt-hashed local account credentials and opaque database-backed sessions with expiry and revocation.

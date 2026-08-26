@@ -81,7 +81,7 @@ Completed 2026-08-24: items 3, 4, and 5. The repository now has a tested private
 ### Owner-gated launch queue
 
 1. Completed P0 with owner approval: physical camera/microphone, existing Cloudflare ingest, signed playback audio/video tracks, and offline recovery were verified using preinstalled FFmpeg because OBS was not installed. Human visual/audio quality confirmation and OBS-specific UI remain optional follow-up evidence.
-2. P0 owner approval: choose a private Linux staging host and approve deployment, secret storage, TLS termination, logging/monitoring, and a host soak test.
+2. Completed private staging deployment with owner approval: the exact hardened application commit was built and started on an owner-controlled Linux VM, bound to localhost and accessed only through an SSH tunnel. Host admission, migrations, readiness, private metrics, synthetic role authentication, backup/restore, image recording, zero initial restarts, and coexistence with the existing host application passed. A longer soak, shared-host load test, off-host backup, OS support upgrade, Cloudflare playback, and any broader access remain separate follow-up gates.
 3. Completed P0 with owner approval: reviewed baseline commit `8aa41bf688336c1f8a0a8478e69d556d094477b5`, with Markdown-only documentation, and annotated tag `stream-launch-candidate-0.1.0` were pushed to the owner repository. Local Word files, secrets, builds, and scratch data remain excluded.
 4. P0 before public launch: rotate the exposed Cloudflare test token and replace synthetic account lifecycle with an approved real identity design.
 5. P0 before public launch: professional legal/privacy/content/age/KYC direction and separately approved payment/cashout design.

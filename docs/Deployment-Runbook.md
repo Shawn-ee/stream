@@ -64,7 +64,7 @@ The migration must exit successfully before the API starts. The API must report 
 sh deploy/private-staging-operator.sh verify
 ```
 
-Do not seed synthetic demo users on a real deployment. Seeding is only part of disposable localhost validation.
+Do not seed synthetic demo users on a public, customer-facing, or real-identity deployment. An explicitly owner-approved, localhost-bound private staging instance may seed the predefined synthetic accounts only after an initial backup, while Cloudflare and every commercial/identity/compliance feature remain disabled. Record that exception in the staging report and never treat those accounts or test coins as production data.
 
 The complete disposable localhost production-package smoke test is:
 
