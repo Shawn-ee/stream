@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-27 - Realtime gifts public deployment
+
+- Deployed reviewed implementation commit `730b7a2` to the isolated Linux Stream project with a fast-forward-only Git update.
+- Created and verified project-local PostgreSQL and source rollback artifacts before the update; applied migration `013_realtime_gift_catalog.sql` and reset only the predefined synthetic demo records.
+- Rebuilt and recreated only the Stream API and web containers. PostgreSQL, Redis, Cloudflare Tunnel, the Linux VM, and unrelated Odoo services were not recreated or restarted.
+- Verified public HTTPS 200, Cloudflare routing, the new production asset hashes, eight ordered gift prices and symbols, healthy Stream services, zero restart counts, unchanged Odoo container identities, and exact deployed source.
+- No broadcast was started and no Cloudflare, DNS, payment, cashout, identity, KYC, or compliance configuration changed.
+
 ## 2026-08-27 - Realtime video interaction and fixed test-gift system
 
 - Added an ordered bilingual gift catalog at 1, 5, 10, 20, 50, 100, 1,000, and 10,000 test tokens, each with an original symbol and bounded animation tier.

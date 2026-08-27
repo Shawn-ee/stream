@@ -6,6 +6,16 @@ On 2026-08-26, the owner approved and the launch candidate was deployed to an ow
 
 The existing applications on the host were not restarted or modified. Stream remains in its isolated project directory and uses the separate Compose project `stream-launch-candidate`.
 
+## Realtime gifts and video activity upgrade
+
+On 2026-08-27, the owner-approved upgrade moved the public Stream checkout from `4baa1450b4f9af1db8596271eed83d8ed0ad1687` to implementation commit `730b7a247279374960cbad8d20438e2c28552c04` using a fast-forward-only pull.
+
+- Before the pull, a verified custom-format PostgreSQL dump and tracked-source archive were stored in the existing project-local owner-only `backups` directory. Their SHA-256 values are `63c28513c0f699f66ea0f544eba3184c9c4319ff8f4e0a8cae843c8c051121f6` and `96182c0710e7ed63ea2426e56dde8fd541f1791dcf9a7a46e2370166e8f82f73`.
+- Migration `013_realtime_gift_catalog.sql` applied successfully. Only the Stream API and web images were rebuilt and their containers recreated; PostgreSQL, Redis, Tunnel, and the three Odoo containers retained their identities and running state.
+- The synthetic demo dataset was reset so the ordered 1, 5, 10, 20, 50, 100, 1,000, and 10,000 test-token gifts became active.
+- Public HTTPS returned 200 through Cloudflare, the new JavaScript/CSS assets were served, all four Stream services were healthy with zero restarts, and the public gift catalog returned all eight values and symbols in order.
+- No encoder or camera was started and no Cloudflare, DNS, real payment, cashout, identity, KYC, or compliance setting changed.
+
 ## Exact source and host admission
 
 - Signed-WHEP implementation source: `cad899a3eaa0255b690f2520ce4d09c6d2a8cfdb` on local branch `main`. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
