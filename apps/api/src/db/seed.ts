@@ -57,10 +57,22 @@ try {
     [accounts[1][0]],
   );
   await client.query(
-    `INSERT INTO gift_catalog (id, name_en, name_zh, coin_cost, animation_key) VALUES ('30000000-0000-4000-8000-000000000001', 'Spark', '火花', 25, 'spark'), ('30000000-0000-4000-8000-000000000002', 'Rose', '玫瑰', 75, 'rose'), ('30000000-0000-4000-8000-000000000003', 'Crown', '王冠', 150, 'crown') ON CONFLICT (id) DO UPDATE SET name_en=EXCLUDED.name_en, name_zh=EXCLUDED.name_zh, coin_cost=EXCLUDED.coin_cost, animation_key=EXCLUDED.animation_key`,
+    `INSERT INTO gift_catalog (id,name_en,name_zh,coin_cost,animation_key,symbol,animation_tier,display_order,is_active) VALUES
+      ('30000000-0000-4000-8000-000000000001','Spark','火花',1,'spark','✦','small',1,TRUE),
+      ('30000000-0000-4000-8000-000000000002','Heart','心意',5,'heart','♥','small',2,TRUE),
+      ('30000000-0000-4000-8000-000000000003','Rose','玫瑰',10,'rose','❀','small',3,TRUE),
+      ('30000000-0000-4000-8000-000000000004','Star','星光',20,'star','★','small',4,TRUE),
+      ('30000000-0000-4000-8000-000000000005','Crown','皇冠',50,'crown','♛','highlight',5,TRUE),
+      ('30000000-0000-4000-8000-000000000006','Diamond','钻石',100,'diamond','◆','highlight',6,TRUE),
+      ('30000000-0000-4000-8000-000000000007','Phoenix','凤凰',1000,'phoenix','🔥','celebration',7,TRUE),
+      ('30000000-0000-4000-8000-000000000008','Galaxy','星河',10000,'galaxy','✺','premium',8,TRUE)
+     ON CONFLICT (id) DO UPDATE SET name_en=EXCLUDED.name_en,name_zh=EXCLUDED.name_zh,coin_cost=EXCLUDED.coin_cost,animation_key=EXCLUDED.animation_key,symbol=EXCLUDED.symbol,animation_tier=EXCLUDED.animation_tier,display_order=EXCLUDED.display_order,is_active=TRUE`,
   );
   await client.query(
-    `INSERT INTO wallet_ledger (id, user_id, entry_type, amount, idempotency_key, reference_type) VALUES ('40000000-0000-4000-8000-000000000001', $1, 'seed_credit', 500, 'seed-demo-audience-500', 'seed') ON CONFLICT (idempotency_key) DO NOTHING`,
+    "UPDATE gift_catalog SET is_active=FALSE WHERE id NOT IN ('30000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000002','30000000-0000-4000-8000-000000000003','30000000-0000-4000-8000-000000000004','30000000-0000-4000-8000-000000000005','30000000-0000-4000-8000-000000000006','30000000-0000-4000-8000-000000000007','30000000-0000-4000-8000-000000000008')",
+  );
+  await client.query(
+    `INSERT INTO wallet_ledger (id,user_id,entry_type,amount,idempotency_key,reference_type) VALUES ('40000000-0000-4000-8000-000000000001',$1,'seed_credit',20000,'seed-demo-audience-20000','seed') ON CONFLICT (id) DO UPDATE SET user_id=EXCLUDED.user_id,entry_type=EXCLUDED.entry_type,amount=EXCLUDED.amount,idempotency_key=EXCLUDED.idempotency_key,reference_type=EXCLUDED.reference_type`,
     [accounts[0][0]],
   );
   await client.query(
@@ -136,7 +148,7 @@ try {
     accounts[2][0],
   ]);
   await client.query(
-    "INSERT INTO wallet_ledger (id, user_id, entry_type, amount, idempotency_key, reference_type) VALUES ('40000000-0000-4000-8000-000000000001', $1, 'seed_credit', 500, 'seed-demo-audience-500', 'seed')",
+    "INSERT INTO wallet_ledger (id, user_id, entry_type, amount, idempotency_key, reference_type) VALUES ('40000000-0000-4000-8000-000000000001', $1, 'seed_credit', 20000, 'seed-demo-audience-20000', 'seed')",
     [accounts[0][0]],
   );
   await client.query(

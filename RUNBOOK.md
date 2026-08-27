@@ -178,7 +178,7 @@ This does not delete data. Do not run a volume-removal command unless deliberate
 npm run db:seed
 ```
 
-This removes only the predefined local demo accounts' room interactions and restores the Demo Audience's 500 test coins. It does not create a real balance or payment record.
+This removes only the predefined local demo accounts' room interactions and restores the Demo Audience's 20,000 test coins. It does not create a real balance or payment record.
 
 ## Verify creator actions and goal progress
 
@@ -187,6 +187,17 @@ This removes only the predefined local demo accounts' room interactions and rest
 ## Verify creator session insights
 
 Creator session insights and the public support feed are covered by `npm run verify:expanded`; realtime support activity is covered by `npm run verify:realtime`. Both commands remain local-only and use only the test ledger.
+
+## Verify realtime video comments and test gifts
+
+1. Run `npm run verify:expanded` to verify the eight fixed gift prices, high-value confirmation requirement, audience-only authorization, exactly-once deduction, equal creator credit, goal progress, and final demo reset.
+2. Run `npm run verify:realtime` to verify room-scoped comment and gift events, gift symbol/quantity/tier data, and absence of private ledger or idempotency data.
+3. In an audience room, select a gift and quantity and confirm the visible total before sending. Use only synthetic local accounts and test coins.
+4. Open Creator Studio and the audience room in separate local sessions. Confirm new comments temporarily flow over both video surfaces and a gift event appears on both without exposing wallet balances.
+5. Check the hide/show activity control, English/Chinese labels, reduced-motion behavior, and a 390×844 viewport with no horizontal page overflow.
+6. Run `npm run db:seed` after manual checks. The baseline Demo Audience balance is 20,000 test coins.
+
+Do not interpret the displayed yuan reference as a real exchange promise. This workflow does not authorize payment, deposit, withdrawal, payout, Cloudflare usage, or deployment.
 
 ## Verify individual audience registration
 

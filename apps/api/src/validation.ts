@@ -47,6 +47,8 @@ export const mutationSchemas = {
     properties: {
       giftId: boundedString(80),
       idempotencyKey: boundedString(160),
+      quantity: { type: "integer", minimum: 1, maximum: 100 },
+      confirmedHighValue: { type: "boolean" },
     },
   },
   createRoomAction: {

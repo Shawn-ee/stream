@@ -1,4 +1,11 @@
-import { StrictMode, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  StrictMode,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { io } from "socket.io-client";
 import {
@@ -878,9 +885,9 @@ function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
         <div className="creator-monitor-panel support-timeline">
           {gifts.length ? (
             gifts.map((gift) => (
-              <article key={gift.id}>
+              <article key={gift.eventId ?? gift.id}>
                 <span className={gift.action ? "support-icon action" : "support-icon"}>
-                  {gift.action ? "⚡" : "◆"}
+                  {gift.action ? "⚡" : gift.symbol ?? "◆"}
                 </span>
                 <div>
                   <strong>{gift.sender}</strong>
@@ -892,7 +899,8 @@ function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
                       : zh
                         ? "送出了礼物"
                         : "sent a gift"}{" "}
-                    · {gift.name}
+                    · {zh ? gift.nameZh ?? gift.name : gift.nameEn ?? gift.name}
+                    {gift.quantity > 1 ? ` ×${gift.quantity}` : ""}
                   </p>
                 </div>
                 <b>
@@ -1331,6 +1339,97 @@ type QuickLivePhase =
   | "live"
   | "error";
 
+function VideoActivityOverlay({
+  messages,
+  gift,
+  t,
+}: {
+  messages: any[];
+  gift: any | null;
+  t: Record<string, string>;
+}) {
+  const [visible, setVisible] = useState(true);
+  const [clock, setClock] = useState(Date.now());
+  const zh = t.title !== "Stream MVP";
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const recentMessages = messages
+    .filter((message) => {
+      const created = Date.parse(message.createdAt ?? "");
+      return !Number.isFinite(created) || clock - created < 12_000;
+    })
+    .slice(-5);
+  return (
+    <div className={`video-activity-overlay ${visible ? "is-visible" : "is-hidden"}`}>
+      <button
+        type="button"
+        className="video-overlay-toggle"
+        onClick={() => setVisible((current) => !current)}
+        aria-pressed={visible}
+      >
+        {visible ? (zh ? "隐藏互动" : "Hide activity") : zh ? "显示互动" : "Show activity"}
+      </button>
+      {visible ? (
+        <>
+          <div className="video-overlay-comments" aria-live="polite">
+            {recentMessages.map((message) => (
+              <p key={message.id} className={`overlay-comment ${message.sender?.role === "streamer" ? "creator" : ""}`}>
+                <strong>{message.sender?.displayName}</strong>
+                <span>{message.body}</span>
+              </p>
+            ))}
+          </div>
+          {gift ? (
+            <div
+              key={gift.eventId ?? gift.id}
+              className={`overlay-gift ${gift.animationTier ?? "small"}`}
+              aria-live="polite"
+            >
+              <span className="overlay-gift-symbol" aria-hidden="true">{gift.symbol ?? "◆"}</span>
+              <div>
+                <strong>{gift.sender}</strong>
+                <span>
+                  {zh ? gift.nameZh ?? gift.name : gift.nameEn ?? gift.name}
+                  {gift.quantity > 1 ? ` ×${gift.quantity}` : ""}
+                </span>
+              </div>
+              <b>+{gift.cost}</b>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function CreatorRealtimeOverlay({ slug, t }: { slug: string; t: typeof copy.en }) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [gift, setGift] = useState<any | null>(null);
+  useEffect(() => {
+    void request(`/api/rooms/${slug}/chat-history`).then((result) =>
+      setMessages(result.messages.slice(-5)),
+    );
+    const socket = io({ transports: ["websocket"] });
+    let giftTimer = 0;
+    socket.on("connect", () => socket.emit("room:join", slug));
+    socket.on("chat:message", (message) =>
+      setMessages((current) => [...current.slice(-4), message]),
+    );
+    socket.on("gift:sent", (event) => {
+      window.clearTimeout(giftTimer);
+      setGift(event);
+      giftTimer = window.setTimeout(() => setGift(null), 6_000);
+    });
+    return () => {
+      window.clearTimeout(giftTimer);
+      socket.disconnect();
+    };
+  }, [slug]);
+  return <VideoActivityOverlay messages={messages} gift={gift} t={t} />;
+}
+
 function QuickGoLive({
   slug,
   available,
@@ -1338,6 +1437,7 @@ function QuickGoLive({
   transport,
   t,
   onChanged,
+  overlay,
 }: {
   slug: string;
   available: boolean;
@@ -1345,6 +1445,7 @@ function QuickGoLive({
   transport?: "obs_hls" | "browser_webrtc";
   t: typeof copy.en;
   onChanged: () => void;
+  overlay?: ReactNode;
 }) {
   const zh = t.title !== "Stream MVP";
   const [phase, setPhase] = useState<QuickLivePhase>("idle");
@@ -1536,14 +1637,17 @@ function QuickGoLive({
         </div>
         <span>{phase === "live" ? (zh ? "直播中" : "LIVE") : zh ? "私密预览" : "Private preview"}</span>
       </div>
-      {stream ? (
-        <video ref={videoRef} className="quick-live-preview" autoPlay muted playsInline />
-      ) : (
-        <div className="quick-live-empty">
-          <strong>{zh ? "您的预览仅在授权后显示" : "Your preview appears only after permission"}</strong>
-          <p>{zh ? "浏览器不会在您点击之前访问设备。" : "The browser will not access devices until you click."}</p>
-        </div>
-      )}
+      <div className="quick-live-video-shell">
+        {stream ? (
+          <video ref={videoRef} className="quick-live-preview" autoPlay muted playsInline />
+        ) : (
+          <div className="quick-live-empty">
+            <strong>{zh ? "您的预览仅在授权后显示" : "Your preview appears only after permission"}</strong>
+            <p>{zh ? "浏览器不会在您点击之前访问设备。" : "The browser will not access devices until you click."}</p>
+          </div>
+        )}
+        {overlay}
+      </div>
       {stream ? (
         <>
           <div className="device-grid">
@@ -2044,6 +2148,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
             transport={room.broadcast_transport}
             t={t}
             onChanged={refresh}
+            overlay={<CreatorRealtimeOverlay slug={room.slug} t={t} />}
           />
           {broadcastState !== "offline" ? (
             <CreatorBroadcastPreview
@@ -2385,10 +2490,12 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
 function CreatorProfile({
   streamerId,
   fallbackName,
+  broadcastState,
   t,
 }: {
   streamerId: string;
   fallbackName: string;
+  broadcastState?: "live" | "connecting" | "offline" | "unavailable";
   t: Record<string, string>;
 }) {
   const [profile, setProfile] = useState<StreamerProfile | null>(null);
@@ -2401,7 +2508,13 @@ function CreatorProfile({
   return (
     <aside className="creator-profile" aria-label={`${fallbackName} profile`}>
       <p className="eyebrow">
-        {profile.room_status === "live" ? t.live : t.offline}
+        {broadcastState === "live"
+          ? t.stateLive
+          : broadcastState === "connecting"
+            ? t.connectingBroadcast
+            : broadcastState === "unavailable"
+              ? t.unavailableBroadcast
+              : t.offline}
       </p>
       <h3>{profile.display_name}</h3>
       <p>{profile.bio}</p>
@@ -2477,6 +2590,10 @@ function RoomView({
   const [wallet, setWallet] = useState<number | null>(null);
   const [walletHistory, setWalletHistory] = useState<any[]>([]);
   const [gifts, setGifts] = useState<any[]>([]);
+  const [selectedGiftId, setSelectedGiftId] = useState("");
+  const [giftQuantity, setGiftQuantity] = useState(1);
+  const [activeGift, setActiveGift] = useState<any | null>(null);
+  const [sendingGift, setSendingGift] = useState(false);
   const [actions, setActions] = useState<any[]>([]);
   const [goalProgress, setGoalProgress] = useState<any>(null);
   const [supportFeed, setSupportFeed] = useState<any[]>([]);
@@ -2490,6 +2607,7 @@ function RoomView({
     transport: room.broadcast_transport ?? "obs_hls",
   });
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  const giftTimerRef = useRef(0);
   const refreshShow = () =>
     void request(`/api/rooms/${room.slug}/private-show`).then(setShow);
   const refreshWallet = () => {
@@ -2537,7 +2655,10 @@ function RoomView({
     void request(`/api/rooms/${room.slug}/chat-history`).then((d) =>
       setMessages(d.messages),
     );
-    void request("/api/gifts").then((d) => setGifts(d.gifts));
+    void request("/api/gifts").then((d) => {
+      setGifts(d.gifts);
+      setSelectedGiftId((current) => current || d.gifts[0]?.id || "");
+    });
     refreshActions();
     refreshSupportFeed();
   }, [room.slug]);
@@ -2582,7 +2703,12 @@ function RoomView({
       },
     );
     socket.on("gift:sent", (d) => {
-      setGiftNotice(`${d.sender} ${t.send} ${d.name}`);
+      window.clearTimeout(giftTimerRef.current);
+      setActiveGift(d);
+      giftTimerRef.current = window.setTimeout(() => setActiveGift(null), 6_000);
+      setGiftNotice(
+        `${d.sender} ${t.send} ${t.title === "Stream MVP" ? d.nameEn ?? d.name : d.nameZh ?? d.name}${d.quantity > 1 ? ` ×${d.quantity}` : ""}`,
+      );
       if (d.goal) setGoalProgress(d.goal);
       refreshSupportFeed();
     });
@@ -2610,6 +2736,7 @@ function RoomView({
       },
     );
     return () => {
+      window.clearTimeout(giftTimerRef.current);
       socket.disconnect();
     };
   }, [room.slug, t]);
@@ -2628,13 +2755,49 @@ function RoomView({
       setDraft("");
     }
   }
-  async function sendGift(id: string) {
-    const d = await request(`/api/rooms/${room.slug}/gifts`, {
-      method: "POST",
-      body: JSON.stringify({ giftId: id, idempotencyKey: crypto.randomUUID() }),
-    });
-    setGiftNotice(`${t.send} ${d.gift.name}`);
-    refreshWallet();
+  async function sendGift(gift: any) {
+    const total = gift.coin_cost * giftQuantity;
+    const highValue = total >= 1_000;
+    if (
+      highValue &&
+      !window.confirm(
+        t.title === "Stream MVP"
+          ? `Confirm this test gift: ${giftQuantity} × ${gift.name_en} = ${total.toLocaleString()} test tokens (¥${total.toLocaleString()} reference value). No real money is charged.`
+          : `确认测试礼物：${giftQuantity} × ${gift.name_zh} = ${total.toLocaleString()} 测试代币（¥${total.toLocaleString()} 参考价值）。不会产生真实扣款。`,
+      )
+    )
+      return;
+    setSendingGift(true);
+    try {
+      const d = await request(`/api/rooms/${room.slug}/gifts`, {
+        method: "POST",
+        body: JSON.stringify({
+          giftId: gift.id,
+          quantity: giftQuantity,
+          confirmedHighValue: highValue,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      if (!d.duplicate)
+        setGiftNotice(
+          t.title === "Stream MVP"
+            ? `Sent ${gift.symbol} ${gift.name_en} ×${giftQuantity}`
+            : `已送出 ${gift.symbol} ${gift.name_zh} ×${giftQuantity}`,
+        );
+      refreshWallet();
+    } catch (error) {
+      setGiftNotice(
+        (error as Error).message === "409"
+          ? t.title === "Stream MVP"
+            ? "Not enough test tokens for this gift."
+            : "测试代币余额不足。"
+          : t.title === "Stream MVP"
+            ? "The test gift could not be sent. Please try again."
+            : "测试礼物发送失败，请重试。",
+      );
+    } finally {
+      setSendingGift(false);
+    }
   }
   async function purchaseAction(id: string) {
     const d = await request(`/api/rooms/${room.slug}/actions/${id}/purchase`, {
@@ -2713,6 +2876,7 @@ function RoomView({
                 : broadcast.message || playerMessage}
           </div>
         )}
+        <VideoActivityOverlay messages={messages} gift={activeGift} t={t} />
       </div>
       <div className="room-heading">
         <div>
@@ -2814,6 +2978,7 @@ function RoomView({
       <CreatorProfile
         streamerId={room.streamer_id}
         fallbackName={room.streamer_name}
+        broadcastState={room.broadcast_state}
         t={t}
       />
       <PrivateShowStatus show={show} t={t} />
@@ -2832,17 +2997,76 @@ function RoomView({
           </button>
         )}
       </div>
-      <div className="gift room-gift-tray">
-        <span>
-          {t.coins}: {wallet ?? "..."}
-        </span>
-        {gifts.map((gift) => (
-          <button key={gift.id} onClick={() => void sendGift(gift.id)}>
-            {t.send} {gift.name_en} ({gift.coin_cost})
-          </button>
-        ))}
-        {giftNotice && <strong>{giftNotice}</strong>}
-      </div>
+      <section className="room-gift-tray">
+        <div className="gift-tray-heading">
+          <div>
+            <p className="eyebrow">{t.title === "Stream MVP" ? "Send a gift" : "赠送礼物"}</p>
+            <strong>{t.title === "Stream MVP" ? "Support this creator" : "支持这位主播"}</strong>
+          </div>
+          <div className="test-wallet-balance">
+            <span>{t.title === "Stream MVP" ? "Test balance" : "测试余额"}</span>
+            <strong>{wallet?.toLocaleString() ?? "…"}</strong>
+          </div>
+        </div>
+        <p className="gift-token-note">
+          {t.title === "Stream MVP"
+            ? "1 test token = ¥1 reference value · no purchase, cashout, or real-money redemption"
+            : "1 测试代币 = ¥1 参考价值 · 不支持购买、提现或真实货币兑换"}
+        </p>
+        <div
+          className="gift-catalog"
+          aria-label={t.title === "Stream MVP" ? "Gift catalog" : "礼物目录"}
+        >
+          {gifts.map((gift) => (
+            <button
+              type="button"
+              key={gift.id}
+              className={`gift-card ${selectedGiftId === gift.id ? "selected" : ""} tier-${gift.animation_tier}`}
+              aria-pressed={selectedGiftId === gift.id}
+              aria-label={`${t.title === "Stream MVP" ? gift.name_en : gift.name_zh}, ${gift.coin_cost.toLocaleString()} ${t.coins}`}
+              onClick={() => setSelectedGiftId(gift.id)}
+            >
+              <span className="gift-card-symbol" aria-hidden="true">{gift.symbol}</span>
+              <strong className="gift-card-name">{t.title === "Stream MVP" ? gift.name_en : gift.name_zh}</strong>
+              <span className="gift-card-price">{gift.coin_cost.toLocaleString()} {t.coins}</span>
+            </button>
+          ))}
+        </div>
+        {(() => {
+          const selected = gifts.find((gift) => gift.id === selectedGiftId);
+          if (!selected) return null;
+          const total = selected.coin_cost * giftQuantity;
+          return (
+            <div className="gift-checkout">
+              <label>
+                {t.title === "Stream MVP" ? "Quantity" : "数量"}
+                <select value={giftQuantity} onChange={(event) => setGiftQuantity(Number(event.target.value))}>
+                  <option value="1">×1</option>
+                  <option value="5">×5</option>
+                  <option value="10">×10</option>
+                </select>
+              </label>
+              <div>
+                <span>{t.title === "Stream MVP" ? "Total" : "合计"}</span>
+                <strong>{total.toLocaleString()} {t.coins}</strong>
+                <small>¥{total.toLocaleString()} {t.title === "Stream MVP" ? "reference" : "参考价值"}</small>
+              </div>
+              <button
+                type="button"
+                className="gift-send-button"
+                disabled={sendingGift || wallet === null || wallet < total}
+                onClick={() => void sendGift(selected)}
+              >
+                <span aria-hidden="true">{selected.symbol}</span>
+                {sendingGift
+                  ? t.title === "Stream MVP" ? "Sending…" : "发送中…"
+                  : t.title === "Stream MVP" ? "Send gift" : "赠送礼物"}
+              </button>
+            </div>
+          );
+        })()}
+        {giftNotice && <p className="gift-notice" role="status">{giftNotice}</p>}
+      </section>
       <aside className="wallet-history room-wallet">
         <p className="eyebrow">
           {t.title === "Stream MVP" ? "Recent test activity" : "最近测试记录"}

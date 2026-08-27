@@ -36,6 +36,23 @@ test("schema contains the full local prototype data model", async () => {
     ]) {
       assert.ok(tables.has(table), `Expected ${table} to exist`);
     }
+    const columns = await client.query<{ table_name: string; column_name: string }>(`
+      SELECT table_name, column_name FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND ((table_name = 'gift_catalog' AND column_name IN ('symbol', 'animation_tier', 'display_order'))
+          OR (table_name = 'gifts' AND column_name = 'quantity'))
+    `);
+    const giftColumns = new Set(
+      columns.rows.map((row) => `${row.table_name}.${row.column_name}`),
+    );
+    for (const column of [
+      "gift_catalog.symbol",
+      "gift_catalog.animation_tier",
+      "gift_catalog.display_order",
+      "gifts.quantity",
+    ]) {
+      assert.ok(giftColumns.has(column), `Expected ${column} to exist`);
+    }
   } finally {
     await client.end();
   }

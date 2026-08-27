@@ -1214,7 +1214,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-          "SELECT id,name_en,name_zh,coin_cost,animation_key FROM gift_catalog WHERE is_active=TRUE ORDER BY coin_cost LIMIT 100",
+          "SELECT id,name_en,name_zh,coin_cost,animation_key,symbol,animation_tier,display_order FROM gift_catalog WHERE is_active=TRUE ORDER BY display_order,coin_cost LIMIT 100",
       );
       return { gifts: result.rows };
     } finally {
@@ -1340,7 +1340,12 @@ export function buildApi() {
   );
   api.post<{
     Params: { slug: string };
-    Body: { giftId?: string; idempotencyKey?: string };
+    Body: {
+      giftId?: string;
+      idempotencyKey?: string;
+      quantity?: number;
+      confirmedHighValue?: boolean;
+    };
   }>(
     "/api/rooms/:slug/gifts",
     { schema: { body: mutationSchemas.giftPurchase } },
@@ -1350,6 +1355,7 @@ export function buildApi() {
     if (!sender) return;
     const giftId = request.body?.giftId;
     const idempotencyKey = request.body?.idempotencyKey;
+    const quantity = request.body?.quantity ?? 1;
     if (!giftId || !idempotencyKey)
       return reply
         .code(400)
@@ -1367,7 +1373,7 @@ export function buildApi() {
       );
       if (existing.rows[0]) {
         await client.query("COMMIT");
-        return { duplicate: true, giftId: existing.rows[0].id };
+        return { duplicate: true };
       }
       const room = await client.query<{ id: string; streamer_id: string }>(
         "SELECT id, streamer_id FROM live_rooms WHERE slug = $1",
@@ -1379,33 +1385,43 @@ export function buildApi() {
         name_en: string;
         name_zh: string;
         animation_key: string;
+        symbol: string;
+        animation_tier: "small" | "highlight" | "celebration" | "premium";
       }>(
-        "SELECT id, coin_cost, name_en, name_zh, animation_key FROM gift_catalog WHERE id = $1 AND is_active = TRUE",
+        "SELECT id,coin_cost,name_en,name_zh,animation_key,symbol,animation_tier FROM gift_catalog WHERE id=$1 AND is_active=TRUE",
         [giftId],
       );
       if (!room.rows[0] || !gift.rows[0]) {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "room_or_gift_not_found" });
       }
+      const totalCost = gift.rows[0].coin_cost * quantity;
+      if (totalCost >= 1_000 && request.body?.confirmedHighValue !== true) {
+        await client.query("ROLLBACK");
+        return reply
+          .code(400)
+          .send({ error: "high_value_confirmation_required" });
+      }
       const balance = await client.query<{ balance: string }>(
         "SELECT COALESCE(SUM(amount), 0)::text AS balance FROM (SELECT amount FROM wallet_ledger WHERE user_id = $1 FOR UPDATE) AS locked_entries",
         [sender.id],
       );
-      if (Number(balance.rows[0].balance) < gift.rows[0].coin_cost) {
+      if (Number(balance.rows[0].balance) < totalCost) {
         await client.query("ROLLBACK");
         return reply.code(409).send({ error: "insufficient_test_coins" });
       }
       const id = crypto.randomUUID();
       await client.query(
-        "INSERT INTO gifts (id, room_id, sender_id, recipient_id, gift_id, coin_cost, idempotency_key) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        "INSERT INTO gifts (id,room_id,sender_id,recipient_id,gift_id,coin_cost,idempotency_key,quantity) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
         [
           id,
           room.rows[0].id,
           sender.id,
           room.rows[0].streamer_id,
           giftId,
-          gift.rows[0].coin_cost,
+          totalCost,
           idempotencyKey,
+          quantity,
         ],
       );
       await client.query(
@@ -1413,25 +1429,32 @@ export function buildApi() {
         [
           crypto.randomUUID(),
           sender.id,
-          -gift.rows[0].coin_cost,
+          -totalCost,
           `${idempotencyKey}:sent`,
           id,
           crypto.randomUUID(),
           room.rows[0].streamer_id,
-          gift.rows[0].coin_cost,
+          totalCost,
           `${idempotencyKey}:received`,
         ],
       );
       const goal = await client.query(
         "UPDATE live_rooms SET goal_progress=goal_progress+$1 WHERE id=$2 RETURNING goal_text,goal_target,goal_progress",
-        [gift.rows[0].coin_cost, room.rows[0].id],
+        [totalCost, room.rows[0].id],
       );
       await client.query("COMMIT");
       const event = {
-        id,
+        eventId: crypto.randomUUID(),
+        giftId: gift.rows[0].id,
         name: gift.rows[0].name_en,
-        cost: gift.rows[0].coin_cost,
+        nameEn: gift.rows[0].name_en,
+        nameZh: gift.rows[0].name_zh,
+        symbol: gift.rows[0].symbol,
+        unitCost: gift.rows[0].coin_cost,
+        quantity,
+        cost: totalCost,
         animationKey: gift.rows[0].animation_key,
+        animationTier: gift.rows[0].animation_tier,
         sender: sender.displayName,
         goal: goal.rows[0],
       };

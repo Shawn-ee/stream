@@ -123,3 +123,9 @@ Machine-readable metrics use a constant-time bearer-token check and a non-proxie
 ## 2026-08-26 - Individual audience registration boundary
 
 Private staging may create individual audience accounts using a non-email ASCII handle, display name, and scrypt-hashed password. Handles are normalized to lowercase and uniquely enforced by the database; registration is rate-limited by source address and always assigns the audience role. New accounts receive no test coins automatically. Creator/admin elevation, email delivery, OAuth, recovery, MFA, real personal-data collection, public exposure, and commercial identity claims remain separate approval-gated milestones.
+
+## 2026-08-27 - Test-token gifts and video activity overlays (P0)
+
+The product uses eight fixed gift prices—1, 5, 10, 20, 50, 100, 1,000, and 10,000 test tokens—with bilingual names, original symbols, and bounded visual tiers. `1 test token = ¥1 reference value` is display-only product language; it does not create a currency, sale, deposit, withdrawal, redemption, or creator payout obligation.
+
+Gift totals are calculated by the API from the active catalog and bounded quantity. Every successful gift is idempotent, produces equal sender-debit and creator-credit entries in the append-only test ledger, advances the local goal, and emits only a minimal room-scoped event. Totals of 1,000 or more require an explicit test-only confirmation. Comments remain persisted in chat, but their video overlay is transient; users may hide it and reduced-motion preferences disable entrance animation.

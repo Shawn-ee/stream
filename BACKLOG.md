@@ -1,5 +1,13 @@
 # Stream MVP Backlog
 
+## Completed P0 - Realtime video interaction and fixed test-gift system
+
+- Completed locally: video-layer comments for audience and creator views, room-scoped gift celebrations, and an accessible activity visibility toggle.
+- Completed locally: fixed bilingual gift values of 1, 5, 10, 20, 50, 100, 1,000, and 10,000 test tokens with original symbols, quantity selection, total preview, and balance-aware controls.
+- Completed locally: server-side total calculation, high-value confirmation, idempotent paired test-ledger transfers, goal contribution, role enforcement, and minimal realtime payloads.
+- Verified: focused workflow/realtime/schema tests, full staging gate, creator and audience desktop checks, 390×844 mobile check with no horizontal overflow, reduced-motion CSS, and deterministic demo reset.
+- Intentionally excluded: token purchasing, real `CNY` custody or redemption, payment/cashout, creator payout, third-party gift media, downloadable assets, and Cloudflare/deployment changes.
+
 ## Completed P0 - Audience discovery and video-first room shell
 
 - Completed locally: persistent signed-in audience navigation, clearer discovery hierarchy, original visual room cards, live-count/search/category controls, and compact access to audience activity.

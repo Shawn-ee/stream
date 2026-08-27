@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-27 - Realtime video interaction and fixed test-gift system
+
+- Added an ordered bilingual gift catalog at 1, 5, 10, 20, 50, 100, 1,000, and 10,000 test tokens, each with an original symbol and bounded animation tier.
+- Added selectable quantities, visible totals, a clearly non-monetary `1 test token = ¥1 reference value` label, balance-aware sending, and explicit confirmation for totals of 1,000 test tokens or more.
+- Hardened gift transfers with server-calculated totals, quantity bounds, idempotency locking, paired sender/creator test-ledger entries, creator-only denial, and privacy-safe room-scoped realtime events.
+- Added transient comments and animated gift events over the audience video and creator preview, with hide/show control, bilingual labels, reduced-motion handling, and responsive mobile behavior.
+- Completed three improvement reviews covering UX/visual consistency, ledger/realtime safety, and accessibility/mobile behavior. The complete Cloudflare-free staging gate passed and demo data was reset.
+- No real currency, purchase, cashout, payment provider, Cloudflare change, public deployment, or production data change occurred.
+
 ## 2026-08-26 - Audience and creator UX public deployment
 
 - Published implementation commit `4f83934` to GitHub `main` and fast-forwarded the isolated Linux checkout in `/home/shawn/projects/stream/launch-candidate` to that exact source.

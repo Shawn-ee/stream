@@ -62,19 +62,39 @@ await audience(`/api/rooms/${room.slug}/visit`, {
 const history = await audience("/api/me/history");
 assert.ok(history.rooms.some((item) => item.slug === room.slug));
 const gifts = await audience("/api/gifts");
-assert.equal(gifts.gifts.length, 3);
+assert.deepEqual(
+  gifts.gifts.map((gift) => gift.coin_cost),
+  [1, 5, 10, 20, 50, 100, 1000, 10000],
+);
+assert.ok(gifts.gifts.every((gift) => gift.symbol && gift.animation_tier));
 const actionListing = await audience(`/api/rooms/${room.slug}/actions`);
 assert.ok(actionListing.actions.length >= 2);
 assert.ok(actionListing.goal.goal_target > 0);
 const beforeGift = (await audience("/api/wallet")).balance;
+const giftKey = crypto.randomUUID();
 await audience(`/api/rooms/${room.slug}/gifts`, {
   method: "POST",
-  body: { giftId: gifts.gifts[0].id, idempotencyKey: crypto.randomUUID() },
+  body: { giftId: gifts.gifts[0].id, quantity: 1, idempotencyKey: giftKey },
 });
 assert.equal(
   (await audience("/api/wallet")).balance,
   beforeGift - gifts.gifts[0].coin_cost,
 );
+const duplicateGift = await audience(`/api/rooms/${room.slug}/gifts`, {
+  method: "POST",
+  body: { giftId: gifts.gifts[0].id, quantity: 1, idempotencyKey: giftKey },
+});
+assert.equal(duplicateGift.duplicate, true);
+assert.equal((await audience("/api/wallet")).balance, beforeGift - 1);
+await audience(`/api/rooms/${room.slug}/gifts`, {
+  method: "POST",
+  expected: 400,
+  body: {
+    giftId: gifts.gifts[6].id,
+    quantity: 1,
+    idempotencyKey: crypto.randomUUID(),
+  },
+});
 const publicSupport = await audience(`/api/rooms/${room.slug}/support-feed`);
 assert.ok(publicSupport.support.some((item) => item.support_type === "gift"));
 await audience(`/api/streamer/rooms/${room.slug}/insights`, { expected: 403 });
@@ -84,6 +104,16 @@ await streamer("/api/auth/login", {
   body: {
     handle: "demo-streamer",
     password: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
+  },
+});
+assert.equal((await streamer("/api/wallet")).balance, gifts.gifts[0].coin_cost);
+await streamer(`/api/rooms/${room.slug}/gifts`, {
+  method: "POST",
+  expected: 403,
+  body: {
+    giftId: gifts.gifts[0].id,
+    quantity: 1,
+    idempotencyKey: crypto.randomUUID(),
   },
 });
 const testSdp = "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=test\r\nt=0 0\r\n";

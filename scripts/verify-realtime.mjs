@@ -165,7 +165,13 @@ try {
     }),
   });
   assert.equal(giftResponse.status, 200);
-  assert.equal((await giftReceived).cost, gifts.gifts[0].coin_cost);
+  const giftEvent = await giftReceived;
+  assert.equal(giftEvent.cost, gifts.gifts[0].coin_cost);
+  assert.equal(giftEvent.quantity, 1);
+  assert.equal(giftEvent.symbol, gifts.gifts[0].symbol);
+  assert.equal(giftEvent.animationTier, gifts.gifts[0].animation_tier);
+  assert.equal(giftEvent.idempotencyKey, undefined);
+  assert.equal(giftEvent.recipientId, undefined);
   const actions = await fetch(`${base}/api/rooms/demo-streamer/actions`).then(
     (response) => response.json(),
   );
