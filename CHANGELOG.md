@@ -1,5 +1,182 @@
 # Changelog
 
+## 2026-08-27 - Frontend modernization Phase 9 polish and performance
+
+- Added a stable bilingual Holiwyn boot surface while the session is checked, preventing the signed-out test console from flashing before a valid session resolves.
+- Debounced creator search by 250ms and added request sequencing so a slower old response cannot replace newer search results.
+- Added explicit bilingual discovery and Following service-failure states with retry controls, distinct from loading and legitimate empty results.
+- Localized screen-reader loading status for desktop and mobile creator skeletons.
+- Added deferred below-fold rendering for discovery, Following, audience-library, creator-program, and profile-recommendation surfaces with intrinsic layout sizing.
+- Added focused `verify:frontend-polish` coverage and a production bundle gate: JavaScript ≤450 KiB raw, CSS ≤125 KiB raw, and combined compressed assets ≤145 KiB.
+- Current production assets pass at JavaScript 356.8 KiB raw/106.9 KiB gzip and CSS 94 KiB raw/18 KiB gzip.
+- Browser acceptance confirmed one API request for a rapidly entered four-character search, no warning/error logs, zero horizontal overflow at 320×568, 390×844, 768×1024, and 1440×900, correct mobile/desktop shell switching, and 52px mobile navigation controls.
+- No backend route, database schema, media transport, Cloudflare resource, payment, authentication policy, deployment, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 8 creator profile
+
+- Added a dedicated responsive public creator profile using the existing profile, room, schedule, category, follower, and broadcast-lifecycle APIs.
+- Added truthful live, connecting, offline, and unavailable presentation with direct current-room access; no fake video preview or manually seeded live claim was introduced.
+- Connected existing follow/unfollow state to the profile and refreshes the existing Following feed after changes.
+- Made creator identity in both desktop and mobile room chrome open the full profile, while retaining a compact profile summary in the room.
+- Added bilingual loading, failure, About, schedule, current-room, and recommended-creator surfaces with original Midnight Aurora artwork rather than invented cover media.
+- Added responsive 44px-or-larger profile controls, narrow-screen stacking, safe-area clearance, reduced-motion behavior, and a focused `verify:creator-profile-ui` staging gate.
+- Desktop localhost acceptance passed at 1280×720 with zero page overflow and complete English/Chinese states. Mobile behavior is structurally covered at the specified breakpoint; actual-device validation remains part of the final responsive QA phase.
+- No backend route, database schema, authentication, streaming transport, Cloudflare resource, payment, deployment, verification badge, social account, clip, or VOD feature changed.
+
+## 2026-08-27 - Frontend modernization Phase 7 mobile broadcasting
+
+- Reworked Browser Quick Go Live into a staged creator flow: deliberate camera/microphone permission, private preview, stream-title setup, device selection, explicit start, understandable live-session controls, and confirmed ending.
+- Defaulted initial mobile camera selection toward the user-facing camera while retaining exact device selection after permission.
+- Added active camera and microphone switching through `RTCRtpSender.replaceTrack`, preserving the current WHIP session instead of renegotiating or exposing the provider endpoint.
+- Added friendly Ready, Connecting, Excellent, Reconnecting, and Unavailable connection labels, live duration, explicit camera/microphone state, and a compact in-preview control layer.
+- Saved the bounded room title through the existing owner-authorized room-metadata endpoint before publishing. A failed save prevents media publication.
+- Added an accessible bilingual end-stream confirmation; ending still closes the peer, deletes only the opaque local publish session, stops every local media track, and refreshes truthful lifecycle state.
+- Added dedicated mobile broadcast styling, 44px-or-larger controls, safe narrow-screen wrapping, reduced-motion handling, and fixes for a 320px Creator Studio class collision and existing compact-grid overflow.
+- Added focused active-track replacement coverage and `verify:mobile-broadcast` to the complete Cloudflare-free staging gate.
+- Completed read-only browser acceptance at 320×568, 375×812, 390×844, 414×896, 430×932, 844×390, and 1440×900 with no horizontal overflow or localhost console warnings/errors. Camera/microphone permission and a real broadcast were intentionally not activated.
+- No backend route, database schema, Cloudflare resource, DNS, deployment, payment, payout, real identity, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 6 mobile live room
+
+- Added a mobile-only immersive room chrome around the existing truthful player: in-player back/status controls, creator identity, presence, follow, chat, gift, optional private access, and a compact report overflow entry.
+- Expanded the mobile media stage to approximately 68% of the portrait viewport while preserving source aspect with contain behavior and keeping offline/connecting/unavailable states truthful.
+- Reused the existing temporary chat and gift activity overlay above video; no second socket or event stream was added.
+- Replaced the permanent mobile chat and gift sections with accessible bottom sheets that share the existing draft, send callback, gift catalog, wallet, quantity, idempotent ledger action, and bilingual state.
+- Added recommended-next creator cards below the core room so discovery remains one tap away without initializing additional video.
+- Hid product header and bottom navigation during the immersive room. Short phone landscape viewports through 932px now use a no-scroll, full-viewport player surface while portrait retains supporting room details below video.
+- Added localized sheet close labels and unique chat input IDs without changing desktop dialog behavior.
+- Added `verify:mobile-room` to the complete Cloudflare-free staging gate and updated the existing desktop-room verifier for the reusable chat input ID.
+- Completed Windows Chrome acceptance at 320×568, 375×812, 390×844, 414×896, 430×932, 844×390, 932×430, and 1440×900. All passed without horizontal overflow or localhost console errors; chat/gift sends, follow/report, private purchase, and broadcast actions were intentionally not triggered.
+- No backend behavior, database schema, realtime protocol, gift ledger, media transport, Cloudflare resource, deployment, real payment, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 5 mobile discovery
+
+- Replaced the mobile stacked-desktop discovery fallback with a dedicated one-column, content-first creator feed while preserving the existing desktop header, featured surface, rail, and grid.
+- Added bilingual For You, Following, and Live tabs backed only by the existing room and followed-creator state. Live filtering uses truthful normalized lifecycle state; it does not seed or invent activity.
+- Added a compact mobile category selector, expandable creator search integration, large 16:9 static previews, three-card loading skeletons, and discovery-driving empty states.
+- Kept discovery previews bounded and inexpensive: no video, iframe, autoplay, media negotiation, or duplicate API/socket ownership exists in the mobile feed.
+- Added `verify:mobile-discovery` to the complete Cloudflare-free staging gate.
+- Completed Windows Chrome acceptance at 320×568, 375×812, 390×844, 414×896, and 430×932. The pass confirmed 44px tabs, zero horizontal overflow, correct 16:9 geometry, search/category results, Following/Live empty states, complete Chinese labels, and no discovery video initialization.
+- Confirmed the existing desktop discovery remains active at 1440×900. No backend behavior, database schema, media transport, Cloudflare resource, deployment, real payment, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 4 mobile global UI
+
+- Added a dedicated signed-in audience mobile header with compact Holiwyn identity, an explicit expandable creator search, and direct account access while keeping desktop navigation unchanged.
+- Added a bilingual five-item Home, Discover, Go Live, Inbox, and Me bottom navigation with 52px controls, a visually emphasized central Go Live action, and safe-area-aware fixed positioning.
+- Routed mobile destinations to existing product surfaces only: live discovery/search, creator application, audience activity, and account/session controls. No duplicate API, socket, authentication, or creator workflow was introduced.
+- Made mobile app navigation immediate instead of page-level smooth scrolling, preventing long-page tab changes from appearing one selection behind.
+- Removed the global 320px body minimum that caused a scrollbar-gutter overflow at the smallest supported viewport.
+- Added the focused `verify:mobile-shell` gate and included it in the complete Cloudflare-free staging sequence.
+- Completed Windows Chrome acceptance at 320×568, 375×812, 390×844, 414×896, and 430×932: no horizontal overflow, all five controls remained 52px tall, destination routing landed correctly, search/account states rendered, and the room remained usable at the edge widths.
+- A Chrome room transition exposed and then verified the fix for an accidentally removed shared `useRef` import before completion. No backend behavior, database schema, media transport, Cloudflare resource, deployment, real payment, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 3 desktop live room
+
+- Reorganized the audience room around a dominant 16:9 video stage and a 21.5rem sticky live-chat panel, with a one-column tablet fallback below 1024 pixels.
+- Added a compact reusable creator bar directly below playback with truthful lifecycle/presence, strong follow state, direct gift access, conditional private access, and a quiet report overflow action.
+- Added a reusable accessible chat panel with status/presence, polite realtime message updates, labeled input, empty state, and direct access to the existing gift tray.
+- Kept goals, creator actions, gifts, support activity, profile, private-show status, and wallet history available but visually subordinate to playback and chat.
+- Preserved signed WHEP browser playback, signed Cloudflare iframe/HLS playback, video activity overlays, Socket.IO, authorization, follow/report, gift ledger, private access, and wallet behavior.
+- Added a focused desktop-room verifier to the complete staging gate; the production build and full Cloudflare-free suite passed and demo data was reset.
+- Completed rendered acceptance in the owner's Windows Chrome at 1707px, 1024px, 390px, and 320px. The pass confirmed exact 16:9 playback sizing, bounded desktop chat, responsive stacking, and zero Holiwyn console errors.
+- Fixed two Chrome-discovered mobile overflows: the gift-sound control now wraps within the gift tray, and the wordmark collapses to its mark at 320–359px so account/search controls remain inside the viewport.
+- No backend behavior, database schema, Cloudflare resource, deployment, real payment, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 2 desktop discovery
+
+- Replaced the signed-in audience discovery shell with a recognizable Holiwyn header, inline creator-first search, focused Discover/Following navigation, and a clear Go Live route to the existing creator program.
+- Added a collapsible desktop creator rail with truthful live/offline state, separate recommendations and followed creators, and realtime lifecycle updates from the existing discovery socket.
+- Added reusable featured-live and lightweight stream-card components with dominant 16:9 artwork, creator identity, category, follower metadata, loading skeletons, and discovery-driving empty states.
+- Added desktop, compact-laptop, tablet, and mobile fallback layouts without inventing viewer counts or modifying room/follow/category APIs.
+- Added a focused desktop-discovery verifier to the complete staging gate; the production build and full Cloudflare-free suite passed and demo data was reset.
+- Completed Windows Chrome discovery acceptance at 1707px and 320px with no horizontal overflow or Holiwyn console errors; the 320px header fix collapses only the wordmark text while preserving search and account access.
+- No backend behavior, schema, media transport, Cloudflare resource, deployment, real payment, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 1 foundation
+
+- Added a semantic Midnight Aurora design layer with a bounded spacing scale, typography hierarchy, 44px controls, visible keyboard focus, reduced-motion behavior, safe-area insets, and explicit mobile-first breakpoints at 480, 768, 1024, and 1440 pixels.
+- Added reusable accessible modal, bottom-sheet, empty-state, skeleton, and live-card-skeleton primitives without changing application data or authorization behavior.
+- Added truthful discovery loading and empty states and branded mobile-browser metadata while preserving the existing room-card and filtering paths.
+- Added a focused frontend-foundation verifier to the complete staging gate; the full Cloudflare-free staging suite passed and demo data was reset.
+- No backend behavior, database schema, media transport, Cloudflare resource, deployment, real payment, or production configuration changed.
+
+## 2026-08-27 - Frontend modernization Phase 0 audit
+
+- Audited the rendered signed-out product and the current React/Vite, CSS, Fastify, PostgreSQL, Redis/Socket.IO, authentication, discovery, room, chat, gift, profile and browser/OBS streaming paths before UI changes.
+- Recorded an incremental presentation architecture that preserves current APIs, state machines, authorization, realtime events and Cloudflare transport.
+- Identified the primary gaps: test-console entry, monolithic frontend, missing global discovery rail/mobile navigation, non-immersive mobile room, permanent mobile chat/gift stacks, inconsistent design tokens/touch targets and incomplete mobile broadcast sequencing.
+- Added an ordered implementation and verification map; no backend, schema, streaming, provider, deployment or production change occurred.
+
+## 2026-08-27 - Owner narrows active goal to test-only product
+
+- Removed legal/compliance execution and all real-money/payment/payout work from the active product goal at the owner's direction.
+- The active deliverable is now four verified phases: account lifecycle, creator approval/provisioning, audience retention, and gift polish, while preserving bilingual streaming workflows.
+- Kept all coins, gifts, actions, private access and creator earnings explicitly synthetic and non-redeemable; no payment processor, real balance, withdrawal or payout is planned in this goal.
+- Added an authoritative test-only completion audit and verifier; archived earlier moderation/commercial plans as non-active background records.
+- Removed legal/commercial planning checks from the normal staging gate and retained the focused product, security, realtime and deployment-safety checks.
+
+## 2026-08-27 - Inactive commercial architecture and activation gates
+
+- Added a separate immutable balanced double-entry ledger design with legal-entity/currency accounts, purchase/token/earning/payout state machines, immutable reversals, and proposed tables that are not migrated or active.
+- Added authoritative hosted-checkout/webhook processing: signed raw-body verification, replay and duplicate safety, out-of-order handling, local and processor idempotency, and an explicit rule that browser redirects never grant tokens.
+- Added creator pending/available/held payable, reserves, negative balances, refunds/chargebacks, payout dual control, daily processor-ledger-settlement-bank reconciliation, suspense, and independent kill switches.
+- Added a money-movement threat model covering card testing, account takeover, self-gifting/collusion, refund abuse, payout takeover, insider risk, sanctions, prohibited-content monetization, and recovery tests.
+- Added a staged activation checklist requiring named owner, counsel, privacy, security, finance/accounting, Trust & Safety, processor/acquirer, KYC/tax and operations evidence.
+- Recorded Stripe as no-go unless the exact disclosed business and content model receives written approval; processor misclassification or restriction bypass is prohibited.
+- Added official Stripe technical sources and a static commercial-design verifier to the full staging gate.
+- No migration, credential, processor resource, real checkout, identity/KYC data, bank data, real token, payout, money movement, deployment, or production change occurred.
+- Added a six-phase requirement/evidence audit that corrects stale launch-candidate status, proves which focused checks cover phases 1–5, and explicitly records phase 6 as incomplete rather than treating design documents as live payments.
+- Added an owner-facing processor scope questionnaire covering the exact entity, jurisdictions, content/adult-live-chat decision, tokens, private access, refunds, creator economics, merchant of record, payout/KYC/tax, risk, and operating facts that must be disclosed without misclassification.
+- Added the audit verifier to the complete staging gate; it checks focused-script presence/inclusion, incomplete-goal language, fresh approval boundaries, and the minimum processor disclosures.
+
+## 2026-08-27 - Production moderation and compliance planning
+
+- Added a production moderation architecture with separated roles, least privilege, case/evidence boundaries, severity routing, child-safety/NCII/imminent-harm playbooks, enforcement/appeals, retention decision matrix, and implementation exit gate.
+- Added nine compliance launch gates covering the fixed business model, jurisdictions, age/creator eligibility, policies/victim channels, privacy, Trust & Safety, processor/commercial feasibility, security/vendors, and signed launch approval.
+- Added a dated register of official U.S. government, NCMEC, California, Supreme Court, and Stripe sources for professional review.
+- Recorded the hard payment feasibility issue: Stripe currently identifies adult content/services and adult live-chat as prohibited and content-creation platforms as requiring review; no bypass or eligibility assumption is allowed.
+- Added a static policy-plan verifier and included it in the full staging gate.
+- No legal conclusion, identity/age collection, KYC, evidence collection, content enforcement, payment credential, external message, deployment, or infrastructure change was made.
+
+## 2026-08-27 - Gift experience polish
+
+- Added persisted, serialized ten-second same-gift combo chains with batched-quantity support and a 10,000 cap while retaining per-purchase price and ledger truth.
+- Added default-off, user-enabled Web Audio gift cues generated locally without assets, autoplay, downloads, or third-party requests.
+- Expanded original celebration/premium CSS into a large media-layer moment with semantic live-region text and reduced-motion fallback.
+- Added one-time, room-owner-only creator thanks with persistence, duplicate safety, and minimal room realtime events.
+- Added migration `017_gift_polish.sql`, schema coverage, focused combo/ledger/realtime/acknowledgement verification, and staging-gate integration.
+- Verified audience and Creator Studio sound controls, premium catalog presentation, realtime combo display, persisted thanks, bilingual copy, and 390×844 layouts without overflow or browser errors; reset demo data afterward.
+- No real currency, purchase, Stripe, cashout, payout, external gift media, download, Cloudflare, deployment, or infrastructure action was introduced.
+
+## 2026-08-27 - Audience retention loop
+
+- Replaced the one-way follow button with persisted follow/unfollow status and a private live-first followed-creator feed.
+- Added creator-managed regular schedule copy, optional next-stream timestamp, and validated IANA timezone to discovery, profile, room, feed, and Creator Studio surfaces.
+- Added deduplicated bilingual in-app notifications for truthful broadcast-started/ended lifecycle transitions, plus owner-only single/all read controls and unread presentation.
+- Removed repeated “follow updated” notification noise and confirmed unfollowed accounts receive no later lifecycle notice.
+- Added migration `016_audience_retention.sql`, schema coverage, a focused verifier, and complete staging-gate integration.
+- Verified English/Chinese audience and creator experiences, notification read persistence, followed-room state, and 390×844 layout without overflow or browser errors; reset demo data afterward.
+- No email, SMS, browser push, tracking, external notification service, payment, Cloudflare, deployment, or production infrastructure change was introduced.
+
+## 2026-08-27 - Creator application and administrator provisioning
+
+- Added a bilingual audience creator-program flow with application status, withdrawal, rejection feedback, and revised submissions.
+- Added an administrator pending queue with required reasoned approve/reject decisions and role-protected access.
+- Made approval transactional and idempotent: one creator profile, one truthful offline room, role change, applicant notification, audit event, and complete applicant-session revocation occur together.
+- Added migration `015_creator_applications.sql`, schema coverage, focused end-to-end verification, and inclusion in the complete staging gate.
+- Verified English/Chinese desktop views and 390×844 audience/admin layouts without horizontal overflow or browser console errors, then removed the temporary account and reset demo data.
+- No identity evidence, KYC, contracts, tax/payout data, Cloudflare resource, payment, deployment, or public infrastructure change was introduced.
+
+## 2026-08-27 - Account lifecycle foundation
+
+- Added bilingual account profile editing for display name and interface locale while keeping handles immutable.
+- Added privacy-safe active-session inventory, individual and all-other-session revocation, coarse device labels, and bounded security-event records without IP addresses or raw user-agent storage.
+- Added current-password-verified password changes with strong-password enforcement, reuse rejection, password-material rotation, full prior-session revocation, and one fresh current session.
+- Added an explicitly inactive account-recovery experience and a separate design covering verified email, enumeration resistance, hashed single-use tokens, rate limits, privacy, and activation gates.
+- Added migration `014_account_lifecycle.sql`, schema coverage, a focused lifecycle verifier, and inclusion in the complete staging gate.
+- Verified English/Chinese desktop behavior and a 390×844 mobile layout with no horizontal overflow; reset synthetic demo data afterward.
+- No email address, external identity provider, recovery delivery, personal information, public deployment, or production account change was introduced.
+
 ## 2026-08-27 - Realtime gifts public deployment
 
 - Deployed reviewed implementation commit `730b7a2` to the isolated Linux Stream project with a fast-forward-only Git update.

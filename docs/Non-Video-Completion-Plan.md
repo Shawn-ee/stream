@@ -17,14 +17,14 @@ The current product already includes discovery, room chat and presence, gifts an
 
 Exit evidence: focused registration verifier, complete staging gate, bilingual browser smoke test, and deterministic cleanup.
 
-### 2. Account lifecycle and profile controls
+### 2. Account lifecycle and profile controls — completed locally
 
 - Change display name, locale, and password after verifying the current password.
 - Revoke all sessions and present understandable account-security feedback.
 - Define account deletion/export behavior before collecting real personal information.
 - Keep email verification, password-reset delivery, OAuth, MFA, and real customer data behind an approved identity-provider/privacy milestone.
 
-### 3. Creator onboarding and room provisioning
+### 3. Creator onboarding and room provisioning — completed locally
 
 - Let an audience account submit a test-only creator application without uploading identity documents.
 - Give administrators a bounded approve/reject workflow with audit records.

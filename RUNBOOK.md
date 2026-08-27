@@ -1,5 +1,29 @@
 # Local Runbook
 
+## Frontend polish and performance verification
+
+Run `npm run verify:frontend-polish` to verify stable session boot, debounced/race-safe discovery, explicit failure states, localized skeleton status, and deferred below-fold rendering. Run `npm run verify:web-bundle-budget` to create a production web build and enforce the asset budgets. In browser QA, rapidly type a multi-character creator query and confirm the API receives only the final query after the debounce window. Check 320×568, 390×844, 768×1024, and 1440×900 for zero horizontal overflow, correct mobile/desktop shell switching, and an empty warning/error console. Reset any temporary viewport override after testing.
+
+## Responsive creator-profile verification
+
+Run `npm run verify:creator-profile-ui` for the focused presentation/data-boundary gate. In a local audience session, open an offline featured creator with **View creator**, confirm the lifecycle label, biography, follower count, schedule/timezone, current-room action, and recommended creators in English and Chinese. Open the same profile from the room avatar/name and confirm navigation returns to the existing room. Do not click Follow during read-only smoke testing unless the test will reseed data afterward. The profile must not show invented cover media, verification, social links, clips, VODs, viewer counts, or an active player while offline.
+
+## Verify the active test-only goal
+
+Run `npm run verify:test-only-goal`. This confirms the four active phases, their focused staging coverage, the synthetic-coin boundary, and the absence of a commercial migration. Legal/compliance implementation and real payments are not active runbook work.
+
+## Verify gift polish
+
+Run `npm run verify:gift-polish` with the local API available. It sends a two-step same-gift chain, verifies combo counts and the ten-second window, replays an idempotency key, confirms zero-sum paired ledger entries, checks minimal realtime payloads, denies audience/non-owner acknowledgement, accepts one room-owner acknowledgement, rejects a repeated acknowledgement as duplicate, and removes its test records.
+
+Browser acceptance should confirm the sound toggle begins off in audience and Creator Studio, the fixed premium gift is clearly distinguished, combo text appears in the creator support timeline, one-click Thank becomes a persisted acknowledgement, English/Chinese labels render, reduced-motion CSS exists, and 390×844 does not overflow. Reset demo data after interactive testing.
+
+## Verify audience retention
+
+Run `npm run verify:audience-retention` with the local API available. It covers role isolation, follow idempotency and unfollow, invalid creator handling, followed-feed ordering/data, structured schedule and timezone validation, live/end notification generation and deduplication, notification ownership, single/all read state, and no delivery after unfollow. It restores the synthetic audience/creator fixture when finished.
+
+The browser check should confirm the English/Chinese followed feed, next-stream rendering, unread/read notification states, the creator schedule controls, followed-room unfollow state, and no horizontal overflow at 390×844. Run `npm run db:seed` after interactive acceptance.
+
 ## Prerequisites
 
 Docker Desktop and Node.js 24 are installed. Copy `.env.example` to `.env` only when setting up a new machine; never commit `.env`.
@@ -27,6 +51,57 @@ Open `http://localhost:5173` and API health at `http://127.0.0.1:3001/health`.
 6. Run `npm run verify:staging`, then reset synthetic data before release preparation. Browser review does not authorize a broadcast, Cloudflare change, Git push, or deployment.
 
 Use `docs/Launch-Acceptance-Checklist.md` for the repeatable human browser pass across audience, creator, administrator, English/Chinese, truthful media states, and final demo reset. It records browser evidence separately from the automated gates below.
+
+## Verify the mobile global shell locally
+
+1. Run `npm run verify:mobile-shell`, then run the complete `npm run verify:staging` gate.
+2. Sign in with the synthetic audience account, acknowledge the test gate, and verify the compact mobile header shows Search and Account actions.
+3. At 320×568, 375×812, 390×844, 414×896, and 430×932, confirm the page has no horizontal scrolling and every bottom-navigation control is at least 44px high.
+4. Select Home, Discover, Go Live, Inbox, and Me. Confirm Discover opens creator search and the live section, Go Live reaches the existing creator-program entry point, Inbox reaches existing audience activity, and Me opens account/session controls.
+5. Enter the seeded room at 320px and 430px. Confirm the room remains within the viewport and the mobile navigation still provides an immediate path back to discovery.
+6. Inspect only localhost application logs for new warnings/errors. Extension-origin messages are unrelated to Holiwyn. Reset demo data with `npm run db:seed` after browser acceptance.
+
+This check does not authorize sending chat or gifts, changing follow/account state, requesting camera/microphone permission, beginning a broadcast, contacting Cloudflare, pushing Git, or deploying.
+
+## Verify mobile discovery locally
+
+1. Run `npm run verify:mobile-discovery`, then run `npm run verify:staging`.
+2. Sign in with the synthetic audience account and acknowledge the clearly labeled local test gate.
+3. At 320×568, 375×812, 390×844, 414×896, and 430×932, confirm the discovery feed is one column, has no horizontal scrolling, and every For You/Following/Live tab is at least 44px high.
+4. Confirm each creator preview remains 16:9 and static. Discovery must not contain a video or iframe; only entering a room may initialize playback.
+5. Select Following and Live. Confirm the selected tab and honest empty state appear when the seeded account follows nobody and no room is broadcasting. Return to For You and confirm both seeded creators appear.
+6. Filter to Music, then search for Night. Confirm only the supported matching creator is shown. Clear both filters afterward.
+7. Switch to Chinese and confirm the heading, tabs, category selector, empty states, and mobile navigation are localized. Return to the intended demo locale afterward.
+8. At 1440×900, confirm mobile discovery is hidden and the existing featured creator, desktop rail, and desktop grid remain visible.
+9. Inspect localhost application logs for new errors, reset any temporary viewport override, and finish with `npm run db:seed`.
+
+This pass is read-only product QA. Do not follow, chat, gift, report, submit a creator application, access camera/microphone, start a broadcast, contact Cloudflare, push Git, or deploy.
+
+## Verify the mobile live room locally
+
+1. Run `npm run verify:mobile-room`, `npm run verify:desktop-room`, and then `npm run verify:staging`.
+2. Sign in with the synthetic audience account, acknowledge the local test gate, and enter the seeded room without starting a broadcast.
+3. At 320×568, 375×812, 390×844, 414×896, and 430×932, confirm the product header and bottom navigation are hidden, the media stage occupies roughly 68% of the viewport, controls remain at least 44px, and no horizontal scrolling exists.
+4. Confirm the back control, truthful lifecycle state, creator identity, presence, follow/chat/gift labels, activity visibility control, and report overflow are visible over the media stage. Do not activate follow or report during read-only acceptance.
+5. Open Live chat. Confirm it is a modal bottom sheet with a labeled close control, current connection/presence, message list, keyboard-safe input, and Send button. Close it without sending.
+6. Open Gift. Confirm all eight synthetic gifts, test balance, one selected gift, quantity, total, and explicit Send button appear. Close it without sending or changing the wallet.
+7. Confirm recommended-next creator cards appear after supporting room details and contain no video/iframe.
+8. At 844×390 and 932×430, confirm the room is exactly one viewport high/wide, secondary sections are hidden, media is not stretched, and there is no page scrolling.
+9. At 1440×900, confirm the mobile overlay/recommendations are hidden and the existing desktop creator bar, gift tray, and sticky chat remain visible.
+10. Repeat labels in Chinese, inspect localhost logs for new warnings/errors, reset the viewport, and finish with `npm run db:seed`.
+
+This browser pass does not authorize chat, gifting, following, reporting, private access, camera/microphone use, broadcast start, Cloudflare contact, Git push, or deployment.
+
+## Verify mobile browser broadcasting locally
+
+1. Run `npm run verify:mobile-broadcast`, then run the complete `npm run verify:staging` gate. These checks do not access a device or contact Cloudflare.
+2. Sign in with the synthetic creator account, acknowledge the local test gate, and remain in the Live workspace.
+3. At 320×568, 375×812, 390×844, 414×896, and 430×932, confirm the private-preview stage, Ready indicator, Step 1 permission explanation, and Allow camera and microphone button fit without horizontal scrolling. Do not press the permission button during read-only acceptance.
+4. Confirm English/Chinese copy, a 44px-or-larger status/control surface, and the unchanged two-column Creator Studio at 1440×900.
+5. Code-level verification must prove permission is requested only after a creator action, the bounded title is saved before publishing, active device switching uses track replacement, disconnected/failed states map to friendly health labels, and End live opens a confirmation before cleanup.
+6. Reset any temporary browser viewport and run `npm run db:seed` after acceptance.
+
+A physical phone test is separate. Immediately before it, the owner must explicitly approve camera/microphone permission and one short Cloudflare broadcast. Then test actual iOS Safari and Android Chrome as available: grant permission, verify preview, select devices/title, start, confirm audience audio/video on a second device, switch camera if the device exposes both, mute/unmute, rotate, background/foreground, end with confirmation, verify offline lifecycle, and reset demo data. Browser emulation is not evidence that physical-device capture works.
 
 For the production-style private package, migration sequencing, readiness, backup/restore, upgrade, and rollback procedures, use `docs/Deployment-Runbook.md`.
 
@@ -141,6 +216,34 @@ npm run verify:staging
 
 This local-only gate applies pending migrations, resets demo data, checks types and schema, confirms local services, and verifies realtime plus expanded application workflows. It deliberately does not contact Cloudflare or change any external configuration.
 
+## Verify the responsive frontend foundation
+
+```powershell
+npm run verify:frontend-foundation
+```
+
+This static regression check covers semantic color tokens, the 480/768/1024/1440 mobile-first breakpoints, minimum touch controls, phone safe-area handling, keyboard focus and reduced-motion rules, accessible modal/bottom-sheet primitives, and discovery loading/empty states. It is included in `npm run verify:staging` and does not contact Cloudflare.
+
+Rendered acceptance still requires a permitted browser surface at the target desktop, tablet, and phone widths. A browser-policy block is not evidence of visual acceptance and must be recorded as a limitation rather than bypassed.
+
+## Verify desktop discovery structure
+
+```powershell
+npm run verify:desktop-discovery
+```
+
+This checks the Holiwyn audience header, creator-first search, collapsible recommendation/following rail, featured surface, reusable live cards, loading/empty states, responsive desktop/tablet/mobile rules, focus semantics, and the rule that unavailable viewer counts must not be fabricated. It is included in `npm run verify:staging`.
+
+## Verify desktop live-room structure
+
+```powershell
+npm run verify:desktop-room
+```
+
+This checks the video-first two-column room, bounded sticky chat, compact creator/follow/gift controls, explicit report overflow, labeled realtime chat input, tablet stacking, 16:9 player sizing, and continued integration of both WHEP and iframe/HLS playback. The presentational room components are also checked for absence of duplicated API or Socket.IO logic. It is included in `npm run verify:staging`.
+
+The 2026-08-27 Windows Chrome acceptance pass covered 1707×791, 1024×768, 390×844, and 320×568. Confirmed evidence: 16:9 player geometry, bounded desktop chat, one-column mobile fallback, discovery and room containment at 320px, and no application-origin console errors. Chrome-extension warnings are not Holiwyn errors and should be distinguished by their `chrome-extension://` source.
+
 ## Verify scale-out and 100-user capacity
 
 ```powershell
@@ -206,3 +309,30 @@ npm run verify:registration
 ```
 
 This creates one uniquely named temporary audience account, verifies validation, password hashing, session/CSRF behavior, identity isolation, role denial, zero test-coin balance, logout, and case-insensitive login, then deletes only that temporary account. It does not send email, contact an identity provider, or retain personal data. The command is included in `npm run verify:staging`.
+
+## Verify account lifecycle
+
+```powershell
+npm run verify:account-lifecycle
+```
+
+This creates one temporary audience account, opens three coarse-labeled sessions, verifies CSRF and profile updates, revokes one device and all remaining non-current devices, changes the password, proves every previous session and password are invalid, checks security-event records, and deletes the temporary account. It does not send email, use an external identity provider, or retain personal information.
+
+The recovery flow is not executable. Its prerequisites and fail-closed design are documented in `docs/Account-Recovery-Design.md`.
+# Creator application and approval verification
+
+Run `npm run verify:creator-applications` while the local API is available. The verifier creates a temporary audience account, proves CSRF and role isolation, covers rejection and resubmission, approves the revised application, verifies all old applicant sessions are revoked, signs in with the new creator role, checks the profile and truthful offline/no-Cloudflare room, validates audit events and notifications, attempts a duplicate decision, and deletes the temporary account.
+
+The complete gate runs this automatically through `npm run verify:staging`. Browser acceptance should confirm English/Chinese audience application states, the administrator pending-review card, and a 390-pixel layout without horizontal overflow. Use only temporary accounts and reset demo data afterward.
+
+## Archived planning checks — not part of the active goal
+
+```powershell
+npm run verify:policy-plans
+npm run verify:commercial-design
+npm run verify:six-phase-audit
+```
+
+These optional static checks preserve historical document integrity only. They are not included in `npm run verify:staging`, are not active milestones, and must not be used to start legal or payment work.
+
+Do not create a Stripe or alternate-processor resource, webhook, product, price, connected account, KYC record, checkout, real token, bank record, or payout from this runbook. Reintroducing that work requires a separate newly scoped owner request.

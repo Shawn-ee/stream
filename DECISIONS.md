@@ -1,5 +1,94 @@
 # Architecture Decisions
 
+## 2026-08-27 - Discovery requests are debounced, race-safe, and failure-aware
+
+- Creator text search waits 250ms after the last input before requesting rooms. Category changes and explicit retries remain immediate.
+- Each room-list request receives a local sequence identifier; only the newest response may update rooms, loading, or failure state.
+- Loading, valid empty results, and service failure are separate user states. A failed API request must not tell users that no creators exist.
+- Below-fold non-media discovery surfaces may use `content-visibility: auto` with intrinsic sizing. The featured surface and live player remain immediately renderable.
+- Production web assets are guarded by explicit raw and gzip budgets. Raising a budget requires evidence from a measured feature, not silent bundle growth.
+
+## 2026-08-27 - Public creator profiles use only supported product data
+
+- The public profile reads the existing streamer profile, room lifecycle, schedule/timezone, follower count, and follow-status APIs; it does not create a second profile or follow data owner.
+- Creator identity in discovery and the room may open the profile, while the current-room call to action returns to the same room and existing player flow.
+- Missing cover images use original non-media artwork. Verification, social links, clips, recent VODs, private analytics, wallet data, and fabricated viewer counts are excluded until real product data and APIs exist.
+- Offline, connecting, unavailable, and live states remain distinct. An offline creator profile may advertise schedule and room metadata but must not render an active player or claim a live broadcast.
+
+## 2026-08-27 - Mobile broadcasting remains one protected WHIP controller
+
+The mobile creator flow is a staged presentation around the existing Browser Quick Go Live controller, not a second publisher. Camera/microphone permission remains user-initiated; the preview stays local until the creator explicitly starts; the existing server-authorized WHIP exchange, heartbeat, opaque session identifier, lifecycle events, safe DELETE, and Cloudflare secret boundary remain unchanged.
+
+The current room title is saved through the existing creator-owned metadata endpoint before negotiation. Active device changes use `RTCRtpSender.replaceTrack` so a compatible phone can switch camera or microphone without ending or renegotiating the provider session. Ordinary creators see Ready, Connecting, Excellent, Reconnecting, or Unavailable rather than raw WebRTC diagnostics.
+
+Ending is a two-step action. Confirmation closes the peer, deletes only the current opaque publishing session, stops local tracks, and returns the UI to idle. Browser emulation proves presentation and control boundaries but cannot prove physical iOS/Android camera behavior; that remains an owner-assisted actual-device and Cloudflare test requiring explicit approval immediately before media starts.
+
+## 2026-08-27 - Mobile room chrome wraps the existing room controller
+
+The immersive mobile room is a responsive presentation of the existing `RoomView`, not a second room implementation. Player lifecycle, WHEP/HLS selection, Socket.IO, chat draft/send, presence, follow/report, private access, gift catalog, test wallet, idempotent ledger transfer, goal progress, and support feed remain owned by the existing controller.
+
+Mobile controls call those existing callbacks. Chat and gift bottom sheets render the same current state without opening another socket or fetching another catalog. Desktop chat/gifts remain the rendered desktop surfaces and are hidden only at phone/short-landscape breakpoints.
+
+Portrait prioritizes a tall black media stage while preserving video with `object-fit: contain`; it does not stretch or crop a 16:9 source. Short landscape phone viewports suppress secondary content and application chrome so the existing player occupies exactly the viewport. No fake quality, share, playback, or live state was introduced.
+
+## 2026-08-27 - Mobile discovery is a presentation over existing room state
+
+The mobile audience receives a dedicated content-first feed, but it does not own fetching, realtime connections, lifecycle normalization, following state, or room navigation. `App` continues to own those concerns and passes current data and callbacks into `MobileDiscoveryFeed`.
+
+For You is a live-first ordering of the existing room result, Following uses the existing followed-creator response, and Live filters only rooms whose normalized lifecycle state is `live`. Empty states remain honest when those sets are empty. Category and creator search continue through the existing filters.
+
+Discovery uses static original gradient artwork only. It does not initialize video, iframe, WHEP/HLS, or autoplay in the feed, avoiding bandwidth and CPU growth as more creators are listed. Video initialization remains exclusive to the selected room.
+
+## 2026-08-27 - Mobile global navigation reuses existing product views
+
+Holiwyn keeps one shared responsive application with a mobile-only header and five-item bottom navigation rather than creating a separate mobile site or router. Home returns to discovery; Discover opens existing creator search/live content; Go Live opens the existing creator-application entry point for audience accounts; Inbox opens existing visited-room/notification activity; and Me opens existing profile, password, and session controls.
+
+Mobile navigation uses immediate section movement because long smooth-scroll animations made rapid tab changes appear stale. Page-level smooth scrolling is disabled below 768px only. The navigation uses safe-area insets and 52px controls, and the global body no longer enforces a fixed 320px minimum that conflicts with the scrollbar gutter.
+
+No new route, server endpoint, tracking, browser storage, invented inbox, payment flow, broadcast transport, or role permission was added. Mobile discovery and immersive room sheets remain separate bounded phases.
+
+## 2026-08-27 - Desktop room layout does not own product logic
+
+The desktop viewer room is a presentation grid: flexible video/engagement content beside a bounded 21.5rem sticky chat panel, with the creator bar immediately below playback and secondary details below the core interaction area. Tablet widths below 1024 pixels stack video, creator, chat, and engagement without changing state ownership.
+
+`RoomCreatorBar` and `LiveChatPanel` are callback-driven presentation components. They do not fetch, mutate, open sockets, negotiate media, or calculate balances. `RoomView` retains the existing signed WHEP and iframe/HLS playback, lifecycle, Socket.IO, gift/action ledger, follow/report, private-show, and wallet paths.
+
+## 2026-08-27 - Discovery uses truthful available metadata
+
+Desktop discovery is creator-first: a Holiwyn product header, creator search, featured room, live-card grid, and collapsible recommendation/following rail all reuse `/api/rooms`, `/api/me/following`, categories, and `discovery:broadcast` events. The UI does not fabricate concurrent viewer counts, verification badges, thumbnails, clips, or recommendation scores that the current API does not provide.
+
+The presentation components accept room data and open callbacks while `App` continues to own fetching and selected-room state. This keeps navigation incremental and avoids a router, API, database, or realtime rewrite. Real viewer counts and creator media may be added later as explicit data contracts.
+
+## 2026-08-27 - Frontend modernization is incremental and mobile-first
+
+Holiwyn will retain one React application and shared business state while using responsive layout wrappers for desktop and mobile viewing. The UI foundation uses semantic Midnight Aurora tokens, a small spacing scale, explicit 480/768/1024/1440 breakpoints, safe-area insets, minimum touch targets, visible focus, and reduced-motion behavior.
+
+Existing Fastify APIs, PostgreSQL records, Socket.IO events, role authorization, gifts/follows, browser WHIP publishing, WHEP playback, and OBS/HLS fallback remain the source of truth. Presentation work must reuse these paths; a visual problem is not permission to replace working backend or media infrastructure. Desktop navigation/discovery is the next bounded phase before live-room and mobile immersive layout changes.
+
+## 2026-08-27 - Compliance is a signed gate set, not a software feature
+
+The project will not label itself compliant based on an age checkbox, moderation queue, KYC vendor, processor account, or passing test. `Compliance-Launch-Gates.md` requires a frozen content/business model, jurisdiction opinions, age/creator eligibility, policies and victim channels, privacy governance, operational Trust & Safety, processor/commercial feasibility, security/vendors, and a signed launch packet.
+
+Production moderation requires separated roles, restricted-evidence handling, immutable cases/actions, independent appeals, explicit retention/deletion/holds, and trained critical-incident procedures. The current local admin/report UI is a product prototype only.
+
+Stripe is not assumed. Its current official restrictions make adult content/services and adult live-chat incompatible, while content-creation platforms require review. The project will not misclassify or route around a processor decision. Commercial activation requires written eligibility for the exact disclosed model or a no-go/change in business model.
+
+## 2026-08-27 - Gift polish cannot change financial truth
+
+Gift combos are a room/viewer/catalog-gift presentation chain with a ten-second window, serialized database calculation, and a hard 10,000 cap. Each purchase retains its own server-calculated cost, idempotency key, gift row, and paired ledger transfer; the combo counter never multiplies price.
+
+Sound is locally synthesized, default-off, and activated only by user choice. Premium motion is original CSS and must preserve semantic live-region text and `prefers-reduced-motion`. This avoids unlicensed assets, autoplay assumptions, and external tracking.
+
+A creator acknowledgement is one persisted room-owner action per gift, not a ledger mutation or private communication. Minimal realtime payloads contain only the acknowledgement/gift identifiers, creator/sender display names, and bounded message key.
+
+## 2026-08-27 - Retention stays in-app and lifecycle-driven
+
+Follow is the initial favorite primitive: one account-to-creator relationship drives a private followed feed and later lifecycle notifications. The feed prioritizes truthful live rooms, then explicit next-stream timestamps and regular schedule copy.
+
+Notifications are created only on persisted broadcast transitions, not every status poll. A per-user lifecycle key makes delivery idempotent. Title/body are selected from the follower's stored locale, and notification read changes are owner-scoped. This milestone deliberately avoids email, SMS, push permissions, external analytics, and third-party messaging until consent/privacy/provider gates exist.
+
+Creator schedules combine human-readable recurring copy with one optional next occurrence and validated IANA timezone. This is intentionally smaller than a recurrence engine; calendars, reminders, and external delivery remain future separately reviewed work.
+
 ## 2026-08-26 - Creator workspace navigation (P0)
 
 Creator Studio uses six persistent product workspaces: Live, Earnings, Actions, Private Show, Profile, and Settings. Live is always the default because broadcasting and operating the current session are the creator's primary job. It contains the deliberate camera/microphone permission path, private preview, Go Live/End Broadcast, truthful lifecycle, audience activity, support, and goal context.
@@ -129,3 +218,25 @@ Private staging may create individual audience accounts using a non-email ASCII 
 The product uses eight fixed gift prices—1, 5, 10, 20, 50, 100, 1,000, and 10,000 test tokens—with bilingual names, original symbols, and bounded visual tiers. `1 test token = ¥1 reference value` is display-only product language; it does not create a currency, sale, deposit, withdrawal, redemption, or creator payout obligation.
 
 Gift totals are calculated by the API from the active catalog and bounded quantity. Every successful gift is idempotent, produces equal sender-debit and creator-credit entries in the append-only test ledger, advances the local goal, and emits only a minimal room-scoped event. Totals of 1,000 or more require an explicit test-only confirmation. Comments remain persisted in chat, but their video overlay is transient; users may hide it and reduced-motion preferences disable entrance animation.
+
+## 2026-08-27 - Account lifecycle foundation and recovery boundary (P0)
+
+Account profile changes are limited to display name and interface locale; handles remain immutable so ownership, ledger, moderation, and audit references stay stable. Password changes require the current password, enforce the registration-strength policy, reject reuse, rotate password material, revoke every existing session, and issue one fresh current session. Session lists expose only a random public session ID, a coarse device label, and bounded timestamps—never token hashes, IP addresses, raw user agents, or CSRF values.
+
+Recovery is design-only. The application does not collect an email address or claim a reset path exists. Activation requires approved privacy/retention policy, verified-email storage, transactional mail delivery, enumeration-safe responses, hashed short-lived single-use tokens, rate limits, complete session revocation, and separate owner approval.
+
+## 2026-08-27 - Real money is a separate ledger and activation program
+
+The synthetic test ledger will never be promoted or converted into financial truth. Any approved commercial system must use a legal-entity/currency-scoped immutable balanced double-entry ledger, explicit purchase/token/earning/payout state machines, compensating reversals, signed duplicate-safe webhook authority, daily reconciliation, and independent purchase/gift/payout kill switches. Browser redirects and animations are never proof of payment.
+
+Commercial activation is staged and fail-closed. Stripe is no-go unless it gives written approval for the exact disclosed entity, domain, countries, content rules, live-chat, token, tipping, private-show, marketplace, refund and payout model; misclassification and bypass are prohibited. Provider sandbox, internal cents test, capped pilot and launch each require completed professional evidence and fresh owner approval. No real-money migration or processor resource is part of the current implementation.
+
+## 2026-08-27 - Owner removes legal and real-money work from the active goal
+
+The active product goal ends at a deployable bilingual test-only streaming platform. Legal/compliance implementation, jurisdiction analysis, enforceable age/KYC, payment processors, real token purchases, refunds/chargebacks, creator financial balances, withdrawal and payouts are not deferred steps inside this goal; they are excluded. The synthetic test ledger and reference-value labels remain non-monetary and cannot be converted into real balances. Any future commercial or legal program must begin as a new explicitly scoped owner request.
+# 2026-08-27 - Creator approval provisions an offline local identity atomically
+
+- Audience accounts may apply with only category, public bio, proposed schedule, and motivation; the test product does not solicit identity documents, KYC, tax, contract, or payout information.
+- Approval and provisioning are one locked database transaction. It creates a single creator profile and offline room, changes the role, writes decision/audit/notification records, and revokes all applicant sessions.
+- Rejection leaves the audience account intact and supports a revised application. Every administrator decision requires a non-sensitive reason; duplicate decisions fail closed.
+- A provisioned room has no Cloudflare Live Input. Media resource assignment and creator eligibility/compliance remain separately owner-gated.

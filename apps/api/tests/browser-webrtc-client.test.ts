@@ -23,6 +23,7 @@ class FakePeerConnection {
   localDescription: { sdp: string } | null = null;
   remoteDescription: { type: string; sdp: string } | null = null;
   addedTracks: unknown[] = [];
+  senders: Array<{ track: { kind: string }; replaceTrack: (track: unknown) => Promise<void> }> = [];
   transceivers: string[] = [];
   listeners = new Map<string, Array<(event: { track: unknown }) => void>>();
   async createOffer() {
@@ -36,6 +37,21 @@ class FakePeerConnection {
   }
   addTrack(track: unknown) {
     this.addedTracks.push(track);
+    const typedTrack = track as { kind: string };
+    this.senders.push({
+      track: typedTrack,
+      replaceTrack: async (replacement: unknown) => {
+        const replacementTrack = replacement as { kind: string };
+        if (replacementTrack.kind !== typedTrack.kind)
+          throw new Error("replacement_kind_mismatch");
+        typedTrack.kind = replacementTrack.kind;
+        this.replacedTrack = replacementTrack;
+      },
+    });
+  }
+  replacedTrack: { kind: string } | null = null;
+  getSenders() {
+    return this.senders;
   }
   addTransceiver(kind: string) {
     this.transceivers.push(kind);
@@ -58,7 +74,7 @@ Object.assign(globalThis, {
   RTCPeerConnection: FakePeerConnection,
 });
 
-const { createWhipPublisher, createWhepPlayer } = await import(
+const { createWhipPublisher, createWhepPlayer, replacePublishedTrack } = await import(
   "../../web/src/webrtc.js"
 );
 
@@ -75,6 +91,30 @@ test("browser publisher adds media tracks and applies the signaling answer", asy
   assert.deepEqual(peer.addedTracks, tracks);
   assert.equal(peer.remoteDescription?.sdp, answer);
   assert.equal(controller.sessionId, "publisher-session");
+  controller.close();
+});
+
+test("browser publisher can replace a camera track without renegotiating", async () => {
+  const originalVideo = { kind: "video" };
+  const controller = await createWhipPublisher(
+    new FakeMediaStream([originalVideo]) as unknown as MediaStream,
+    async () => ({ answerSdp: answer, sessionId: "publisher-switch" }),
+  );
+  const replacementVideo = { kind: "video" };
+  await replacePublishedTrack(
+    controller,
+    replacementVideo as unknown as MediaStreamTrack,
+  );
+  const peer = controller.peer as unknown as FakePeerConnection;
+  assert.equal(peer.replacedTrack, replacementVideo);
+  await assert.rejects(
+    () =>
+      replacePublishedTrack(
+        controller,
+        { kind: "audio" } as unknown as MediaStreamTrack,
+      ),
+    /webrtc_sender_unavailable/,
+  );
   controller.close();
 });
 

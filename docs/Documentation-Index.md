@@ -16,6 +16,15 @@ All published project documentation is Markdown so it remains searchable, review
 
 - [`RUNBOOK.md`](../RUNBOOK.md) — local setup and verification commands.
 - [`Deployment-Runbook.md`](Deployment-Runbook.md) — private Docker deployment, migrations, backup/restore, upgrade, rollback, and incident boundaries.
+- [`Account-Recovery-Design.md`](Account-Recovery-Design.md) — inactive recovery architecture, threat controls, data boundaries, and approval gates.
+- [`Creator-Onboarding-Workflow.md`](Creator-Onboarding-Workflow.md) — test application, reasoned review, atomic offline provisioning, and production prerequisites.
+- [`Audience-Retention-Design.md`](Audience-Retention-Design.md) — follow feed, structured schedules, lifecycle notifications, read state, and external-delivery boundary.
+- [`Gift-Experience-Design.md`](Gift-Experience-Design.md) — bounded combos, accessible sound, premium motion, creator acknowledgement, and ledger invariants.
+- Archived, out-of-scope background: [`Production-Moderation-Architecture.md`](Production-Moderation-Architecture.md), [`Compliance-Launch-Gates.md`](Compliance-Launch-Gates.md), and [`Compliance-Source-Register.md`](Compliance-Source-Register.md).
+- Archived, out-of-scope background: [`Commercial-System-Design.md`](Commercial-System-Design.md), [`Money-Movement-Threat-Model.md`](Money-Movement-Threat-Model.md), [`Commercial-Activation-Checklist.md`](Commercial-Activation-Checklist.md), and [`Commercial-Processor-Scope-Questionnaire.md`](Commercial-Processor-Scope-Questionnaire.md).
+- [`Test-Only-Product-Completion-Audit.md`](Test-Only-Product-Completion-Audit.md) — authoritative evidence for the revised four-phase, synthetic-coin-only product goal.
+- [`Frontend-Modernization-Implementation-Map.md`](Frontend-Modernization-Implementation-Map.md) — audited frontend architecture, reuse boundaries, UX gaps, ordered responsive redesign and verification plan.
+- [`Six-Phase-Completion-Audit.md`](Six-Phase-Completion-Audit.md) — archived audit from the superseded legal/commercial scope; not an active goal document.
 - [`Monitoring-Runbook.md`](Monitoring-Runbook.md) — protected metrics, initial 100-user thresholds, and response order.
 - [`Release-Baseline-Checklist.md`](Release-Baseline-Checklist.md) — version-baseline review and publication safeguards.
 - [`Private-Staging-Approval-Checklist.md`](Private-Staging-Approval-Checklist.md) — exact host inputs, recommended no-public-listener boundary, approval statement, and Linux evidence sequence.

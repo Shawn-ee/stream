@@ -92,6 +92,17 @@ export async function createWhepPlayer(
   }
 }
 
+export async function replacePublishedTrack(
+  controller: WebRtcController,
+  track: MediaStreamTrack,
+) {
+  const sender = controller.peer
+    .getSenders()
+    .find((candidate) => candidate.track?.kind === track.kind);
+  if (!sender) throw new Error("webrtc_sender_unavailable");
+  await sender.replaceTrack(track);
+}
+
 export function stopMediaStream(stream: MediaStream | null) {
   for (const track of stream?.getTracks() ?? []) track.stop();
 }

@@ -1,0 +1,340 @@
+.quick-live-video-shell {
+  aspect-ratio: 16 / 9;
+  background: #050812;
+  isolation: isolate;
+}
+
+.quick-live-video-shell .quick-live-preview,
+.quick-live-video-shell .quick-live-empty {
+  border-radius: inherit;
+  height: 100%;
+  min-height: 0;
+}
+
+.broadcast-stage-status {
+  align-items: center;
+  background: rgba(5, 8, 18, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  display: flex;
+  gap: var(--space-2);
+  left: var(--space-3);
+  min-height: 2.75rem;
+  padding: 0.45rem 0.75rem;
+  position: absolute;
+  top: var(--space-3);
+  z-index: 7;
+}
+
+.broadcast-stage-status strong,
+.broadcast-stage-status time {
+  color: var(--color-text-primary);
+  font-size: var(--text-meta);
+}
+
+.broadcast-stage-status time {
+  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  font-variant-numeric: tabular-nums;
+  padding-left: var(--space-2);
+}
+
+.broadcast-health-dot {
+  background: var(--color-text-muted);
+  border-radius: 50%;
+  height: 0.6rem;
+  width: 0.6rem;
+}
+
+.broadcast-health-dot.health-ready,
+.broadcast-health-dot.health-excellent {
+  background: var(--color-success);
+  box-shadow: 0 0 0 0.2rem rgba(61, 220, 151, 0.15);
+}
+
+.broadcast-health-dot.health-connecting,
+.broadcast-health-dot.health-reconnecting {
+  animation: broadcast-health-pulse 1.4s ease-in-out infinite;
+  background: var(--color-warning);
+}
+
+.broadcast-health-dot.health-unavailable {
+  background: var(--color-error);
+}
+
+.broadcast-stage-controls {
+  display: flex;
+  gap: var(--space-2);
+  position: absolute;
+  right: var(--space-3);
+  top: var(--space-3);
+  z-index: 7;
+}
+
+.broadcast-stage-controls button {
+  align-items: center;
+  backdrop-filter: blur(10px);
+  background: rgba(5, 8, 18, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  color: var(--color-text-primary);
+  display: inline-flex;
+  font-size: 1.05rem;
+  height: 2.75rem;
+  justify-content: center;
+  min-width: 2.75rem;
+  padding: 0;
+  width: 2.75rem;
+}
+
+.broadcast-setup-heading {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.broadcast-setup-heading span,
+.broadcast-permission-step > span {
+  color: var(--color-brand-primary);
+  font-size: var(--text-meta);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.broadcast-setup-heading h4,
+.broadcast-permission-step h4 {
+  font-size: var(--text-section);
+  margin: var(--space-1) 0 0;
+}
+
+.broadcast-setup-heading small {
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.broadcast-title-field {
+  color: var(--color-text-secondary);
+  display: grid;
+  font-size: var(--text-body);
+  gap: var(--space-2);
+}
+
+.broadcast-title-field input {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  min-height: var(--control-min);
+  padding: 0 var(--space-3);
+  width: 100%;
+}
+
+.broadcast-audio-check {
+  align-items: center;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: max-content minmax(5rem, 1fr);
+}
+
+.broadcast-audio-check > span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-meta);
+}
+
+.broadcast-permission-step {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) 0 var(--space-2);
+  text-align: center;
+}
+
+.broadcast-permission-step p {
+  color: var(--color-text-secondary);
+  margin: var(--space-2) auto var(--space-4);
+  max-width: 38rem;
+}
+
+.broadcast-live-console {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.broadcast-live-metrics {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.broadcast-live-metrics > span {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+}
+
+.broadcast-live-metrics small {
+  color: var(--color-text-secondary);
+}
+
+.broadcast-live-metrics strong {
+  overflow-wrap: anywhere;
+}
+
+.quick-live-controls.live-controls {
+  justify-content: flex-end;
+}
+
+@keyframes broadcast-health-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (max-width: 767px) {
+  .app.role-streamer {
+    padding-right: max(var(--space-2), env(safe-area-inset-right));
+    padding-left: max(var(--space-2), env(safe-area-inset-left));
+  }
+
+  .creator-studio {
+    max-width: 100%;
+    padding: var(--space-2);
+  }
+
+  .creator-live-section,
+  .creator-broadcast-layout,
+  .creator-stage-column,
+  .creator-control-rail,
+  .creator-monitor,
+  .creator-monitor-panel,
+  .session-insights {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .creator-control-rail > .control-rail-section {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .creator-chat-form input,
+  .insight-metrics > div {
+    min-width: 0;
+  }
+
+  .insight-metrics strong,
+  .insight-metrics span {
+    overflow-wrap: anywhere;
+  }
+
+  .creator-live-section .creator-broadcast-layout,
+  .creator-live-section .creator-stage-column {
+    gap: var(--space-3);
+  }
+
+  .quick-live-panel {
+    border-radius: var(--radius-lg);
+    gap: var(--space-3);
+    padding: var(--space-2);
+  }
+
+  .quick-live-heading {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+  }
+
+  .quick-live-heading h3 {
+    font-size: 1.15rem;
+  }
+
+  .quick-live-heading > span {
+    flex: 0 0 auto;
+  }
+
+  .quick-live-video-shell {
+    aspect-ratio: auto;
+    height: min(64dvh, 40rem);
+    min-height: 25rem;
+  }
+
+  .quick-live-preview {
+    object-fit: cover;
+  }
+
+  .quick-live-empty {
+    padding: var(--space-4);
+  }
+
+  .broadcast-stage-status {
+    left: var(--space-2);
+    top: var(--space-2);
+  }
+
+  .broadcast-stage-controls {
+    bottom: var(--space-3);
+    flex-direction: column;
+    right: var(--space-2);
+    top: auto;
+  }
+
+  .broadcast-setup-heading {
+    align-items: flex-start;
+  }
+
+  .broadcast-setup-heading small {
+    max-width: 8rem;
+  }
+
+  .device-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .device-grid select,
+  .broadcast-title-field input {
+    font-size: 1rem;
+    min-height: 3rem;
+  }
+
+  .broadcast-live-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .broadcast-live-metrics > span {
+    padding: var(--space-2);
+  }
+
+  .quick-live-controls,
+  .quick-live-controls.live-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quick-live-controls button,
+  .broadcast-permission-step .creator-primary-action {
+    min-height: 3.25rem;
+    width: 100%;
+  }
+
+  .quick-live-controls .creator-primary-action,
+  .quick-live-controls .danger {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 932px) {
+  .quick-live-video-shell {
+    height: min(72dvh, 32rem);
+    min-height: 18rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .broadcast-health-dot.health-connecting,
+  .broadcast-health-dot.health-reconnecting {
+    animation: none;
+  }
+}

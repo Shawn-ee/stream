@@ -31,11 +31,17 @@ import {
   databasePoolStats,
 } from "./db/pool.js";
 import {
+  AccountSecurityError,
   authenticateCredentials,
+  changeAccountPassword,
+  clientLabelForUserAgent,
   createSession,
+  listUserSessions,
   registerAudienceAccount,
   RegistrationError,
+  revokeOtherUserSessions,
   revokeSession,
+  revokeUserSession,
   sessionTokenFromCookieHeader,
   userForSessionToken,
 } from "./auth.js";
@@ -81,6 +87,15 @@ function safeTokenMatch(received: string | undefined, expected: string) {
 
 function redisMetric(source: string, name: string) {
   return Number(source.match(new RegExp(`^${name}:(\\d+)\\r?$`, "m"))?.[1] ?? 0);
+}
+
+function validTimeZone(value: string) {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function prometheusMetrics(redis: {
@@ -133,10 +148,16 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
   try {
     await client.query("BEGIN");
     const previous = await client.query<{
+      id: string;
+      streamer_id: string;
+      streamer_name: string;
       broadcast_state: string;
       broadcast_transport: BroadcastTransport;
     }>(
-      "SELECT broadcast_state,broadcast_transport FROM live_rooms WHERE slug=$1 FOR UPDATE",
+      `SELECT r.id,r.streamer_id,u.display_name AS streamer_name,
+              r.broadcast_state,r.broadcast_transport
+       FROM live_rooms r JOIN users u ON u.id=r.streamer_id
+       WHERE r.slug=$1 FOR UPDATE OF r`,
       [slug],
     );
     if (!previous.rows[0]) {
@@ -156,10 +177,34 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
           : previous.rows[0].broadcast_state === "live" && changed
             ? "broadcast_ended"
             : "broadcast_status_checked";
+    const lifecycleEventId = changed ? crypto.randomUUID() : null;
     if (changed)
       await client.query(
         "INSERT INTO room_lifecycle_events (id,room_id,state,event_type,message) SELECT $1,id,$2::broadcast_lifecycle_state,$3,$4 FROM live_rooms WHERE slug=$5",
-        [crypto.randomUUID(), status.state, eventType, status.message, slug],
+        [lifecycleEventId, status.state, eventType, status.message, slug],
+      );
+    if (changed && ["broadcast_started", "broadcast_ended"].includes(eventType))
+      await client.query(
+        `INSERT INTO notifications
+         (id,user_id,kind,title,body,room_id,notification_key)
+         SELECT gen_random_uuid(),f.follower_id,$1,
+                CASE WHEN viewer.locale='zh'
+                  THEN CASE WHEN $1='creator_live' THEN '关注的主播开播了' ELSE '直播已结束' END
+                  ELSE CASE WHEN $1='creator_live' THEN 'A creator you follow is live' ELSE 'Broadcast ended' END END,
+                CASE WHEN viewer.locale='zh'
+                  THEN CASE WHEN $1='creator_live' THEN $2 || ' 现在正在直播。' ELSE $2 || ' 的直播已结束。' END
+                  ELSE CASE WHEN $1='creator_live' THEN $2 || ' is live now.' ELSE $2 || '''s broadcast has ended.' END END,
+                $3,$4
+         FROM follows f JOIN users viewer ON viewer.id=f.follower_id
+         WHERE f.streamer_id=$5
+         ON CONFLICT (user_id,notification_key) WHERE notification_key IS NOT NULL DO NOTHING`,
+        [
+          eventType === "broadcast_started" ? "creator_live" : "creator_offline",
+          previous.rows[0].streamer_name,
+          previous.rows[0].id,
+          `${eventType}:${lifecycleEventId}`,
+          previous.rows[0].streamer_id,
+        ],
       );
     await client.query("COMMIT");
     if (changed) {
@@ -234,6 +279,8 @@ export function buildApi() {
         ? 5
         : request.url === "/api/auth/login"
         ? 15
+        : request.url === "/api/account/password"
+          ? 10
         : request.url.includes("/reports")
           ? 20
           : request.url.includes("/gifts") || request.url.includes("/purchase")
@@ -420,7 +467,10 @@ export function buildApi() {
     async (request, reply) => {
       try {
         const user = await registerAudienceAccount(request.body);
-        const session = await createSession(user.id);
+        const session = await createSession(
+          user.id,
+          clientLabelForUserAgent(request.headers["user-agent"]),
+        );
         setSessionCookies(reply, session);
         return reply.code(201).send({ user });
       } catch (error) {
@@ -445,7 +495,10 @@ export function buildApi() {
       rateBuckets.delete(
         `${request.ip}:POST:/api/auth/login:${handle.toLowerCase()}`,
       );
-      const session = await createSession(user.id);
+      const session = await createSession(
+        user.id,
+        clientLabelForUserAgent(request.headers["user-agent"]),
+      );
       setSessionCookies(reply, session);
       return { user };
     },
@@ -456,6 +509,231 @@ export function buildApi() {
     reply.clearCookie("stream_csrf", { path: "/" });
     return reply.code(204).send();
   });
+  api.patch<{
+    Body: { displayName?: string; locale?: "en" | "zh" };
+  }>(
+    "/api/account/profile",
+    { schema: { body: mutationSchemas.accountProfile } },
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user) return reply.code(401).send({ error: "session_required" });
+      const displayName = request.body.displayName?.trim();
+      if (request.body.displayName !== undefined && !displayName)
+        return reply.code(400).send({ error: "invalid_display_name" });
+      const client = database();
+      await client.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          `UPDATE users
+           SET display_name=COALESCE($1,display_name),
+               locale=COALESCE($2,locale),updated_at=NOW()
+           WHERE id=$3
+           RETURNING id,handle,display_name,role,locale,test_age_acknowledged_at`,
+          [displayName ?? null, request.body.locale ?? null, user.id],
+        );
+        await client.query(
+          "INSERT INTO account_security_events (id,user_id,event_type) VALUES ($1,$2,'profile_updated')",
+          [crypto.randomUUID(), user.id],
+        );
+        await client.query("COMMIT");
+        const updated = result.rows[0];
+        return {
+          user: {
+            id: updated.id,
+            handle: updated.handle,
+            displayName: updated.display_name,
+            role: updated.role,
+            locale: updated.locale,
+            ageAcknowledged: Boolean(updated.test_age_acknowledged_at),
+          },
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.get("/api/account/sessions", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    return {
+      sessions: await listUserSessions(
+        user.id,
+        request.cookies.stream_session,
+      ),
+    };
+  });
+  api.delete("/api/account/sessions", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    return {
+      revoked: await revokeOtherUserSessions(
+        user.id,
+        request.cookies.stream_session,
+      ),
+    };
+  });
+  api.delete<{ Params: { sessionId: string } }>(
+    "/api/account/sessions/:sessionId",
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user) return reply.code(401).send({ error: "session_required" });
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.params.sessionId))
+        return reply.code(400).send({ error: "invalid_session_id" });
+      const revoked = await revokeUserSession(
+        user.id,
+        request.params.sessionId,
+        request.cookies.stream_session,
+      );
+      if (!revoked)
+        return reply.code(404).send({ error: "session_not_found" });
+      if (revoked.is_current) {
+        reply.clearCookie("stream_session", { path: "/" });
+        reply.clearCookie("stream_csrf", { path: "/" });
+      }
+      return reply.code(204).send();
+    },
+  );
+  api.post<{
+    Body: { currentPassword: string; newPassword: string };
+  }>(
+    "/api/account/password",
+    { schema: { body: mutationSchemas.passwordChange } },
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user) return reply.code(401).send({ error: "session_required" });
+      try {
+        await changeAccountPassword(
+          user.id,
+          request.body.currentPassword,
+          request.body.newPassword,
+        );
+        const session = await createSession(
+          user.id,
+          clientLabelForUserAgent(request.headers["user-agent"]),
+        );
+        setSessionCookies(reply, session);
+        return { changed: true };
+      } catch (error) {
+        if (error instanceof AccountSecurityError)
+          return reply.code(400).send({ error: error.code });
+        throw error;
+      }
+    },
+  );
+  api.get("/api/creator-applications/me", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query(
+        `SELECT id,category,bio,schedule_text,motivation,status,review_reason,
+                reviewed_at,created_at,updated_at
+         FROM creator_applications
+         WHERE applicant_id=$1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [user.id],
+      );
+      return { application: result.rows[0] ?? null };
+    } finally {
+      await client.end();
+    }
+  });
+  api.post<{
+    Body: {
+      category: string;
+      bio: string;
+      scheduleText: string;
+      motivation: string;
+    };
+  }>(
+    "/api/creator-applications",
+    { schema: { body: mutationSchemas.creatorApplication } },
+    async (request, reply) => {
+      const applicant = (await requireRole(request, reply, "audience")) as
+        | DemoUser
+        | undefined;
+      if (!applicant) return;
+      const client = database();
+      await client.connect();
+      try {
+        await client.query("BEGIN");
+        const id = crypto.randomUUID();
+        const result = await client.query(
+          `INSERT INTO creator_applications
+           (id,applicant_id,category,bio,schedule_text,motivation)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           RETURNING id,category,bio,schedule_text,motivation,status,created_at`,
+          [
+            id,
+            applicant.id,
+            request.body.category.trim(),
+            request.body.bio.trim(),
+            request.body.scheduleText.trim(),
+            request.body.motivation.trim(),
+          ],
+        );
+        await client.query(
+          "INSERT INTO creator_application_events (id,application_id,actor_id,event_type) VALUES ($1,$2,$3,'submitted')",
+          [crypto.randomUUID(), id, applicant.id],
+        );
+        await client.query("COMMIT");
+        return reply.code(201).send({ application: result.rows[0] });
+      } catch (error) {
+        await client.query("ROLLBACK");
+        if ((error as { code?: string }).code === "23505")
+          return reply
+            .code(409)
+            .send({ error: "active_creator_application_exists" });
+        throw error;
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.delete<{ Params: { applicationId: string } }>(
+    "/api/creator-applications/:applicationId",
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user) return reply.code(401).send({ error: "session_required" });
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.params.applicationId))
+        return reply.code(400).send({ error: "invalid_application_id" });
+      const client = database();
+      await client.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          `UPDATE creator_applications
+           SET status='withdrawn',updated_at=NOW()
+           WHERE id=$1 AND applicant_id=$2 AND status='pending'
+           RETURNING id`,
+          [request.params.applicationId, user.id],
+        );
+        if (!result.rows[0]) {
+          await client.query("ROLLBACK");
+          return reply
+            .code(409)
+            .send({ error: "application_not_withdrawable" });
+        }
+        await client.query(
+          "INSERT INTO creator_application_events (id,application_id,actor_id,event_type) VALUES ($1,$2,$3,'withdrawn')",
+          [crypto.randomUUID(), request.params.applicationId, user.id],
+        );
+        await client.query("COMMIT");
+        return reply.code(204).send();
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        await client.end();
+      }
+    },
+  );
   api.post("/api/demo/age-acknowledgement", async (request, reply) => {
     const user = await currentUser(request);
     if (!user) return reply.code(401).send({ error: "session_required" });
@@ -486,7 +764,7 @@ export function buildApi() {
         const query = request.query.q?.trim() ?? "";
         const category = request.query.category?.trim() ?? "";
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.goal_text, u.id AS streamer_id, u.display_name AS streamer_name, p.category, p.bio, p.schedule_text, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%') AND ($2='' OR p.category=$2) ORDER BY r.status = 'live' DESC, r.title LIMIT 100`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.goal_text, u.id AS streamer_id, u.display_name AS streamer_name, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%') AND ($2='' OR p.category=$2) ORDER BY r.status = 'live' DESC, r.title LIMIT 100`,
           [query, category],
         );
         return { rooms: result.rows };
@@ -514,7 +792,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT u.id,u.handle,u.display_name,p.bio,p.category,p.schedule_text,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status FROM users u JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
+          "SELECT u.id,u.handle,u.display_name,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state FROM users u JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
           [request.params.streamerId],
         );
         if (!result.rows[0])
@@ -534,20 +812,70 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
-        await client.query(
-          "INSERT INTO follows (follower_id,streamer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+        const target = await client.query(
+          "SELECT id FROM users WHERE id=$1 AND role='streamer'",
+          [request.params.streamerId],
+        );
+        if (!target.rows[0])
+          return reply.code(404).send({ error: "streamer_not_found" });
+        const inserted = await client.query(
+          "INSERT INTO follows (follower_id,streamer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING follower_id",
           [viewer.id, request.params.streamerId],
         );
-        await client.query(
-          "INSERT INTO notifications (id,user_id,kind,title,body) VALUES ($1,$2,'follow','Following updated','You are following a test streamer.')",
-          [crypto.randomUUID(), viewer.id],
-        );
-        return { following: true };
+        return { following: true, created: Boolean(inserted.rows[0]) };
       } finally {
         await client.end();
       }
     },
   );
+  api.get<{ Params: { streamerId: string } }>(
+    "/api/streamers/:streamerId/follow-status",
+    async (request, reply) => {
+      const viewer = (await requireRole(request, reply, "audience")) as
+        | DemoUser
+        | undefined;
+      if (!viewer) return;
+      const client = database();
+      await client.connect();
+      try {
+        const result = await client.query(
+          "SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id=$1 AND streamer_id=$2) AS following",
+          [viewer.id, request.params.streamerId],
+        );
+        return { following: result.rows[0].following };
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.get("/api/me/following", async (request, reply) => {
+    const viewer = (await requireRole(request, reply, "audience")) as
+      | DemoUser
+      | undefined;
+    if (!viewer) return;
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query(
+        `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,
+                u.id AS streamer_id,u.display_name AS streamer_name,
+                p.category,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,
+                f.created_at AS followed_at
+         FROM follows f
+         JOIN users u ON u.id=f.streamer_id
+         JOIN streamer_profiles p ON p.user_id=u.id
+         JOIN live_rooms r ON r.streamer_id=u.id
+         WHERE f.follower_id=$1
+         ORDER BY (r.broadcast_state='live') DESC,
+                  p.next_stream_at ASC NULLS LAST,f.created_at DESC
+         LIMIT 100`,
+        [viewer.id],
+      );
+      return { creators: result.rows };
+    } finally {
+      await client.end();
+    }
+  });
   api.delete<{ Params: { streamerId: string } }>(
     "/api/streamers/:streamerId/follow",
     async (request, reply) => {
@@ -583,6 +911,41 @@ export function buildApi() {
       await client.end();
     }
   });
+  api.patch<{ Params: { notificationId: string } }>(
+    "/api/me/notifications/:notificationId/read",
+    async (request, reply) => {
+      const user = await currentUser(request);
+      if (!user) return reply.code(401).send({ error: "session_required" });
+      const client = database();
+      await client.connect();
+      try {
+        const result = await client.query(
+          "UPDATE notifications SET read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND user_id=$2 RETURNING id,read_at",
+          [request.params.notificationId, user.id],
+        );
+        if (!result.rows[0])
+          return reply.code(404).send({ error: "notification_not_found" });
+        return { notification: result.rows[0] };
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.post("/api/me/notifications/read-all", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query(
+        "UPDATE notifications SET read_at=NOW() WHERE user_id=$1 AND read_at IS NULL",
+        [user.id],
+      );
+      return { updated: result.rowCount ?? 0 };
+    } finally {
+      await client.end();
+    }
+  });
   api.get("/api/me/history", async (request, reply) => {
     const viewer = await currentUser(request);
     if (!viewer)
@@ -606,7 +969,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_transport, r.cloudflare_live_input_id, u.display_name AS streamer_name, p.category, p.bio, p.schedule_text FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_transport, r.cloudflare_live_input_id, u.id AS streamer_id,u.display_name AS streamer_name, p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -1395,6 +1758,23 @@ export function buildApi() {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "room_or_gift_not_found" });
       }
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        `${room.rows[0].id}:${sender.id}:${giftId}:gift-combo`,
+      ]);
+      const previousCombo = await client.query<{
+        combo_count: number;
+        combo_expires_at: Date | null;
+      }>(
+        `SELECT combo_count,combo_expires_at FROM gifts
+         WHERE room_id=$1 AND sender_id=$2 AND gift_id=$3
+         ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+        [room.rows[0].id, sender.id, giftId],
+      );
+      const comboCount =
+        previousCombo.rows[0]?.combo_expires_at &&
+        previousCombo.rows[0].combo_expires_at.getTime() > Date.now()
+          ? Math.min(10_000, previousCombo.rows[0].combo_count + quantity)
+          : quantity;
       const totalCost = gift.rows[0].coin_cost * quantity;
       if (totalCost >= 1_000 && request.body?.confirmedHighValue !== true) {
         await client.query("ROLLBACK");
@@ -1412,7 +1792,7 @@ export function buildApi() {
       }
       const id = crypto.randomUUID();
       await client.query(
-        "INSERT INTO gifts (id,room_id,sender_id,recipient_id,gift_id,coin_cost,idempotency_key,quantity) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+        "INSERT INTO gifts (id,room_id,sender_id,recipient_id,gift_id,coin_cost,idempotency_key,quantity,combo_count,combo_expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()+INTERVAL '10 seconds')",
         [
           id,
           room.rows[0].id,
@@ -1422,6 +1802,7 @@ export function buildApi() {
           totalCost,
           idempotencyKey,
           quantity,
+          comboCount,
         ],
       );
       await client.query(
@@ -1444,7 +1825,8 @@ export function buildApi() {
       );
       await client.query("COMMIT");
       const event = {
-        eventId: crypto.randomUUID(),
+        eventId: id,
+        giftTransactionId: id,
         giftId: gift.rows[0].id,
         name: gift.rows[0].name_en,
         nameEn: gift.rows[0].name_en,
@@ -1452,6 +1834,8 @@ export function buildApi() {
         symbol: gift.rows[0].symbol,
         unitCost: gift.rows[0].coin_cost,
         quantity,
+        comboCount,
+        comboWindowSeconds: 10,
         cost: totalCost,
         animationKey: gift.rows[0].animation_key,
         animationTier: gift.rows[0].animation_tier,
@@ -1466,6 +1850,58 @@ export function buildApi() {
     } finally {
       await client.end();
     }
+    },
+  );
+  api.post<{
+    Params: { slug: string; giftTransactionId: string };
+    Body: { message?: "thank_you" | "celebrate" };
+  }>(
+    "/api/streamer/rooms/:slug/gifts/:giftTransactionId/acknowledge",
+    async (request, reply) => {
+      const creator = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!creator) return;
+      const message = request.body?.message ?? "thank_you";
+      if (!["thank_you", "celebrate"].includes(message))
+        return reply.code(400).send({ error: "invalid_acknowledgement" });
+      const client = database();
+      await client.connect();
+      try {
+        const gift = await client.query<{
+          id: string;
+          sender_name: string;
+        }>(
+          `SELECT g.id,u.display_name AS sender_name
+           FROM gifts g
+           JOIN live_rooms r ON r.id=g.room_id
+           JOIN users u ON u.id=g.sender_id
+           WHERE g.id=$1 AND r.slug=$2 AND r.streamer_id=$3`,
+          [request.params.giftTransactionId, request.params.slug, creator.id],
+        );
+        if (!gift.rows[0])
+          return reply.code(404).send({ error: "gift_not_found" });
+        const id = crypto.randomUUID();
+        const inserted = await client.query(
+          `INSERT INTO gift_acknowledgements (id,gift_id,creator_id,message_key)
+           VALUES ($1,$2,$3,$4) ON CONFLICT (gift_id) DO NOTHING RETURNING id`,
+          [id, gift.rows[0].id, creator.id, message],
+        );
+        if (!inserted.rows[0]) return { duplicate: true };
+        const event = {
+          acknowledgementId: id,
+          giftTransactionId: gift.rows[0].id,
+          creator: creator.displayName,
+          sender: gift.rows[0].sender_name,
+          message,
+        };
+        realtime
+          ?.to(`room:${request.params.slug}`)
+          .emit("gift:acknowledged", event);
+        return { acknowledgement: event };
+      } finally {
+        await client.end();
+      }
     },
   );
   api.post<{
@@ -1806,7 +2242,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.bio,p.category,p.schedule_text,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
+        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
         [user.id],
       );
       return {
@@ -1945,7 +2381,15 @@ export function buildApi() {
       }
     },
   );
-  api.put<{ Body: { bio?: string; category?: string; scheduleText?: string } }>(
+  api.put<{
+    Body: {
+      bio?: string;
+      category?: string;
+      scheduleText?: string;
+      nextStreamAt?: string | null;
+      scheduleTimezone?: string;
+    };
+  }>(
     "/api/streamer/profile",
     async (request, reply) => {
       const streamer = (await requireRole(request, reply, "streamer")) as
@@ -1954,19 +2398,45 @@ export function buildApi() {
       const bio = request.body?.bio?.trim();
       const category = request.body?.category?.trim();
       const schedule = request.body?.scheduleText?.trim();
+      const nextStreamSupplied = request.body?.nextStreamAt !== undefined;
+      const nextStreamAt = request.body?.nextStreamAt;
+      const scheduleTimezone = request.body?.scheduleTimezone?.trim();
+      const nextStreamTimestamp =
+        typeof nextStreamAt === "string" ? Date.parse(nextStreamAt) : null;
       if (
-        (!bio && !category && !schedule) ||
+        (!bio && !category && !schedule && !nextStreamSupplied && !scheduleTimezone) ||
         (bio && bio.length > 500) ||
         (category && category.length > 60) ||
-        (schedule && schedule.length > 160)
+        (schedule && schedule.length > 160) ||
+        (scheduleTimezone && !validTimeZone(scheduleTimezone)) ||
+        (typeof nextStreamAt === "string" &&
+          (!Number.isFinite(nextStreamTimestamp) ||
+            nextStreamTimestamp! < Date.now() - 5 * 60_000 ||
+            nextStreamTimestamp! > Date.now() + 2 * 365 * 24 * 60 * 60_000))
       )
         return reply.code(400).send({ error: "invalid_profile_metadata" });
       const client = database();
       await client.connect();
       try {
         const update = await client.query(
-          "UPDATE streamer_profiles SET bio=COALESCE($1,bio),category=COALESCE($2,category),schedule_text=COALESCE($3,schedule_text) WHERE user_id=$4 RETURNING bio,category,schedule_text",
-          [bio ?? null, category ?? null, schedule ?? null, streamer.id],
+          `UPDATE streamer_profiles
+           SET bio=COALESCE($1,bio),category=COALESCE($2,category),
+               schedule_text=COALESCE($3,schedule_text),
+               next_stream_at=CASE WHEN $4 THEN $5::timestamptz ELSE next_stream_at END,
+               schedule_timezone=COALESCE($6,schedule_timezone)
+           WHERE user_id=$7
+           RETURNING bio,category,schedule_text,next_stream_at,schedule_timezone`,
+          [
+            bio ?? null,
+            category ?? null,
+            schedule ?? null,
+            nextStreamSupplied,
+            typeof nextStreamAt === "string"
+              ? new Date(nextStreamTimestamp!).toISOString()
+              : null,
+            scheduleTimezone ?? null,
+            streamer.id,
+          ],
         );
         return { profile: update.rows[0] };
       } finally {
@@ -2149,6 +2619,153 @@ export function buildApi() {
       await client.end();
     }
   });
+  api.get("/api/admin/creator-applications", async (request, reply) => {
+    const admin = await requireRole(request, reply, "admin");
+    if (!admin) return;
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query(
+        `SELECT a.id,a.category,a.bio,a.schedule_text,a.motivation,a.status,
+                a.review_reason,a.reviewed_at,a.created_at,a.updated_at,
+                u.id AS applicant_id,u.handle,u.display_name,u.locale
+         FROM creator_applications a
+         JOIN users u ON u.id=a.applicant_id
+         ORDER BY (a.status='pending') DESC,a.created_at DESC
+         LIMIT 100`,
+      );
+      return { applications: result.rows };
+    } finally {
+      await client.end();
+    }
+  });
+  api.post<{
+    Params: { applicationId: string };
+    Body: { decision: "approved" | "rejected"; reason: string };
+  }>(
+    "/api/admin/creator-applications/:applicationId/decision",
+    { schema: { body: mutationSchemas.creatorApplicationDecision } },
+    async (request, reply) => {
+      const admin = (await requireRole(request, reply, "admin")) as
+        | DemoUser
+        | undefined;
+      if (!admin) return;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.params.applicationId))
+        return reply.code(400).send({ error: "invalid_application_id" });
+      const client = database();
+      await client.connect();
+      try {
+        await client.query("BEGIN");
+        const application = await client.query<{
+          id: string;
+          applicant_id: string;
+          category: string;
+          bio: string;
+          schedule_text: string;
+          status: string;
+          handle: string;
+          display_name: string;
+          locale: "en" | "zh";
+          role: Role;
+        }>(
+          `SELECT a.id,a.applicant_id,a.category,a.bio,a.schedule_text,a.status,
+                  u.handle,u.display_name,u.locale,u.role
+           FROM creator_applications a
+           JOIN users u ON u.id=a.applicant_id
+           WHERE a.id=$1
+           FOR UPDATE OF a,u`,
+          [request.params.applicationId],
+        );
+        const item = application.rows[0];
+        if (!item) {
+          await client.query("ROLLBACK");
+          return reply.code(404).send({ error: "creator_application_not_found" });
+        }
+        if (item.status !== "pending") {
+          await client.query("ROLLBACK");
+          return reply.code(409).send({ error: "application_already_decided" });
+        }
+
+        const reason = request.body.reason.trim();
+        if (request.body.decision === "rejected") {
+          await client.query(
+            `UPDATE creator_applications
+             SET status='rejected',reviewed_by=$1,review_reason=$2,
+                 reviewed_at=NOW(),updated_at=NOW()
+             WHERE id=$3`,
+            [admin.id, reason, item.id],
+          );
+          await client.query(
+            "INSERT INTO creator_application_events (id,application_id,actor_id,event_type) VALUES ($1,$2,$3,'rejected')",
+            [crypto.randomUUID(), item.id, admin.id],
+          );
+          await client.query(
+            "INSERT INTO notifications (id,user_id,kind,title,body) VALUES ($1,$2,'creator_application','Creator application update',$3)",
+            [crypto.randomUUID(), item.applicant_id, reason],
+          );
+          await client.query("COMMIT");
+          return { applicationId: item.id, status: "rejected" };
+        }
+
+        if (item.role !== "audience") {
+          await client.query("ROLLBACK");
+          return reply.code(409).send({ error: "applicant_role_changed" });
+        }
+        const roomId = crypto.randomUUID();
+        const roomTitle =
+          item.locale === "zh"
+            ? `${item.display_name} 的直播间`
+            : `${item.display_name}'s Live Room`;
+        await client.query(
+          `INSERT INTO streamer_profiles
+           (user_id,bio,category,schedule_text,is_featured)
+           VALUES ($1,$2,$3,$4,FALSE)`,
+          [item.applicant_id, item.bio, item.category, item.schedule_text],
+        );
+        await client.query(
+          `INSERT INTO live_rooms (id,streamer_id,slug,title,status)
+           VALUES ($1,$2,$3,$4,'offline')`,
+          [roomId, item.applicant_id, item.handle, roomTitle],
+        );
+        await client.query(
+          "UPDATE users SET role='streamer',updated_at=NOW() WHERE id=$1",
+          [item.applicant_id],
+        );
+        await client.query(
+          `UPDATE creator_applications
+           SET status='approved',reviewed_by=$1,review_reason=$2,
+               reviewed_at=NOW(),updated_at=NOW(),provisioned_room_id=$3
+           WHERE id=$4`,
+          [admin.id, reason, roomId, item.id],
+        );
+        await client.query(
+          "INSERT INTO creator_application_events (id,application_id,actor_id,event_type) VALUES ($1,$2,$3,'approved')",
+          [crypto.randomUUID(), item.id, admin.id],
+        );
+        await client.query(
+          "INSERT INTO notifications (id,user_id,kind,title,body) VALUES ($1,$2,'creator_application','Creator application approved',$3)",
+          [crypto.randomUUID(), item.applicant_id, reason],
+        );
+        await client.query("DELETE FROM auth_sessions WHERE user_id=$1", [
+          item.applicant_id,
+        ]);
+        await client.query("COMMIT");
+        return {
+          applicationId: item.id,
+          status: "approved",
+          roomSlug: item.handle,
+          requiresRelogin: true,
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        if ((error as { code?: string }).code === "23505")
+          return reply.code(409).send({ error: "creator_provisioning_conflict" });
+        throw error;
+      } finally {
+        await client.end();
+      }
+    },
+  );
   api.get("/api/admin/test-transactions", async (request, reply) => {
     const admin = await requireRole(request, reply, "admin");
     if (!admin) return;

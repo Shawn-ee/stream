@@ -25,6 +25,44 @@ export const mutationSchemas = {
       password: boundedString(256, 8),
     },
   },
+  accountProfile: {
+    type: "object",
+    additionalProperties: false,
+    minProperties: 1,
+    properties: {
+      displayName: boundedString(50, 2),
+      locale: { type: "string", enum: ["en", "zh"] },
+    },
+  },
+  passwordChange: {
+    type: "object",
+    additionalProperties: false,
+    required: ["currentPassword", "newPassword"],
+    properties: {
+      currentPassword: boundedString(256, 8),
+      newPassword: boundedString(256, 12),
+    },
+  },
+  creatorApplication: {
+    type: "object",
+    additionalProperties: false,
+    required: ["category", "bio", "scheduleText", "motivation"],
+    properties: {
+      category: boundedString(60, 2),
+      bio: boundedString(500, 20),
+      scheduleText: boundedString(160, 4),
+      motivation: boundedString(800, 20),
+    },
+  },
+  creatorApplicationDecision: {
+    type: "object",
+    additionalProperties: false,
+    required: ["decision", "reason"],
+    properties: {
+      decision: { type: "string", enum: ["approved", "rejected"] },
+      reason: boundedString(500, 2),
+    },
+  },
   report: {
     type: "object",
     additionalProperties: false,

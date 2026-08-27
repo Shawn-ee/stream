@@ -34,7 +34,7 @@ try {
     await client.query(
       `INSERT INTO users (id, handle, display_name, role, password_hash, password_salt)
        VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, role = EXCLUDED.role, password_hash=EXCLUDED.password_hash, password_salt=EXCLUDED.password_salt, is_muted = FALSE, is_banned = FALSE, updated_at = NOW()`,
+       ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, role = EXCLUDED.role, locale='en',test_age_acknowledged_at=NULL,password_hash=EXCLUDED.password_hash, password_salt=EXCLUDED.password_salt, is_muted = FALSE, is_banned = FALSE, updated_at = NOW()`,
       [id, handle, displayName, role, demoPassword.hash, demoPassword.salt],
     );
   }
@@ -53,7 +53,7 @@ try {
     ],
   );
   await client.query(
-    "UPDATE streamer_profiles SET schedule_text = 'Weekdays 8 PM Central · Test schedule', category = 'Featured' WHERE user_id = $1",
+    "UPDATE streamer_profiles SET schedule_text = 'Weekdays 8 PM Central · Test schedule', category = 'Featured',next_stream_at=NOW()+INTERVAL '1 day',schedule_timezone='America/Chicago' WHERE user_id = $1",
     [accounts[1][0]],
   );
   await client.query(
@@ -159,6 +159,10 @@ try {
   );
   await client.query(
     "INSERT INTO streamer_profiles (user_id,bio,category,schedule_text) VALUES ($1,'A second local creator for discovery testing.','Music','Weekends 10 PM Central - Test schedule') ON CONFLICT (user_id) DO UPDATE SET bio=EXCLUDED.bio,category=EXCLUDED.category,schedule_text=EXCLUDED.schedule_text",
+    [accounts[3][0]],
+  );
+  await client.query(
+    "UPDATE streamer_profiles SET next_stream_at=NOW()+INTERVAL '2 days',schedule_timezone='America/Chicago' WHERE user_id=$1",
     [accounts[3][0]],
   );
   await client.query(

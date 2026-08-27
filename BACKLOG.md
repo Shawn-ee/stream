@@ -1,5 +1,28 @@
 # Stream MVP Backlog
 
+## Active frontend modernization
+
+- Phase 0 completed locally: audited React/Vite state routing, global CSS, authentication, discovery, room/chat/gift/follow/profile flows, Creator Studio, Socket.IO, WHIP/WHEP/HLS and API boundaries. See `docs/Frontend-Modernization-Implementation-Map.md`.
+- Phase 1 completed locally: semantic mobile-first design tokens, explicit 480/768/1024/1440 breakpoints, safe-area/touch/focus/reduced-motion rules, accessible modal and bottom-sheet primitives, loading skeletons, and discovery empty/loading states.
+- Phase 2 completed locally: recognizable Holiwyn audience header, inline creator search, collapsible desktop creator rail, truthful featured creator/live surface, light reusable stream cards, following integration, and responsive one/two/three/four-column behavior.
+- Phase 3 completed locally: video-first desktop room, compact creator/follow/gift/private/report bar, fixed-width sticky live chat, 16:9 truthful player states, and subordinate goal/gift/support/profile/wallet surfaces with tablet stacking.
+- Phase 4 completed locally: dedicated mobile header actions, expandable creator search, five-item bottom navigation, direct existing-view routing, safe-area clearance, 52px touch targets, mobile account access, and overflow-free 320–430px layouts.
+- Phase 5 completed locally: one-column content-first mobile discovery, For You/Following/Live tabs, compact category and creator search, truthful static 16:9 previews, dedicated loading/empty states, bilingual labels, and overflow-free 320–430px behavior.
+- Phase 6 completed locally: viewport-dominant mobile room, truthful player/offline states, creator identity and action rail over video, existing transient chat/gift activity overlay, accessible chat and gift sheets, recommended-next creator cards, hidden app chrome, and fullscreen short-landscape behavior.
+- Phase 7 completed locally: staged browser permission, private preview, stream-title save, camera/microphone selection, active WebRTC track replacement, friendly connection health, duration/mute/camera controls, safe end confirmation, bilingual mobile copy, and overflow-free 320–430px layouts. The existing WHIP session and explicit owner-approval boundary for real broadcasts remain intact.
+- Phase 8 completed locally: responsive creator-first public profile, truthful current-room lifecycle, existing follower/follow and schedule data, direct room/profile navigation, bilingual loading/error states, and recommended-next discovery. No cover media, verification, social links, clips, or VODs were invented.
+- Phase 9 completed locally: stable session boot state, debounced and race-safe creator search, explicit discovery/following service-error states with retry, localized loading status, deferred below-fold rendering, production asset budgets, and representative responsive/browser regression checks.
+- Frontend modernization Phases 1–9 are complete locally. Next P0 product milestone: public discovery and low-friction test onboarding, allowing anonymous browsing of safe room/profile metadata while requiring authentication for chat, follow, gifts, private access, and broadcasting.
+
+## Active test-only product cycle
+
+1. Completed locally P0: account profile, password change with full session rotation, privacy-safe active-session management, inactive recovery design, focused verification, bilingual browser checks, and mobile review.
+2. Completed locally P0: creator application, withdrawal/reapplication, administrator reasoned decision, audit trail, notification, session invalidation, and transactional creator profile/offline-room provisioning.
+3. Completed locally P1: follow/unfollow favorites, live-first followed-creator feed, validated next-stream schedules/timezones, deduplicated bilingual lifecycle notifications, and owned read state.
+4. Completed locally P1: default-off synthesized gift sounds, original premium motion, reduced-motion handling, serialized bounded combos, and one-time room-owner creator acknowledgements.
+5. Owner-deferred/out of scope: legal/compliance implementation and launch analysis. Earlier planning files are archived background only.
+6. Owner-deferred/out of scope: real token purchases, Stripe/processor work, refunds/chargebacks, creator financial balances, KYC/tax integration, withdrawal and payout. The product remains synthetic test-coin only.
+
 ## Completed P0 - Realtime video interaction and fixed test-gift system
 
 - Completed locally: video-layer comments for audience and creator views, room-scoped gift celebrations, and an accessible activity visibility toggle.
