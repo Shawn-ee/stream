@@ -1,5 +1,26 @@
 # Stream MVP Backlog
 
+## Completed P0 - Audience discovery and video-first room shell
+
+- Completed locally: persistent signed-in audience navigation, clearer discovery hierarchy, original visual room cards, live-count/search/category controls, and compact access to audience activity.
+- Completed locally: desktop video/chat split with support, goal, gifts, public support activity, creator profile, wallet, and private-show details below the primary viewing surface.
+- Verified: full Cloudflare-free staging gate, English/Chinese audience chrome, desktop discovery/room review, 390×844 discovery/room review, corrected status badges, top-of-page room navigation, and no horizontal overflow.
+- Not deployed: the public Linux site remains on the last owner-approved release until a separate deployment approval.
+
+## Completed P0 - Creator navigation and live-control consolidation
+
+- Completed locally: persistent Live, Earnings, Actions, Private Show, Profile, and Settings navigation with one focused workspace visible at a time.
+- Completed locally: camera permission/private preview and the primary Go Live/End Broadcast path remain first; goal, chat, support, audience presence, and session metrics stay visible in Live while configuration and technical help moved to dedicated sections.
+- Verified: all six sections in English and Chinese, desktop and 390×844 layouts, mobile card clipping and header fixes, no page-level horizontal overflow, complete staging gate, and audience/admin browser regressions.
+- Not deployed: existing APIs, media transport, Cloudflare configuration, payments, identity, and Linux production remain unchanged.
+
+## Next P0 - Public discovery and low-friction test onboarding
+
+- Replace the engineering-style signed-out console with an original public discovery landing page that can show safe room/profile metadata before login.
+- Require sign-in only when a visitor enters protected interaction flows such as chat, support, follow, private-show access, or Creator Studio.
+- Keep synthetic demo-role access available in local development, but move it into a clearly separated test-access panel rather than making it the product homepage.
+- Preserve truthful live/offline states, English/Chinese copy, age-gate boundaries, and existing server-side authorization. Real authentication and launch compliance remain separate approval gates.
+
 ## Completed P0 - Browser-Native Quick Go Live
 
 - Implemented and deployed: explicit device permission, private preview, camera/microphone selection, microphone level, mute/camera controls, WHIP start, safe stop, and error recovery.

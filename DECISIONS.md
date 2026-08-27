@@ -1,5 +1,17 @@
 # Architecture Decisions
 
+## 2026-08-26 - Creator workspace navigation (P0)
+
+Creator Studio uses six persistent product workspaces: Live, Earnings, Actions, Private Show, Profile, and Settings. Live is always the default because broadcasting and operating the current session are the creator's primary job. It contains the deliberate camera/microphone permission path, private preview, Go Live/End Broadcast, truthful lifecycle, audience activity, support, and goal context.
+
+Configuration is separated by frequency and intent. Goal/action editing, test earnings, private access, public profile, moderation, OBS guidance, and local-development tools cannot crowd the primary live workflow. The sections reuse existing server-authorized APIs and realtime events; navigation is a presentation boundary, not a new authorization mechanism. On phones it remains horizontally scrollable while the page itself must not overflow.
+
+## 2026-08-26 - Audience product hierarchy (P0)
+
+The signed-in audience surface uses a persistent product header and a discovery-first information hierarchy. Room cards provide original visual identity, truthful broadcast state, creator/category context, and schedule/follower metadata without copying reference branding, assets, or exact layouts.
+
+Inside a room, video and chat are the primary desktop surfaces. Goal/support actions, gifts, public support activity, creator profile, wallet, and private-show information remain available as secondary layers. On narrow screens these surfaces become one ordered column without horizontal overflow. Existing authorization, ledger, realtime, playback, and private-show behavior is unchanged; this decision restructures presentation rather than weakening product boundaries.
+
 ## 2026-08-26 - Browser-native Quick Go Live with signaling proxy (P0)
 
 Creators receive an explicit browser permission and private-preview flow before any camera or microphone is accessed. Quick Go Live uses Cloudflare Stream WHIP publishing and WHEP playback; OBS continues to use RTMPS ingest and signed HLS playback. A room stores the selected transport so viewers never receive the wrong player. The two transports cannot publish simultaneously to one room.

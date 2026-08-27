@@ -17,9 +17,15 @@
   border: 1px solid #2b3655;
   border-radius: 20px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
+  min-width: 0;
   overflow: hidden;
   padding: 1rem;
+}
+.quick-live-panel > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .quick-live-heading,
 .quick-live-controls {
@@ -32,6 +38,13 @@
 .quick-live-heading h3,
 .quick-live-heading p {
   margin: 0;
+}
+.quick-live-heading > div {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+.quick-live-heading h3 {
+  overflow-wrap: anywhere;
 }
 .quick-live-heading > span {
   background: rgba(124, 92, 252, 0.18);
@@ -1115,6 +1128,407 @@ p {
   color: #aab4cc;
 }
 
+/* Audience product shell */
+.product-identity,
+.product-account,
+.audience-main-nav,
+.discovery-heading,
+.room-heading {
+  display: flex;
+  align-items: center;
+}
+.product-identity {
+  gap: 0.8rem;
+}
+.product-identity > div > p {
+  margin: 0.3rem 0 0;
+}
+.product-mark {
+  display: grid;
+  width: 2.45rem;
+  height: 2.45rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #8d7bff;
+  border-radius: 0.8rem;
+  background: linear-gradient(145deg, #7c5cfc, #4833b8);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 950;
+  box-shadow: 0 10px 28px #39258e66;
+}
+.product-account {
+  gap: 0.7rem;
+}
+.product-account .locale {
+  position: static;
+  flex: 0 0 auto;
+  padding: 0.2rem;
+  backdrop-filter: none;
+}
+.product-account .locale button {
+  padding: 0.28rem 0.42rem;
+  font-size: 0.72rem;
+}
+.product-account > span {
+  color: #aab4cc;
+  font-size: 0.84rem;
+}
+.role-audience.app {
+  width: min(1480px, 100%);
+  padding-top: 1rem;
+}
+.role-audience > .product-header {
+  position: sticky;
+  z-index: 8;
+  top: 0;
+  align-items: center;
+  padding: 0.8rem 0;
+  background: #0b1020e8;
+  backdrop-filter: blur(18px);
+}
+.role-audience > .product-header h1 {
+  max-width: none;
+  font-size: 1.45rem;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+.role-audience > .product-header .eyebrow {
+  display: none;
+}
+.role-audience > .product-header .product-identity p:last-child {
+  color: #8994b0;
+  font-size: 0.76rem;
+}
+.audience-main-nav {
+  gap: 0.25rem;
+  padding: 0.28rem;
+  border: 1px solid #2b3655;
+  border-radius: 0.8rem;
+  background: #10162a;
+}
+.audience-main-nav button,
+.audience-main-nav a {
+  border: 0;
+  border-radius: 0.58rem;
+  background: transparent;
+  color: #aab4cc;
+  padding: 0.58rem 0.8rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+.audience-main-nav button:hover,
+.audience-main-nav a:hover,
+.audience-main-nav .active {
+  background: #202a44;
+  color: #f7f8fc;
+}
+.audience-discovery {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-inline: 0;
+}
+.discovery-heading {
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 0.9rem;
+}
+.discovery-heading h2,
+.discovery-heading p {
+  margin: 0.2rem 0;
+}
+.live-room-count {
+  flex: 0 0 auto;
+  border: 1px solid #ff4d6d66;
+  border-radius: 999px;
+  background: #371625;
+  color: #ff9aab;
+  padding: 0.48rem 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+.audience-discovery > .roles {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+.audience-discovery > .roles .room-card {
+  display: grid;
+  min-height: 290px;
+  grid-template-rows: 185px 1fr;
+  padding: 0;
+  border-color: #2b3655;
+  background: #151b2e;
+}
+.audience-discovery > .roles .room-card::after {
+  display: none;
+}
+.audience-discovery > .roles .room-card > .broadcast-label {
+  position: absolute;
+  z-index: 3;
+  top: 0.75rem;
+  right: 0.75rem;
+  bottom: auto;
+  left: auto;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+.room-card-art {
+  position: relative;
+  display: grid !important;
+  min-width: 0;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  margin: 0 !important;
+  background:
+    radial-gradient(circle at 35% 28%, #ff4d6d38, transparent 30%),
+    linear-gradient(145deg, #382a65, #10162a);
+}
+.room-card-art::after {
+  content: "";
+  position: absolute;
+  width: 12rem;
+  height: 12rem;
+  right: -4rem;
+  bottom: -6rem;
+  border: 1px solid #ffffff1a;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2rem #ffffff08, 0 0 0 4rem #ffffff05;
+}
+.room-card-art-1 {
+  background:
+    radial-gradient(circle at 70% 20%, #3ddc9735, transparent 32%),
+    linear-gradient(145deg, #194239, #111728);
+}
+.room-card-art-2 {
+  background:
+    radial-gradient(circle at 30% 20%, #f6b73c3d, transparent 32%),
+    linear-gradient(145deg, #4a331d, #151b2e);
+}
+.room-card-art-3 {
+  background:
+    radial-gradient(circle at 70% 20%, #4db8ff35, transparent 32%),
+    linear-gradient(145deg, #183855, #111728);
+}
+.room-card-avatar {
+  display: grid !important;
+  width: 5rem;
+  height: 5rem;
+  place-items: center;
+  margin: 0 !important;
+  border: 1px solid #ffffff44;
+  border-radius: 50%;
+  background: #0b102088;
+  color: #fff !important;
+  font-size: 1.45rem !important;
+  font-weight: 900;
+  box-shadow: 0 16px 40px #03050b66;
+}
+.room-card-category {
+  position: absolute !important;
+  left: 0.8rem;
+  bottom: 0.75rem;
+  margin: 0 !important;
+  border: 1px solid #ffffff26;
+  border-radius: 999px;
+  background: #070a13aa;
+  color: #eef0f8 !important;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.68rem !important;
+  font-weight: 800;
+}
+.room-card-copy {
+  display: grid !important;
+  align-content: center;
+  gap: 0.35rem;
+  margin: 0 !important;
+  padding: 0.9rem 1rem 1rem;
+}
+.audience-discovery .room-card-copy strong {
+  max-width: none;
+  font-size: 1rem;
+}
+.audience-discovery .room-card-copy > span {
+  max-width: none;
+  margin: 0 !important;
+  color: #aab4cc !important;
+  font-size: 0.78rem !important;
+}
+.audience-room {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.78fr);
+  grid-template-areas:
+    "back back"
+    "media chat"
+    "heading chat"
+    "goal chat"
+    "support chat"
+    "social feed"
+    "gifts feed"
+    "profile wallet"
+    "private wallet";
+  gap: 0.85rem;
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(145deg, #101629, #0d1323);
+}
+.room-back {
+  grid-area: back;
+  justify-self: start;
+}
+.room-media-panel {
+  grid-area: media;
+  min-width: 0;
+}
+.room-media-panel .watching-live {
+  margin: 0 0 0.55rem;
+}
+.room-media-panel .player,
+.room-media-panel .player-placeholder {
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  margin: 0;
+  border-radius: 0.8rem;
+}
+.room-heading {
+  grid-area: heading;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0.15rem;
+}
+.room-heading h2,
+.room-heading p {
+  margin: 0.25rem 0;
+}
+.room-state {
+  flex: 0 0 auto;
+  border: 1px solid #2b3655;
+  border-radius: 999px;
+  color: #aab4cc;
+  padding: 0.38rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.room-state.state-live {
+  border-color: #ff4d6d;
+  background: #ff4d6d;
+  color: #fff;
+}
+.room-goal {
+  grid-area: goal;
+}
+.room-goal-compact {
+  margin: 0;
+}
+.audience-room > .support-actions {
+  grid-area: support;
+  margin: 0;
+}
+.audience-room > .public-support-feed {
+  grid-area: feed;
+  margin: 0;
+}
+.audience-room > .creator-profile {
+  grid-area: profile;
+  margin: 0;
+}
+.audience-room > .private-status {
+  grid-area: private;
+  margin: 0;
+}
+.room-social-actions {
+  grid-area: social;
+}
+.room-gift-tray {
+  grid-area: gifts;
+}
+.room-social-actions,
+.room-gift-tray {
+  margin: 0;
+  border: 1px solid #2b3655;
+  border-radius: 0.85rem;
+  background: #151b2e;
+  padding: 0.75rem;
+}
+.room-wallet {
+  grid-area: wallet;
+  margin: 0;
+}
+.room-chat {
+  grid-area: chat;
+  display: flex;
+  min-height: 520px;
+  flex-direction: column;
+  margin: 0;
+  background: #0e1425;
+}
+.room-chat .messages {
+  min-height: 280px;
+  max-height: none;
+  flex: 1;
+}
+
+@media (max-width: 980px) {
+  .audience-room {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "back"
+      "media"
+      "heading"
+      "goal"
+      "support"
+      "social"
+      "gifts"
+      "chat"
+      "feed"
+      "profile"
+      "private"
+      "wallet";
+  }
+  .room-chat {
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 700px) {
+  .role-audience > .product-header {
+    position: relative;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .role-audience .product-account > span {
+    display: none;
+  }
+  .audience-main-nav {
+    order: 3;
+    width: 100%;
+  }
+  .audience-main-nav button,
+  .audience-main-nav a {
+    flex: 1;
+    text-align: center;
+  }
+  .discovery-heading {
+    align-items: flex-start;
+  }
+  .audience-room {
+    padding: 0.7rem;
+  }
+  .room-media-panel .player,
+  .room-media-panel .player-placeholder {
+    min-height: 220px;
+  }
+  .room-heading {
+    align-items: flex-start;
+  }
+}
+
 /* Creator cockpit */
 .app.role-streamer {
   width: min(1480px, 100%);
@@ -1159,6 +1573,131 @@ p {
 }
 .creator-studio-heading > div:first-child > p:last-child {
   color: #aab4cc;
+}
+.creator-section-nav {
+  position: sticky;
+  z-index: 7;
+  top: 0;
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  margin: 0 -0.25rem 1rem;
+  padding: 0.35rem;
+  border: 1px solid #2b3655;
+  border-radius: 0.9rem;
+  background: #0b1020ee;
+  box-shadow: 0 12px 32px #02040c55;
+  backdrop-filter: blur(16px);
+  scrollbar-width: none;
+}
+.creator-section-nav::-webkit-scrollbar {
+  display: none;
+}
+.creator-section-nav button {
+  flex: 1 0 auto;
+  min-width: 7rem;
+  border: 0;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: #8994b0;
+  padding: 0.7rem 0.85rem;
+  font-weight: 800;
+  box-shadow: none;
+}
+.creator-section-nav button:hover {
+  background: #202a44;
+  color: #f7f8fc;
+}
+.creator-section-nav button.active {
+  background: linear-gradient(135deg, #7254ed, #5c43cf);
+  color: #fff;
+  box-shadow: 0 10px 24px #3d2b9866;
+}
+.creator-section {
+  animation: creator-section-enter 180ms ease-out;
+}
+.creator-config-page {
+  min-height: 36rem;
+  border: 1px solid #2b3655;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #12192c, #0f1526);
+  padding: 1rem;
+}
+.creator-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.creator-page-heading h3,
+.creator-page-heading p {
+  margin: 0.18rem 0;
+}
+.test-earnings-total {
+  border: 1px solid #f6b73c55;
+  border-radius: 999px;
+  background: #3a2a14;
+  color: #ffd982;
+  padding: 0.6rem 0.85rem;
+  white-space: nowrap;
+}
+.creator-tools-grid {
+  display: grid;
+  grid-template-columns: minmax(270px, 0.72fr) minmax(0, 1.5fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+.creator-action-workspace,
+.creator-obs-workspace {
+  overflow: hidden;
+  border: 1px solid #2b3655;
+  border-radius: 0.85rem;
+  background: #111728;
+}
+.creator-action-workspace .action-manager,
+.creator-obs-workspace .obs-readiness {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.creator-state-chip {
+  border: 1px solid #3a4568;
+  border-radius: 999px;
+  color: #aab4cc;
+  padding: 0.48rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.creator-state-chip.active {
+  border-color: #3ddc9777;
+  background: #17382e;
+  color: #7af0bd;
+}
+.creator-guidance-card {
+  display: grid;
+  align-content: center;
+}
+.creator-settings-operations {
+  padding: 0;
+}
+.creator-settings-operations + .creator-obs-workspace {
+  margin-top: 0.9rem;
+}
+.text-button {
+  border: 0;
+  background: transparent;
+  color: #b5a9ff;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 750;
+  box-shadow: none;
+  text-align: left;
+}
+@keyframes creator-section-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .creator-live-badge {
   display: flex;
@@ -1744,6 +2283,9 @@ p {
   .creator-broadcast-layout {
     grid-template-columns: 1fr;
   }
+  .creator-tools-grid {
+    grid-template-columns: 1fr;
+  }
   .creator-control-rail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1756,6 +2298,15 @@ p {
   }
 }
 @media (max-width: 620px) {
+  .app:not(.role-audience) > .product-header {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+  .app:not(.role-audience) > .product-header .product-account {
+    width: 100%;
+    justify-content: space-between;
+  }
   .creator-studio-heading,
   .creator-monitor-heading {
     align-items: flex-start;
@@ -1763,6 +2314,23 @@ p {
   }
   .creator-live-badge {
     width: 100%;
+  }
+  .creator-section-nav {
+    margin-right: -0.65rem;
+    margin-left: -0.65rem;
+    border-radius: 0.65rem;
+  }
+  .creator-section-nav button {
+    min-width: 6.2rem;
+    padding: 0.62rem 0.7rem;
+  }
+  .creator-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .creator-config-page {
+    min-height: 0;
+    padding: 0.8rem;
   }
   .creator-preview-toolbar > span {
     display: none;

@@ -17,6 +17,15 @@ npm run dev
 
 Open `http://localhost:5173` and API health at `http://127.0.0.1:3001/health`.
 
+## Verify the audience product shell locally
+
+1. Sign in with the synthetic audience account and confirm the compact header exposes Browse live, My activity, English/Chinese, and account controls.
+2. Confirm discovery shows truthful room-state badges, search/category controls, creator metadata, and original visual cards.
+3. Enter the seeded room and confirm the page opens at the top. At desktop width, the media surface must be left of chat; goal/support, gifts, recent support, creator profile, wallet, and private-show details follow below.
+4. At 390×844, verify discovery and the room become one readable column with no horizontal scrolling. Connecting, offline, and unavailable states must not display fake playback.
+5. Switch between English and Chinese and confirm the audience navigation, lifecycle labels, controls, and empty states update. Seeded creator-written titles/profile text may remain test content.
+6. Run `npm run verify:staging`, then reset synthetic data before release preparation. Browser review does not authorize a broadcast, Cloudflare change, Git push, or deployment.
+
 Use `docs/Launch-Acceptance-Checklist.md` for the repeatable human browser pass across audience, creator, administrator, English/Chinese, truthful media states, and final demo reset. It records browser evidence separately from the automated gates below.
 
 For the production-style private package, migration sequencing, readiness, backup/restore, upgrade, and rollback procedures, use `docs/Deployment-Runbook.md`.
@@ -71,13 +80,13 @@ The 2026-08-26 signed-WHEP repeat passed creator permission/private preview, WHI
 
 ## Verify the Creator Broadcast Cockpit locally
 
-1. Sign in as `demo-streamer` and confirm the video stage is the first operational surface below the compact header.
-2. In the collapsed technical-help section, use the local development selector to verify `offline`, `connecting`, `live`, and `unavailable`; no Cloudflare call is made.
-3. Confirm each state changes the stage, status badge, and OBS operating guidance without claiming playback when unavailable.
-4. Confirm Chat, Gifts & support, and Audience tabs render independently and the displayed audience count uses unique audience identities.
-5. Confirm room/profile/private-show settings remain available in Room setup, actions remain under Earning tools, and OBS troubleshooting remains under Technical help.
+1. Sign in as `demo-streamer` and confirm **Live** is selected by default. Camera/microphone permission, private preview, and the primary Go Live/End Broadcast path must appear before configuration tools.
+2. Visit Live, Earnings, Actions, Private Show, Profile, and Settings. Exactly one focused workspace should be visible, while the truthful broadcast badge remains available above navigation.
+3. In Settings, use the local development selector to verify `offline`, `connecting`, `live`, and `unavailable`; no Cloudflare call is made. Each state must update the Live surface without claiming playback when unavailable.
+4. In Live, confirm Chat, Gifts & support, and Audience tabs render independently and audience count uses unique audience identities. Confirm goal progress and support insight remain readable without opening settings.
+5. Confirm goal/action editing is under Actions, test summaries under Earnings, access controls under Private Show, audience-facing metadata under Profile, and OBS/moderation/local tools under Settings.
 6. Transition `live` to `offline` locally and confirm the owner-only session summary appears. An audience request to the same summary endpoint must be rejected.
-7. Check English and Chinese at desktop width and inspect the mobile layout at 390 px when a resizable browser surface is available.
+7. Check every workspace in English and Chinese at desktop width and at 390×844. The workspace navigation may scroll horizontally on phones, but the page must have no horizontal overflow and Quick Go Live content must not clip.
 8. Run `npm run verify:staging` and reset demo data. This local workflow does not authorize an encoder, Cloudflare usage, or Linux/public deployment.
 
 ## Activate the approved public Stream input
