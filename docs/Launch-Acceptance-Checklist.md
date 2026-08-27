@@ -58,7 +58,7 @@ Record the date, tester, build or commit identifier when one exists, browser/ver
 - [ ] Confirm camera video and microphone audio through the signed audience playback path, then manually stop the encoder.
 - [ ] Confirm the room returns offline, the audience player is hidden, and no encoder process remains.
 
-The 2026-08-24 approved physical-device run already proved encoded camera video, microphone audio, signed playback tracks, and offline recovery. A new release needs a new media run only when media-related code/configuration changes or the owner requests a human quality check.
+The 2026-08-24 approved physical-device run proved encoded camera video, microphone audio, signed HLS playback tracks, and offline recovery. The 2026-08-26 approved browser-native repeat additionally proved WHIP ingest, server-signed WHEP negotiation for creator/self-monitor and an isolated audience, real 640×480 playback with an advancing unmuted media clock, realtime ended behavior, provider disconnect, and demo reset. A new release needs a new media run only when media-related code/configuration changes or the owner requests a human quality check.
 
 ## Operational evidence and closeout
 

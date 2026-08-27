@@ -67,7 +67,7 @@ This test uses the existing Cloudflare Stream input and requires fresh owner con
 
 If WebRTC is unavailable, stop and use **Switch to professional OBS mode**. Do not silently mix browser WHIP publishing with HLS playback because Cloudflare currently requires WHIP/WHEP pairing.
 
-The 2026-08-26 physical Quick Go Live attempt passed creator permission, private preview, WHIP ingest, provider live/offline lifecycle, and teardown, but WHEP failed closed because the existing Live Input requires signed playback and no Stream signing key is configured. Before repeating step 5, the owner must separately approve either creating/installing a Stream signing key (recommended) or disabling `requireSignedURLs` on this test input. Never change that Cloudflare security setting merely to make a smoke test pass.
+The 2026-08-26 signed-WHEP repeat passed creator permission/private preview, WHIP ingest, provider live/offline lifecycle, server-signed creator and audience WHEP negotiation, real 640×480 playback with an advancing unmuted media clock, teardown, audience-ended behavior, and deterministic demo reset. The signing private JWK is Linux-only and must never be printed, copied to a browser, or committed. Every future physical broadcast still requires fresh immediate owner approval because it consumes Cloudflare Stream resources; audible quality must be confirmed by a human listener.
 
 ## Verify the Creator Broadcast Cockpit locally
 

@@ -14,7 +14,7 @@ Audience browser -- SDP --> Linux API -- SDP --> Cloudflare WHEP
 Audience browser <==== direct encrypted WebRTC media ===== Cloudflare
 ```
 
-The API discovers fixed provider endpoints with its account token and never returns those endpoints to browser code. It retains upstream resource locations only in process memory for bounded teardown. The database stores non-sensitive broadcast session identity, owner, room, transport, state, and timestamps. No SDP or provider URL is persisted.
+The API discovers fixed provider endpoints with its account token and never returns those endpoints to browser code. For a signed Live Input, it creates a five-minute RS256 token from the Linux-only Stream signing JWK and substitutes that token only into the WHEP endpoint before proxying SDP. It retains upstream resource locations only in process memory for bounded teardown. The database stores non-sensitive broadcast session identity, owner, room, transport, state, and timestamps. No signing material, SDP, or provider URL is persisted.
 
 Endpoint discovery is cached for five minutes and concurrent discovery requests share one provider call. Active browser sessions send an authenticated heartbeat every minute. If a tab crashes or disappears, the API terminates its in-memory upstream resource after three missed minutes. A signaling answer failure still retains the opaque local session identifier so the creator or viewer can clean up safely.
 
@@ -40,8 +40,10 @@ A button click never proves live status. The existing Cloudflare lifecycle polle
 - Production Compose build/migration/readiness/gateway/artifact gate: passed.
 - Git/Linux deployment: commit `6aa776d` deployed; migration `012` applied; API/web healthy; public HTTPS bundle and camera/microphone policy headers verified; demo data reset.
 - Physical creator proof: passed with the Logitech camera/microphone; private preview, WHIP publish, provider-confirmed live state, 3 minute 8 second session, explicit stop, provider disconnect, and offline recovery were observed.
-- Physical audience WHEP proof: blocked by the existing Live Input's `requireSignedURLs=true` setting. The current low-volume Stream token endpoint does not support Live WebRTC; a Stream signing key or an owner-approved test-input policy change is required before retrying.
+- Signed WHEP implementation: focused RS256 signature verification, exact endpoint-segment substitution, fail-closed production configuration, environment validation, activation handling, and secret-exposure tests passed.
+- Physical audience WHEP proof: passed after explicit owner approval created exactly one Stream signing key and installed its private JWK only on Linux. Creator/self-monitor and isolated-audience signaling returned success; the audience rendered real 640×480 playback at ready state 4 with an advancing, unmuted media clock.
+- Teardown proof: a 2 minute 2 second browser session ended explicitly, the creator and audience immediately returned offline, provider status was disconnected, logs contained no signing/playback fatal errors, and demo data was reset.
 
 ## Current limitation
 
-Cloudflare WebRTC is beta and currently requires WHIP publishing to use WHEP playback. Recording, simulcasting, provider analytics, and provider viewer counts are not part of this milestone. The assigned input also requires signed playback. Cloudflare's [signed URL documentation](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream/) says its low-volume token endpoint does not support Live WebRTC, so the production-safe WHEP path needs a signing key. OBS with signed HLS remains the fallback until that separately approved configuration is complete and operationally proven.
+Cloudflare WebRTC is beta and currently requires WHIP publishing to use WHEP playback. Recording, simulcasting, provider analytics, and provider viewer counts are not part of this milestone. The assigned input continues to require signed playback, and its private signing JWK must remain Linux-only. Automated evidence proves negotiation and decoded video behavior; a human listener must still judge subjective sound quality. OBS with signed HLS remains the professional fallback.

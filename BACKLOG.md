@@ -1,6 +1,6 @@
 # Stream MVP Backlog
 
-## Active P0 - Browser-Native Quick Go Live
+## Completed P0 - Browser-Native Quick Go Live
 
 - Implemented and deployed: explicit device permission, private preview, camera/microphone selection, microphone level, mute/camera controls, WHIP start, safe stop, and error recovery.
 - Implemented and deployed: server-only Cloudflare WebRTC endpoint discovery and signaling proxy; fixed WHIP/WHEP URLs, Stream token, account identifier, and SDP are excluded from browser logs and persistent browser storage.
@@ -8,7 +8,8 @@
 - Verified: existing production Live Input advertises WHIP and WHEP without modification; provider/client unit tests, schema and role tests, expanded workflows, full staging gate, English/Chinese browser review, and production Compose gate pass.
 - Published and deployed with owner approval as GitHub commit `6aa776d`; migration `012`, healthy API/web, public HTTPS assets and security headers, creator availability, read-only WHIP/WHEP capability, safe OBS default, and demo reset were verified.
 - Verified physically: Logitech camera/microphone permission and private preview, short WHIP broadcast, provider-confirmed live state, session summary, explicit stop, provider disconnect, offline recovery, and deterministic demo reset.
-- Blocked on owner approval: configure a Stream signing key for the existing `requireSignedURLs=true` Live Input, or explicitly disable signed playback for this test input, then verify WHEP audience audio/video and mute/camera controls end to end.
+- Completed with owner approval: created exactly one Stream signing key, installed its private JWK only in the ignored mode-600 Linux environment, deployed production-fail-closed signed WHEP, and verified successful creator/self-monitor and isolated-audience WHEP negotiations without exposing signing material.
+- Verified physically: real 640×480 audience video reached ready state 4 and its media clock advanced while unmuted; explicit End Broadcast immediately closed playback and returned both creator and audience to offline. Subjective sound quality remains an owner listening check.
 - Known gate: Cloudflare WHIP/WHEP remains beta and must be monitored; OBS/HLS remains the stable fallback.
 
 ## Completed P0 - Professional Creator Broadcast Cockpit

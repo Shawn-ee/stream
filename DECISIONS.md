@@ -10,11 +10,11 @@ Endpoint discovery is cached and concurrent requests are deduplicated so audienc
 
 Cloudflare WebRTC is beta and currently requires WHIP ingest to pair with WHEP playback. OBS/HLS therefore remains a visible professional fallback. A physical camera/audio broadcast and Linux deployment remain fresh owner-approval gates.
 
-## 2026-08-26 - Signed WHEP playback is a separate Cloudflare gate (P0)
+## 2026-08-26 - Server-generated signed WHEP playback (P0)
 
-The owner-approved physical browser test proved Logitech camera/microphone permission, private preview, WHIP publishing, provider-confirmed `live`, automatic lifecycle updates, explicit stop, provider `disconnected`, and local offline recovery. WHEP returned the existing secret-safe service-unavailable response because the assigned Live Input has `requireSignedURLs=true` and the application has no Stream signing key.
+The assigned Live Input keeps `requireSignedURLs=true`. With explicit owner approval, exactly one account Stream signing key was created and its private JWK was installed only in the ignored, mode-600 Linux production environment. The security setting was not weakened.
 
-Cloudflare documents that the low-volume `/token` endpoint used by the existing signed HLS path does not support Live WebRTC; signed WHEP requires locally generated tokens from a Stream signing key. Creating/installing that key or disabling `requireSignedURLs` changes Cloudflare security configuration and therefore remains owner-approval-required. Until one option is approved and tested, OBS/RTMPS with signed HLS is the verified audience-delivery fallback and Quick Go Live must not be called end-to-end complete.
+The API locally generates five-minute RS256 tokens whose subject is the assigned Live Input, substitutes the token only into the WHEP playback endpoint, and proxies SDP as before. The private JWK, key ID, fixed provider URL, and raw provider errors never enter browser responses. Production Quick Go Live fails closed unless the base Stream configuration and both signing fields are present. The owner-approved physical test proved successful signed WHEP negotiation, real audience video playback, explicit teardown, and offline recovery. OBS/RTMPS with signed HLS remains the professional fallback because Cloudflare WebRTC is beta.
 
 ## 2026-08-26 - Video-first creator cockpit (P0)
 

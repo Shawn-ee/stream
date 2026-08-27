@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-26 - Signed WHEP production completion
+
+- Added server-side five-minute RS256 Stream token generation for WHEP while retaining `requireSignedURLs=true`; production Quick Go Live now fails closed unless both the key ID and private JWK are configured.
+- Added signing-key environment validation, activation support, secret-exposure checks, URL-segment validation, cryptographic signature tests, and production-safe error handling. No signing material or fixed provider endpoint is returned to browsers.
+- Passed the complete local staging gate, production Compose gate, release preflight, focused signature/WHEP tests, and secret-safe production readiness checks.
+- With explicit owner approval, created exactly one Cloudflare Stream signing key and installed it only in the ignored mode-600 Linux production environment. Host-only environment, PostgreSQL, and source rollback artifacts were created first.
+- Published implementation commit `cad899a`, fast-forwarded the isolated Linux Stream checkout, rebuilt/recreated only the API container, and preserved the web, PostgreSQL, Redis, Tunnel, VM, and unrelated services.
+- Repeated the physical Logitech camera/microphone test: WHIP reached provider-confirmed Live, creator/self-monitor and isolated-audience signed WHEP requests succeeded, audience playback was 640×480 at ready state 4 with an advancing unmuted media clock, and the 2 minute 2 second session ended cleanly on both sides.
+- Confirmed provider Offline before and after the final demo reset, zero signing/playback fatal-error log lines, healthy Stream containers, and no secret exposure. Subjective sound quality remains a human listening check.
+
 ## 2026-08-26 - Browser-Native Quick Go Live launch candidate
 
 - Added creator-initiated browser camera/microphone permission, private preview, device selectors, microphone level, mute/camera controls, Go Live, and safe End Broadcast controls with full English/Chinese copy.

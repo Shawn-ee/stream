@@ -8,7 +8,7 @@ The existing applications on the host were not restarted or modified. Stream rem
 
 ## Exact source and host admission
 
-- Current application source: `6aa776def4b6f13da7d4ad237e6f9732aaa6caa5` on local branch `main`. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
+- Signed-WHEP implementation source: `cad899a3eaa0255b690f2520ce4d09c6d2a8cfdb` on local branch `main`. The initial deployment used `e1f64ad73e26792a84a94460afba50e0e16d5db3`.
 - Host: Ubuntu 20.04.6 LTS virtual machine, Linux AMD64.
 - Admission result: 8 logical CPUs, 11,964 MiB memory, 52 GiB free workspace disk, Git 2.25.1, Docker 26.1.3, Docker Compose 2.27.1, synchronized clock, and private gateway port available.
 - Production environment: mode `600`, generated distinct random secrets, public HTTPS origin through Cloudflare Tunnel, and an existing configured Cloudflare Stream Live Input.
@@ -34,6 +34,14 @@ The owner-approved inactive upgrade moved the public launch candidate to `6aa776
 With fresh owner approval, Chrome granted the deployed site access to the Logitech C270 camera and microphone. Creator Studio showed the selected devices and private preview, WHIP publishing reached Cloudflare `connected`, the application transitioned `connecting` to provider-confirmed `live`, and the creator session ran for 3 minutes 8 seconds. Explicit End Broadcast returned the UI offline and Cloudflare to `disconnected`; the persisted publisher session was ended normally.
 
 Audience WHEP signaling failed closed with the generic application error. A read-only input check established the precise configuration cause: the existing Live Input has `requireSignedURLs=true`, while the application has no Stream signing key and Cloudflare's low-volume playback-token endpoint does not support Live WebRTC. No Cloudflare setting was changed. The demo reset restored `obs_hls/offline`, removed all WebRTC session rows, and all Stream/Odoo services remained healthy. Signed WHEP configuration and the final audience audio/video proof remain owner-gated.
+
+### Signed-WHEP completion
+
+After a second explicit approval, exactly one Stream signing key was created. Its private JWK was installed only in `.env.production`, which remained mode `600`; the response was never printed or copied to Windows, and no secret entered Git. Production now requires both signing fields before exposing Quick Go Live and generates five-minute RS256 WHEP tokens inside the API.
+
+Before deployment, mode-600 environment, PostgreSQL, and source archives were created under the project-local ignored `backups` directory and checksummed. Commit `cad899a` was pushed and pulled with fast-forward-only. Only the API image was rebuilt and only the API container was recreated; web, PostgreSQL, Redis, Tunnel, VM, and unrelated workloads were left running.
+
+The repeat physical test used Chrome with the Logitech C270 camera and microphone. WHIP reached provider-confirmed Live. Creator self-monitor and an isolated signed-in audience both completed signed WHEP signaling through the public application. Audience media rendered at 640×480, ready state 4, unmuted and advancing from 29.183 to 31.709 seconds. Explicit End Broadcast ended the 2 minute 2 second session; the audience received `Broadcast ended`, both views returned Offline, provider readiness confirmed disconnected, demo data was reset, and all Stream containers remained healthy. This proves technical audio/video negotiation and decoded video delivery; subjective sound quality remains a human listening check.
 
 ## Creator cockpit public upgrade
 
