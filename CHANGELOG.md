@@ -1,12 +1,20 @@
 # Changelog
 
+## 2026-08-26 - Audience and creator UX public deployment
+
+- Published implementation commit `4f83934` to GitHub `main` and fast-forwarded the isolated Linux checkout in `/home/shawn/projects/stream/launch-candidate` to that exact source.
+- Created owner-only source and web-image rollback records inside the existing Stream backup directory before the update.
+- Rebuilt and recreated only `stream-launch-candidate-web-1`. API, PostgreSQL, Redis, Cloudflare Tunnel, the Linux VM, and unrelated applications were not recreated or restarted.
+- Verified the web/API health endpoints, database and Redis readiness, zero restart counts, public HTTPS 200 response, Cloudflare routing, new production asset hashes, and signed-out browser rendering without horizontal overflow.
+- No camera, microphone, broadcast, Cloudflare configuration, payment, identity, or database change occurred during this deployment.
+
 ## 2026-08-26 - Creator navigation and live-control consolidation
 
 - Replaced the remaining long creator dashboard with persistent Live, Earnings, Actions, Private Show, Profile, and Settings workspaces; only one focused operating surface is shown at a time.
 - Kept browser camera permission, private preview, Go Live/End Broadcast, truthful lifecycle, current goal, realtime chat/support/audience activity, and session metrics in the primary Live workflow.
 - Moved goal/action editing, test earnings summaries, private-show configuration, public profile editing, moderation, lifecycle refresh, OBS help, and local-state tools into dedicated sections without changing existing APIs or media behavior.
 - Moved signed-in language controls into the account header, corrected mobile header and Quick Go Live clipping, hid the horizontal navigation scrollbar while preserving touch/keyboard scrolling, and verified no page-level overflow at 390×844.
-- Passed the complete Cloudflare-free staging gate, all-section English/Chinese browser checks, and audience/admin regressions. Demo data was reset; no broadcast, Cloudflare change, Git push, or Linux deployment occurred.
+- Passed the complete Cloudflare-free staging gate, all-section English/Chinese browser checks, and audience/admin regressions. Demo data was reset and the reviewed UI was subsequently deployed without a broadcast or Cloudflare change.
 
 ## 2026-08-26 - Audience discovery and video-first room shell
 
@@ -14,7 +22,7 @@
 - Reorganized the audience room around a desktop video/chat split, followed by goal, support actions, gifts, recent support, profile, wallet, and private-show details. Offline and unavailable states remain truthful.
 - Moved the English/Chinese control into the audience account header, corrected legacy room-card and creator-header collisions, and made room entry/back navigation return to the top of the page.
 - Passed the complete Cloudflare-free staging gate plus desktop and 390×844 browser smoke tests. The responsive layouts have no horizontal overflow and the audience chrome was checked in English and Chinese.
-- This milestone is local only. It did not start a broadcast, change Cloudflare, push source, or deploy Linux.
+- The reviewed audience shell was subsequently published and deployed together with the creator navigation milestone without starting a broadcast or changing Cloudflare.
 
 ## 2026-08-26 - Signed WHEP production completion
 

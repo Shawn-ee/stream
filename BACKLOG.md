@@ -5,14 +5,14 @@
 - Completed locally: persistent signed-in audience navigation, clearer discovery hierarchy, original visual room cards, live-count/search/category controls, and compact access to audience activity.
 - Completed locally: desktop video/chat split with support, goal, gifts, public support activity, creator profile, wallet, and private-show details below the primary viewing surface.
 - Verified: full Cloudflare-free staging gate, English/Chinese audience chrome, desktop discovery/room review, 390×844 discovery/room review, corrected status badges, top-of-page room navigation, and no horizontal overflow.
-- Not deployed: the public Linux site remains on the last owner-approved release until a separate deployment approval.
+- Deployed with owner approval in implementation commit `4f83934`; public HTTPS, the new asset hashes, container health, and audience rendering passed.
 
 ## Completed P0 - Creator navigation and live-control consolidation
 
 - Completed locally: persistent Live, Earnings, Actions, Private Show, Profile, and Settings navigation with one focused workspace visible at a time.
 - Completed locally: camera permission/private preview and the primary Go Live/End Broadcast path remain first; goal, chat, support, audience presence, and session metrics stay visible in Live while configuration and technical help moved to dedicated sections.
 - Verified: all six sections in English and Chinese, desktop and 390×844 layouts, mobile card clipping and header fixes, no page-level horizontal overflow, complete staging gate, and audience/admin browser regressions.
-- Not deployed: existing APIs, media transport, Cloudflare configuration, payments, identity, and Linux production remain unchanged.
+- Deployed with owner approval in implementation commit `4f83934`; only the Stream web container was recreated, while existing APIs, media transport, Cloudflare configuration, payments, identity, and data services remained unchanged.
 
 ## Next P0 - Public discovery and low-friction test onboarding
 
