@@ -36,6 +36,8 @@ export function createTemporaryProductionEnvironment({ appPort }) {
     CLOUDFLARE_API_TOKEN: "",
     CLOUDFLARE_STREAM_CUSTOMER_CODE: "",
     CLOUDFLARE_STREAM_LIVE_INPUT_ID: "",
+    CLOUDFLARE_STREAM_SIGNING_KEY_ID: "",
+    CLOUDFLARE_STREAM_SIGNING_JWK: "",
   };
   validateProductionEnvironment(environment);
   mkdirSync("work", { recursive: true });

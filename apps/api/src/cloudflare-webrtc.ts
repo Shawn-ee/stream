@@ -1,5 +1,12 @@
 import {
+  createPrivateKey,
+  sign,
+  type JsonWebKey,
+  type KeyObject,
+} from "node:crypto";
+import {
   config,
+  hasCloudflareStreamSigningConfiguration,
   hasCloudflareStreamConfiguration,
   required,
 } from "./config.js";
@@ -25,6 +32,89 @@ const endpointCache = new Map<
   string,
   { expiresAt: number; request: Promise<WebRtcEndpoints> }
 >();
+let signingKeyCache:
+  | { encodedJwk: string; key: KeyObject }
+  | undefined;
+
+type SigningOptions = {
+  keyId?: string;
+  encodedJwk?: string;
+  nowSeconds?: number;
+  ttlSeconds?: number;
+};
+
+function base64Url(value: string | Buffer) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function privateSigningKey(encodedJwk: string) {
+  if (signingKeyCache?.encodedJwk === encodedJwk) return signingKeyCache.key;
+  let parsed: JsonWebKey;
+  try {
+    parsed = JSON.parse(Buffer.from(encodedJwk, "base64").toString("utf8"));
+  } catch {
+    throw new Error("webrtc_signing_unavailable");
+  }
+  if (parsed.kty !== "RSA" || !parsed.n || !parsed.e || !parsed.d)
+    throw new Error("webrtc_signing_unavailable");
+  try {
+    const key = createPrivateKey({ key: parsed, format: "jwk" });
+    signingKeyCache = { encodedJwk, key };
+    return key;
+  } catch {
+    throw new Error("webrtc_signing_unavailable");
+  }
+}
+
+export function createSignedStreamToken(
+  liveInputId: string,
+  options: SigningOptions = {},
+) {
+  const keyId = options.keyId ?? config.cloudflare.signingKeyId;
+  const encodedJwk = options.encodedJwk ?? config.cloudflare.signingJwk;
+  if (
+    (!options.keyId &&
+      !options.encodedJwk &&
+      !hasCloudflareStreamSigningConfiguration()) ||
+    !keyId ||
+    !encodedJwk ||
+    liveInputId.length < 16
+  )
+    throw new Error("webrtc_signing_unavailable");
+  const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
+  const ttlSeconds = options.ttlSeconds ?? 5 * 60;
+  if (!Number.isInteger(nowSeconds) || ttlSeconds < 30 || ttlSeconds > 15 * 60)
+    throw new Error("webrtc_signing_unavailable");
+  const header = base64Url(JSON.stringify({ alg: "RS256", kid: keyId }));
+  const payload = base64Url(
+    JSON.stringify({ sub: liveInputId, kid: keyId, exp: nowSeconds + ttlSeconds }),
+  );
+  const unsigned = `${header}.${payload}`;
+  const signature = sign(
+    "RSA-SHA256",
+    Buffer.from(unsigned),
+    privateSigningKey(encodedJwk),
+  );
+  return `${unsigned}.${base64Url(signature)}`;
+}
+
+export function createSignedWebRtcPlaybackUrl(
+  playbackUrl: string,
+  liveInputId: string,
+  options: SigningOptions = {},
+) {
+  const target = safeHttpsUrl(playbackUrl, "whep");
+  const segments = target.pathname.split("/");
+  const inputIndex = segments.findIndex(
+    (segment) => decodeURIComponent(segment) === liveInputId,
+  );
+  if (inputIndex < 1) throw new Error("webrtc_signing_unavailable");
+  segments[inputIndex] = createSignedStreamToken(liveInputId, options);
+  target.pathname = segments.join("/");
+  target.search = "";
+  target.hash = "";
+  return target.toString();
+}
 
 function validSdp(value: string) {
   return value.length >= 20 && value.length <= 60_000 && value.startsWith("v=0");

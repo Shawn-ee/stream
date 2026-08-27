@@ -8,6 +8,7 @@ import { createClient } from "redis";
 import { Server } from "socket.io";
 import { createPlaybackUrl } from "./cloudflare-stream.js";
 import {
+  createSignedWebRtcPlaybackUrl,
   endWebRtcResource,
   exchangeWebRtcOffer,
   readWebRtcEndpoints,
@@ -20,6 +21,7 @@ import {
 } from "./broadcast-status.js";
 import {
   config,
+  hasCloudflareQuickLiveConfiguration,
   hasCloudflareStreamConfiguration,
   required,
 } from "./config.js";
@@ -768,7 +770,7 @@ export function buildApi() {
         | DemoUser
         | undefined;
       if (!streamer) return;
-      if (!hasCloudflareStreamConfiguration())
+      if (!hasCloudflareQuickLiveConfiguration())
         return reply.code(503).send({ error: "webrtc_service_unavailable" });
       const offerSdp = request.body?.sdp;
       if (typeof offerSdp !== "string" || offerSdp.length > 60_000)
@@ -1018,7 +1020,7 @@ export function buildApi() {
       const user = await currentUser(request);
       if (!user)
         return reply.code(401).send({ error: "demo_session_required" });
-      if (!hasCloudflareStreamConfiguration())
+      if (!hasCloudflareQuickLiveConfiguration())
         return reply.code(503).send({ error: "webrtc_service_unavailable" });
       const offerSdp = request.body?.sdp;
       if (typeof offerSdp !== "string" || offerSdp.length > 60_000)
@@ -1064,7 +1066,11 @@ export function buildApi() {
       }
       try {
         const endpoints = await readWebRtcEndpoints(inputId);
-        const exchange = await exchangeWebRtcOffer(endpoints.playbackUrl, offerSdp);
+        const signedPlaybackUrl = createSignedWebRtcPlaybackUrl(
+          endpoints.playbackUrl,
+          inputId,
+        );
+        const exchange = await exchangeWebRtcOffer(signedPlaybackUrl, offerSdp);
         const sessionId = crypto.randomUUID();
         webRtcResources.set(sessionId, {
           resourceUrl: exchange.resourceUrl,
@@ -1786,7 +1792,7 @@ export function buildApi() {
         broadcastControls: {
           localFallbackEnabled: config.nodeEnv !== "production",
           cloudflareConfigured: hasCloudflareStreamConfiguration(),
-          browserQuickLiveAvailable: hasCloudflareStreamConfiguration(),
+          browserQuickLiveAvailable: hasCloudflareQuickLiveConfiguration(),
         },
       };
     } finally {

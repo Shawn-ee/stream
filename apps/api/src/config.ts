@@ -19,6 +19,8 @@ export const config = {
     apiToken: process.env.CLOUDFLARE_API_TOKEN,
     customerCode: process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE,
     liveInputId: process.env.CLOUDFLARE_STREAM_LIVE_INPUT_ID,
+    signingKeyId: process.env.CLOUDFLARE_STREAM_SIGNING_KEY_ID,
+    signingJwk: process.env.CLOUDFLARE_STREAM_SIGNING_JWK,
   },
   localBroadcastStatus: ([
     "live",
@@ -39,6 +41,25 @@ export function hasCloudflareStreamConfiguration(
       cloudflare.apiToken &&
       cloudflare.customerCode &&
       cloudflare.liveInputId,
+  );
+}
+
+export function hasCloudflareStreamSigningConfiguration(
+  cloudflare = config.cloudflare,
+): boolean {
+  return Boolean(
+    cloudflare.signingKeyId &&
+      cloudflare.signingKeyId.length >= 16 &&
+      cloudflare.signingJwk &&
+      cloudflare.signingJwk.length >= 100,
+  );
+}
+
+export function hasCloudflareQuickLiveConfiguration(): boolean {
+  return Boolean(
+    hasCloudflareStreamConfiguration() &&
+      (config.nodeEnv !== "production" ||
+        hasCloudflareStreamSigningConfiguration()),
   );
 }
 

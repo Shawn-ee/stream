@@ -31,6 +31,8 @@ function baseEnvironment() {
     CLOUDFLARE_API_TOKEN: "",
     CLOUDFLARE_STREAM_CUSTOMER_CODE: "",
     CLOUDFLARE_STREAM_LIVE_INPUT_ID: "",
+    CLOUDFLARE_STREAM_SIGNING_KEY_ID: "",
+    CLOUDFLARE_STREAM_SIGNING_JWK: "",
   };
 }
 
@@ -54,6 +56,30 @@ cloudflare.CLOUDFLARE_API_TOKEN = "test-token-shape-with-more-than-forty-charact
 cloudflare.CLOUDFLARE_STREAM_CUSTOMER_CODE = "customer-code";
 cloudflare.CLOUDFLARE_STREAM_LIVE_INPUT_ID = "live-input-id-with-safe-test-shape";
 assert.equal(validateProductionEnvironment(cloudflare).cloudflareEnabled, true);
+
+const signedCloudflare = { ...cloudflare };
+signedCloudflare.CLOUDFLARE_STREAM_SIGNING_KEY_ID = "abcdef0123456789abcdef0123456789";
+signedCloudflare.CLOUDFLARE_STREAM_SIGNING_JWK = Buffer.from(
+  JSON.stringify({
+    kty: "RSA",
+    n: "test",
+    e: "AQAB",
+    d: "private-test-material".repeat(8),
+  }),
+).toString("base64");
+assert.equal(validateProductionEnvironment(signedCloudflare).cloudflareEnabled, true);
+rejected(
+  {
+    CLOUDFLARE_STREAM_ENABLED: "true",
+    CLOUDFLARE_ACCOUNT_ID: cloudflare.CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN: cloudflare.CLOUDFLARE_API_TOKEN,
+    CLOUDFLARE_STREAM_CUSTOMER_CODE: cloudflare.CLOUDFLARE_STREAM_CUSTOMER_CODE,
+    CLOUDFLARE_STREAM_LIVE_INPUT_ID: cloudflare.CLOUDFLARE_STREAM_LIVE_INPUT_ID,
+    CLOUDFLARE_STREAM_SIGNING_KEY_ID:
+      signedCloudflare.CLOUDFLARE_STREAM_SIGNING_KEY_ID,
+  },
+  /configured together/,
+);
 
 rejected({ POSTGRES_PASSWORD: "short" }, /POSTGRES_PASSWORD is too short/);
 rejected({ DATABASE_URL: "postgresql://stream_mvp:wrong@postgres:5432/stream_mvp" }, /DATABASE_URL password/);

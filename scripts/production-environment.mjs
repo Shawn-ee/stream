@@ -24,6 +24,8 @@ export const productionEnvironmentNames = [
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_STREAM_CUSTOMER_CODE",
   "CLOUDFLARE_STREAM_LIVE_INPUT_ID",
+  "CLOUDFLARE_STREAM_SIGNING_KEY_ID",
+  "CLOUDFLARE_STREAM_SIGNING_JWK",
 ];
 
 export function parseEnvironment(content) {
@@ -147,6 +149,8 @@ export function validateProductionEnvironment(environment) {
     "CLOUDFLARE_API_TOKEN",
     "CLOUDFLARE_STREAM_CUSTOMER_CODE",
     "CLOUDFLARE_STREAM_LIVE_INPUT_ID",
+    "CLOUDFLARE_STREAM_SIGNING_KEY_ID",
+    "CLOUDFLARE_STREAM_SIGNING_JWK",
   ];
   if (cloudflareEnabled) {
     const accountId = required(environment, "CLOUDFLARE_ACCOUNT_ID");
@@ -154,6 +158,13 @@ export function validateProductionEnvironment(environment) {
     secret(environment, "CLOUDFLARE_API_TOKEN", 40);
     assert.ok(required(environment, "CLOUDFLARE_STREAM_CUSTOMER_CODE").length >= 8, "CLOUDFLARE_STREAM_CUSTOMER_CODE is too short");
     assert.ok(required(environment, "CLOUDFLARE_STREAM_LIVE_INPUT_ID").length >= 16, "CLOUDFLARE_STREAM_LIVE_INPUT_ID is too short");
+    const signingKeyId = environment.CLOUDFLARE_STREAM_SIGNING_KEY_ID;
+    const signingJwk = environment.CLOUDFLARE_STREAM_SIGNING_JWK;
+    assert.equal(Boolean(signingKeyId), Boolean(signingJwk), "Cloudflare Stream signing key fields must be configured together");
+    if (signingKeyId && signingJwk) {
+      assert.match(signingKeyId, /^[a-f0-9]{32}$/i, "CLOUDFLARE_STREAM_SIGNING_KEY_ID has an invalid shape");
+      secret(environment, "CLOUDFLARE_STREAM_SIGNING_JWK", 100);
+    }
   } else {
     for (const name of cloudflareNames)
       assert.equal(environment[name], "", `${name} must be blank when Cloudflare Stream is disabled`);

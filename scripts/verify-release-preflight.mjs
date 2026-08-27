@@ -100,6 +100,8 @@ for (const environmentFile of [".env.example", ".env.production.example"]) {
     "CLOUDFLARE_API_TOKEN",
     "CLOUDFLARE_STREAM_CUSTOMER_CODE",
     "CLOUDFLARE_STREAM_LIVE_INPUT_ID",
+    "CLOUDFLARE_STREAM_SIGNING_KEY_ID",
+    "CLOUDFLARE_STREAM_SIGNING_JWK",
   ]) {
     const value = content.match(new RegExp(`^${name}=(.+)$`, "m"))?.[1];
     assert.ok(value?.startsWith("replace-with-"), `${name} is not a placeholder`);

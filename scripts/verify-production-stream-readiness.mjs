@@ -71,6 +71,8 @@ for (const secret of [
   process.env.CLOUDFLARE_API_TOKEN,
   process.env.CLOUDFLARE_STREAM_LIVE_INPUT_ID,
   process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE,
+  process.env.CLOUDFLARE_STREAM_SIGNING_KEY_ID,
+  process.env.CLOUDFLARE_STREAM_SIGNING_JWK,
 ]) {
   if (secret) assert.equal(publicEvidence.includes(secret), false);
 }
