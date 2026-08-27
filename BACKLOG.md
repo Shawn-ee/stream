@@ -7,7 +7,8 @@
 - Implemented and deployed: room transport/session persistence, single-active-publisher enforcement, stale-session recovery, creator ownership, CSRF/rate limits, private-show-aware WHEP authorization, and OBS/HLS fallback.
 - Verified: existing production Live Input advertises WHIP and WHEP without modification; provider/client unit tests, schema and role tests, expanded workflows, full staging gate, English/Chinese browser review, and production Compose gate pass.
 - Published and deployed with owner approval as GitHub commit `6aa776d`; migration `012`, healthy API/web, public HTTPS assets and security headers, creator availability, read-only WHIP/WHEP capability, safe OBS default, and demo reset were verified.
-- Pending owner-assisted evidence: physical camera/microphone permission, short WHIP broadcast, provider-confirmed live state, WHEP audience audio/video, mute/camera controls, and stop/offline recovery.
+- Verified physically: Logitech camera/microphone permission and private preview, short WHIP broadcast, provider-confirmed live state, session summary, explicit stop, provider disconnect, offline recovery, and deterministic demo reset.
+- Blocked on owner approval: configure a Stream signing key for the existing `requireSignedURLs=true` Live Input, or explicitly disable signed playback for this test input, then verify WHEP audience audio/video and mute/camera controls end to end.
 - Known gate: Cloudflare WHIP/WHEP remains beta and must be monitored; OBS/HLS remains the stable fallback.
 
 ## Completed P0 - Professional Creator Broadcast Cockpit

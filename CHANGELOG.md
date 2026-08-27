@@ -10,7 +10,8 @@
 - Added deduplicated provider-endpoint caching, authenticated session heartbeats, bounded orphan cleanup, and answer-application recovery so failed or abandoned tabs do not strand publisher/viewer resources.
 - Passed read-only capability verification on the existing production input, focused provider/client/schema/role tests, the complete local staging gate, bilingual browser review, and the production Compose gate.
 - Published commit `6aa776d` and deployed it to the existing isolated Linux Stream project after creating host-only rollback artifacts. Migration `012` applied, only the Stream API/web containers were recreated, demo data was reset, and the public Cloudflare origin plus creator capability checks passed.
-- Physical camera/audio WHIP-to-WHEP proof remains a separate owner-assisted acceptance test; deployment did not request device permission or start a broadcast.
+- Ran an owner-approved physical browser test with the Logitech camera/microphone. Private preview, WHIP publishing, provider-confirmed live lifecycle, explicit stop, provider disconnect, and offline recovery passed during a 3 minute 8 second session.
+- WHEP correctly failed closed because the existing Live Input requires signed URLs and no Stream signing key is configured. Creating a signing key or disabling signed playback remains a separate Cloudflare security/configuration approval gate; demo data was reset after the test.
 
 ## 2026-08-26 - Creator cockpit public Linux deployment
 

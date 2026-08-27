@@ -29,6 +29,12 @@ The owner-approved inactive upgrade moved the public launch candidate to `6aa776
 - `https://holiwyn.online` returned HTTP 200 through Cloudflare, served the new Quick Go Live bundle, and returned `Permissions-Policy: camera=(self), microphone=(self), geolocation=()`. A read-only browser smoke test loaded the bilingual sign-in shell with no console errors.
 - Synthetic demo data was reset after deployment. Physical camera/audio WHIP-to-WHEP proof remains a separate owner-confirmed acceptance test.
 
+### Browser-native physical test
+
+With fresh owner approval, Chrome granted the deployed site access to the Logitech C270 camera and microphone. Creator Studio showed the selected devices and private preview, WHIP publishing reached Cloudflare `connected`, the application transitioned `connecting` to provider-confirmed `live`, and the creator session ran for 3 minutes 8 seconds. Explicit End Broadcast returned the UI offline and Cloudflare to `disconnected`; the persisted publisher session was ended normally.
+
+Audience WHEP signaling failed closed with the generic application error. A read-only input check established the precise configuration cause: the existing Live Input has `requireSignedURLs=true`, while the application has no Stream signing key and Cloudflare's low-volume playback-token endpoint does not support Live WebRTC. No Cloudflare setting was changed. The demo reset restored `obs_hls/offline`, removed all WebRTC session rows, and all Stream/Odoo services remained healthy. Signed WHEP configuration and the final audience audio/video proof remain owner-gated.
+
 ## Creator cockpit public upgrade
 
 The owner-approved upgrade moved the public launch candidate to `2a0ac1ef1a7ad6c52f573a3b530944a75ee7d4ee` using a reviewed GitHub push and a fast-forward-only pull on Linux.

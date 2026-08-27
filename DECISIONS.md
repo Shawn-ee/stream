@@ -10,6 +10,12 @@ Endpoint discovery is cached and concurrent requests are deduplicated so audienc
 
 Cloudflare WebRTC is beta and currently requires WHIP ingest to pair with WHEP playback. OBS/HLS therefore remains a visible professional fallback. A physical camera/audio broadcast and Linux deployment remain fresh owner-approval gates.
 
+## 2026-08-26 - Signed WHEP playback is a separate Cloudflare gate (P0)
+
+The owner-approved physical browser test proved Logitech camera/microphone permission, private preview, WHIP publishing, provider-confirmed `live`, automatic lifecycle updates, explicit stop, provider `disconnected`, and local offline recovery. WHEP returned the existing secret-safe service-unavailable response because the assigned Live Input has `requireSignedURLs=true` and the application has no Stream signing key.
+
+Cloudflare documents that the low-volume `/token` endpoint used by the existing signed HLS path does not support Live WebRTC; signed WHEP requires locally generated tokens from a Stream signing key. Creating/installing that key or disabling `requireSignedURLs` changes Cloudflare security configuration and therefore remains owner-approval-required. Until one option is approved and tested, OBS/RTMPS with signed HLS is the verified audience-delivery fallback and Quick Go Live must not be called end-to-end complete.
+
 ## 2026-08-26 - Video-first creator cockpit (P0)
 
 Creator Studio is an operating surface, not an administration dashboard. Its primary hierarchy is: signed audience-feed confidence monitor, truthful lifecycle/start guidance, realtime audience/support activity, then secondary configuration. The site does not claim it can start OBS or capture devices; the primary offline action confirms that the creator started streaming in OBS and performs a safe status refresh.

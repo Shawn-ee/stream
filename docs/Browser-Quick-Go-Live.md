@@ -39,8 +39,9 @@ A button click never proves live status. The existing Cloudflare lifecycle polle
 - English/Chinese Creator Studio browser review: passed without granting real media permission.
 - Production Compose build/migration/readiness/gateway/artifact gate: passed.
 - Git/Linux deployment: commit `6aa776d` deployed; migration `012` applied; API/web healthy; public HTTPS bundle and camera/microphone policy headers verified; demo data reset.
-- Physical camera/audio WHIP-to-WHEP proof: pending fresh owner confirmation.
+- Physical creator proof: passed with the Logitech camera/microphone; private preview, WHIP publish, provider-confirmed live state, 3 minute 8 second session, explicit stop, provider disconnect, and offline recovery were observed.
+- Physical audience WHEP proof: blocked by the existing Live Input's `requireSignedURLs=true` setting. The current low-volume Stream token endpoint does not support Live WebRTC; a Stream signing key or an owner-approved test-input policy change is required before retrying.
 
 ## Current limitation
 
-Cloudflare WebRTC is beta and currently requires WHIP publishing to use WHEP playback. Recording, simulcasting, provider analytics, and provider viewer counts are not part of this milestone. OBS with signed HLS remains the fallback until WebRTC is generally available and operationally proven.
+Cloudflare WebRTC is beta and currently requires WHIP publishing to use WHEP playback. Recording, simulcasting, provider analytics, and provider viewer counts are not part of this milestone. The assigned input also requires signed playback. Cloudflare's [signed URL documentation](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream/) says its low-volume token endpoint does not support Live WebRTC, so the production-safe WHEP path needs a signing key. OBS with signed HLS remains the fallback until that separately approved configuration is complete and operationally proven.

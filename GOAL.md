@@ -20,7 +20,7 @@ Completed locally on 2026-08-26. The feature-heavy Creator Studio scroll is now 
 
 The deployed launch candidate now includes an explicit creator-only camera/microphone permission flow, private preview, device selection, microphone level, mute/camera controls, WHIP publishing, WHEP audience playback, safe stop, transport-aware lifecycle, and an OBS/HLS fallback. The existing production Live Input passed a read-only WHIP/WHEP capability check. Fixed provider publishing and playback endpoints remain server-side because the Linux API proxies signaling only; audio/video media continues directly between browser and Cloudflare.
 
-Automated tests, the complete Cloudflare-free staging gate, bilingual browser review, production Compose gate, reviewed Git publication, migration `012`, controlled Linux deployment, public HTTPS checks, and inactive creator capability checks pass. Completion still requires fresh owner approval for one short physical camera/audio broadcast, separate-device audience confirmation, and clean stop/offline recovery.
+Automated tests, the complete Cloudflare-free staging gate, bilingual browser review, production Compose gate, reviewed Git publication, migration `012`, controlled Linux deployment, public HTTPS checks, and inactive creator capability checks pass. The owner-assisted physical test also proved browser camera/microphone permission, WHIP ingest, provider-confirmed live state, explicit stop, and offline recovery. Completion still requires an owner-approved signed-WHEP configuration choice because the existing Live Input has `requireSignedURLs=true`: install a Stream signing key, or disable signed playback on this test input, then confirm audience audio/video and mute/camera behavior.
 
 ## Product scope
 
