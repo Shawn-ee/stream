@@ -2,6 +2,8 @@
 
 ## Active frontend modernization
 
+- Dedicated broadcaster redesign completed locally: minimal desktop video/chat split, camera-first mobile setup/live layouts, essential media controls, incoming gifts in chat, compact health, safe ending, and simple ended summary. Physical-device and Cloudflare broadcast validation remains owner-assisted.
+
 - Phase 0 completed locally: audited React/Vite state routing, global CSS, authentication, discovery, room/chat/gift/follow/profile flows, Creator Studio, Socket.IO, WHIP/WHEP/HLS and API boundaries. See `docs/Frontend-Modernization-Implementation-Map.md`.
 - Phase 1 completed locally: semantic mobile-first design tokens, explicit 480/768/1024/1440 breakpoints, safe-area/touch/focus/reduced-motion rules, accessible modal and bottom-sheet primitives, loading skeletons, and discovery empty/loading states.
 - Phase 2 completed locally: recognizable Holiwyn audience header, inline creator search, collapsible desktop creator rail, truthful featured creator/live surface, light reusable stream cards, following integration, and responsive one/two/three/four-column behavior.

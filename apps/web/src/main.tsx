@@ -1,5 +1,6 @@
 import {
   StrictMode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -1336,21 +1337,30 @@ function CreatorApplication({ t }: { t: typeof copy.en }) {
     </section>
   );
 }
-function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
+function CreatorLiveMonitor({
+  slug,
+  t,
+  mobileOpen,
+  onMobileClose,
+  onViewerCountChange,
+}: {
+  slug: string;
+  t: typeof copy.en;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+  onViewerCountChange: (count: number) => void;
+}) {
   const [messages, setMessages] = useState<any[]>([]);
   const [participants, setParticipants] = useState<any[]>([]);
   const [gifts, setGifts] = useState<any[]>([]);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
-  const [giftSoundEnabled, setGiftSoundEnabled] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "support" | "audience">(
-    "chat",
-  );
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  const zh = t.title !== "Stream MVP";
   useEffect(() => {
-    void request(`/api/rooms/${slug}/chat-history`).then((d) =>
-      setMessages(d.messages),
-    );
+    void request(`/api/rooms/${slug}/chat-history`)
+      .then((d) => setMessages(d.messages))
+      .catch(() => setStatus(zh ? "暂时无法加载聊天记录。" : "Chat history is temporarily unavailable."));
     const socket = io({ transports: ["websocket"] });
     socketRef.current = socket;
     socket.on("connect", () => socket.emit("room:join", slug));
@@ -1363,12 +1373,11 @@ function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
     socket.on("chat:message", (d) =>
       setMessages((current) => [...current.slice(-39), d]),
     );
-    socket.on("gift:sent", (d) => {
-      if (giftSoundEnabled) playGiftTone(d.animationTier);
+    socket.on("gift:sent", (d) =>
       setGifts((current) =>
-        [{ ...d, createdAt: new Date().toISOString() }, ...current].slice(0, 8),
-      );
-    });
+        [...current.slice(-7), { ...d, createdAt: new Date().toISOString() }],
+      ),
+    );
     socket.on("gift:acknowledged", (d) =>
       setGifts((current) =>
         current.map((gift) =>
@@ -1381,21 +1390,16 @@ function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
     socket.on("action:purchased", (d) =>
       setGifts((current) =>
         [
-          {
-            ...d,
-            name: d.title,
-            createdAt: new Date().toISOString(),
-            action: true,
-          },
-          ...current,
-        ].slice(0, 8),
+          ...current.slice(-7),
+          { ...d, name: d.title, createdAt: new Date().toISOString(), action: true },
+        ],
       ),
     );
     return () => {
       socket.disconnect();
     };
-  }, [slug, giftSoundEnabled]);
-  const zh = t.title !== "Stream MVP";
+  }, [slug, zh]);
+  useEffect(() => onViewerCountChange(participants.length), [onViewerCountChange, participants.length]);
   function send(e: FormEvent) {
     e.preventDefault();
     if (!draft.trim() || !socketRef.current?.connected) return;
@@ -1407,176 +1411,41 @@ function CreatorLiveMonitor({ slug, t }: { slug: string; t: typeof copy.en }) {
     );
     setDraft("");
   }
-  async function moderate(targetId: string, action: "mute" | "unmute") {
-    await request(`/api/streamer/rooms/${slug}/moderation`, {
-      method: "POST",
-      body: JSON.stringify({ targetId, action }),
-    });
-  }
-  async function acknowledge(gift: any) {
-    const result = await request(
-      `/api/streamer/rooms/${slug}/gifts/${gift.giftTransactionId}/acknowledge`,
-      { method: "POST", body: JSON.stringify({ message: "thank_you" }) },
-    );
-    if (!result.duplicate)
-      setGifts((current) =>
-        current.map((item) =>
-          item.giftTransactionId === gift.giftTransactionId
-            ? { ...item, acknowledgement: result.acknowledgement }
-            : item,
-        ),
-      );
-  }
   return (
-    <div className="creator-monitor">
-      <div className="creator-monitor-heading">
-        <div>
-          <p className="eyebrow">{zh ? "实时互动" : "Live activity"}</p>
-          <h3>{zh ? "与观众保持联系" : "Stay connected to your room"}</h3>
-        </div>
+    <aside className={`broadcaster-chat ${mobileOpen ? "is-open" : ""}`} aria-label={zh ? "直播聊天" : "Live chat"}>
+      <header className="broadcaster-chat-header">
+        <div><span className="live-dot" /> <strong>{zh ? "直播聊天" : "LIVE CHAT"}</strong></div>
         <span className="presence-pill">
-          <i /> {participants.length} {zh ? "位观众" : "viewers"}
+          {participants.length} {zh ? "位观众" : "viewers"}
         </span>
-        <button type="button" className="secondary gift-sound-toggle" aria-pressed={giftSoundEnabled} onClick={() => setGiftSoundEnabled((current) => !current)}>{giftSoundEnabled ? (zh ? "礼物提示音：开" : "Gift sounds: on") : (zh ? "礼物提示音：关" : "Gift sounds: off")}</button>
-      </div>
-      <div className="creator-monitor-tabs" role="tablist">
-        <button
-          type="button"
-          className={activeTab === "chat" ? "active" : ""}
-          onClick={() => setActiveTab("chat")}
-        >
-          {zh ? "聊天" : "Chat"}
-        </button>
-        <button
-          type="button"
-          className={activeTab === "support" ? "active" : ""}
-          onClick={() => setActiveTab("support")}
-        >
-          {zh ? "礼物与支持" : "Gifts & support"}
-          {gifts.length ? <span>{gifts.length}</span> : null}
-        </button>
-        <button
-          type="button"
-          className={activeTab === "audience" ? "active" : ""}
-          onClick={() => setActiveTab("audience")}
-        >
-          {zh ? "观众" : "Audience"}
-        </button>
-      </div>
-      {activeTab === "chat" ? (
-        <div className="creator-monitor-panel">
-          <div className="messages">
-            {messages.length ? (
-              messages.map((message) => (
-                <p key={message.id}>
-                  <strong>{message.sender.displayName}</strong> {message.body}
-                </p>
-              ))
-            ) : (
-              <div className="creator-empty-state">
-                <strong>{zh ? "聊天会显示在这里" : "Chat will appear here"}</strong>
-                <span>
-                  {zh
-                    ? "开播后向第一位观众打个招呼。"
-                    : "Say hello when your first viewer arrives."}
-                </span>
-              </div>
-            )}
+        <button type="button" className="broadcaster-chat-close" onClick={onMobileClose} aria-label={zh ? "关闭聊天" : "Close chat"}>×</button>
+      </header>
+      <div className="broadcaster-chat-feed" aria-live="polite">
+        {!messages.length && !gifts.length ? (
+          <div className="creator-empty-state">
+            <strong>{zh ? "聊天会显示在这里" : "Chat will appear here"}</strong>
+            <span>{zh ? "开播后向第一位观众打个招呼。" : "Say hello when your first viewer arrives."}</span>
           </div>
-          <form className="creator-chat-form" onSubmit={send}>
-            <input
-              value={draft}
-              maxLength={500}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={zh ? "给直播间发送消息" : "Message your room"}
-            />
-            <button>{zh ? "发送" : "Send"}</button>
-          </form>
-          {status && <p className="error">{status}</p>}
-        </div>
-      ) : null}
-      {activeTab === "support" ? (
-        <div className="creator-monitor-panel support-timeline">
-          {gifts.length ? (
-            gifts.map((gift) => (
-              <article key={gift.eventId ?? gift.id}>
-                <span className={gift.action ? "support-icon action" : "support-icon"}>
-                  {gift.action ? "⚡" : gift.symbol ?? "◆"}
-                </span>
-                <div>
-                  <strong>{gift.sender}</strong>
-                  <p>
-                    {gift.action
-                      ? zh
-                        ? "购买了互动动作"
-                        : "purchased an action"
-                      : zh
-                        ? "送出了礼物"
-                        : "sent a gift"}{" "}
-                    · {zh ? gift.nameZh ?? gift.name : gift.nameEn ?? gift.name}
-                    {gift.quantity > 1 ? ` ×${gift.quantity}` : ""}
-                    {gift.comboCount > 1 ? ` · COMBO ×${gift.comboCount}` : ""}
-                  </p>
-                </div>
-                <b>
-                  +{gift.cost} {t.coins}
-                </b>
-                {!gift.action ? (
-                  gift.acknowledgement ? <span className="gift-acknowledged">{zh ? "已感谢" : "Thanked"}</span> : <button type="button" className="secondary" onClick={() => void acknowledge(gift)}>{zh ? "感谢" : "Thank"}</button>
-                ) : null}
-              </article>
-            ))
-          ) : (
-            <div className="creator-empty-state">
-              <strong>{zh ? "等待第一份支持" : "Waiting for your first support"}</strong>
-              <span>
-                {zh
-                  ? "礼物和互动动作会实时出现在这里。"
-                  : "Gifts and action purchases appear here in real time."}
-              </span>
-            </div>
-          )}
-        </div>
-      ) : null}
-      {activeTab === "audience" ? (
-        <div className="creator-monitor-panel participant-roster">
-          {participants.length ? (
-            participants.map((participant) => (
-              <article key={participant.id}>
-                <span className="viewer-avatar">
-                  {participant.displayName.slice(0, 1).toUpperCase()}
-                </span>
-                <strong>{participant.displayName}</strong>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => void moderate(participant.id, "mute")}
-                  >
-                    {zh ? "禁言" : "Mute"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void moderate(participant.id, "unmute")}
-                  >
-                    {zh ? "解除" : "Unmute"}
-                  </button>
-                </div>
-              </article>
-            ))
-          ) : (
-            <div className="creator-empty-state">
-              <strong>{zh ? "直播间里还没有观众" : "No viewers in the room yet"}</strong>
-              <span>{zh ? "观众加入后会显示在这里。" : "Viewers appear here as they join."}</span>
-            </div>
-          )}
-        </div>
-      ) : null}
-      <CreatorSessionInsights
-        slug={slug}
-        audienceCount={participants.length}
-        t={t}
-      />
-    </div>
+        ) : null}
+        {messages.map((message) => (
+          <p className={`broadcaster-chat-message ${message.sender?.role === "streamer" ? "creator" : ""}`} key={message.id}>
+            <strong>{message.sender.displayName}</strong><span>{message.body}</span>
+          </p>
+        ))}
+        {gifts.map((gift) => (
+          <p className="broadcaster-gift-event" key={gift.eventId ?? gift.id}>
+            <span aria-hidden="true">{gift.action ? "⚡" : gift.symbol ?? "◆"}</span>
+            <strong>{gift.sender}</strong>
+            <span>{gift.action ? (zh ? "购买了" : "purchased") : (zh ? "送出了" : "sent")} {zh ? gift.nameZh ?? gift.name : gift.nameEn ?? gift.name}{gift.quantity > 1 ? ` ×${gift.quantity}` : ""}</span>
+          </p>
+        ))}
+      </div>
+      <form className="broadcaster-chat-form" onSubmit={send}>
+        <input value={draft} maxLength={500} onChange={(event) => setDraft(event.target.value)} placeholder={zh ? "输入消息…" : "Type message…"} />
+        <button>{zh ? "发送" : "Send"}</button>
+      </form>
+      {status ? <p className="error broadcaster-chat-error">{status}</p> : null}
+    </aside>
   );
 }
 function CreatorSessionInsights({
@@ -1955,14 +1824,34 @@ type QuickLivePhase =
   | "preview"
   | "connecting"
   | "live"
+  | "ending"
+  | "ended"
   | "error";
 
 type BroadcastConnectionHealth =
   | "ready"
   | "connecting"
   | "excellent"
+  | "weak"
   | "reconnecting"
   | "unavailable";
+
+type BroadcasterRuntime = {
+  phase: QuickLivePhase;
+  health: BroadcastConnectionHealth;
+  duration: string;
+};
+
+function BroadcastIcon({ name }: { name: "microphone" | "camera" | "flip" | "chat" | "stop" }) {
+  const paths = {
+    microphone: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" /></>,
+    camera: <><rect x="3" y="6" width="18" height="13" rx="3" /><path d="m8 6 1.5-3h5L16 6M9 12.5l2 2 4-4" /></>,
+    flip: <><path d="M4 8a8 8 0 0 1 13-3l2 2M20 16a8 8 0 0 1-13 3l-2-2" /><path d="M19 3v4h-4M5 21v-4h4" /></>,
+    chat: <path d="M4 4h16v12H9l-5 4V4Z" />,
+    stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+  };
+  return <svg className="broadcast-control-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
 
 function VideoActivityOverlay({
   messages,
@@ -2067,6 +1956,9 @@ function QuickGoLive({
   onTitleChange,
   onSaveTitle,
   overlay,
+  viewerCount,
+  onRuntimeChange,
+  onChatOpen,
 }: {
   slug: string;
   available: boolean;
@@ -2078,6 +1970,9 @@ function QuickGoLive({
   onTitleChange: (title: string) => void;
   onSaveTitle: () => Promise<void>;
   overlay?: ReactNode;
+  viewerCount: number;
+  onRuntimeChange: (runtime: BroadcasterRuntime) => void;
+  onChatOpen: () => void;
 }) {
   const zh = t.title !== "Stream MVP";
   const [phase, setPhase] = useState<QuickLivePhase>("idle");
@@ -2093,6 +1988,8 @@ function QuickGoLive({
   const [error, setError] = useState("");
   const [endConfirmationOpen, setEndConfirmationOpen] = useState(false);
   const [liveStartedAt, setLiveStartedAt] = useState<number | null>(null);
+  const [lastDuration, setLastDuration] = useState("00:00");
+  const [peakViewers, setPeakViewers] = useState(0);
   const [clock, setClock] = useState(Date.now());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controllerRef = useRef<WebRtcController | null>(null);
@@ -2325,6 +2222,8 @@ function QuickGoLive({
     }
   }
   async function endBroadcast() {
+    setPhase("ending");
+    setLastDuration(duration);
     const sessionId = sessionIdRef.current;
     controllerRef.current?.close();
     controllerRef.current = null;
@@ -2335,7 +2234,7 @@ function QuickGoLive({
       }).catch(() => undefined);
     stopMediaStream(streamRef.current);
     setStream(null);
-    setPhase("idle");
+    setPhase("ended");
     setConnectionHealth("ready");
     setLiveStartedAt(null);
     setEndConfirmationOpen(false);
@@ -2358,6 +2257,7 @@ function QuickGoLive({
   const sessionActive =
     phase === "connecting" ||
     phase === "live" ||
+    phase === "ending" ||
     (phase === "error" && Boolean(sessionIdRef.current));
   const durationSeconds = liveStartedAt
     ? Math.max(0, Math.floor((clock - liveStartedAt) / 1_000))
@@ -2369,9 +2269,14 @@ function QuickGoLive({
     ready: zh ? "准备就绪" : "Ready",
     connecting: zh ? "正在连接" : "Connecting",
     excellent: zh ? "连接良好" : "Excellent",
+    weak: zh ? "连接较弱" : "Weak",
     reconnecting: zh ? "正在重新连接" : "Reconnecting",
     unavailable: zh ? "连接不可用" : "Unavailable",
   };
+  useEffect(() => {
+    if (phase === "live") setPeakViewers((current) => Math.max(current, viewerCount));
+    onRuntimeChange({ phase, health: connectionHealth, duration });
+  }, [connectionHealth, duration, onRuntimeChange, phase, viewerCount]);
   return (
     <section className={`quick-live-panel phase-${phase}`} id="quick-go-live">
       <div className="quick-live-heading">
@@ -2379,7 +2284,7 @@ function QuickGoLive({
           <p className="eyebrow">{zh ? "快速开播" : "Quick Go Live"}</p>
           <h3>{zh ? "直接使用浏览器开播" : "Broadcast directly from your browser"}</h3>
         </div>
-        <span>{phase === "live" ? (zh ? "直播中" : "LIVE") : zh ? "私密预览" : "Private preview"}</span>
+        <span>{phase === "live" ? (zh ? "直播中" : "LIVE") : zh ? "开播预览" : "Broadcast preview"}</span>
       </div>
       <div className="quick-live-video-shell">
         {stream ? (
@@ -2393,19 +2298,26 @@ function QuickGoLive({
         <div className="broadcast-stage-status" aria-live="polite">
           <span className={`broadcast-health-dot health-${connectionHealth}`} />
           <strong>{healthLabel[connectionHealth]}</strong>
-          {phase === "live" ? <time>{duration}</time> : null}
+          {phase === "live" ? <><time>{duration}</time><span className="stage-viewers" aria-label={zh ? `${viewerCount} 位观众` : `${viewerCount} viewers`}>◉ {viewerCount}</span></> : null}
         </div>
         {stream ? (
           <div className="broadcast-stage-controls">
             {cameras.length > 1 ? (
-              <button type="button" onClick={() => void switchCamera()} aria-label={zh ? "切换相机" : "Switch camera"}>↻</button>
+              <button type="button" onClick={() => void switchCamera()} aria-label={zh ? "切换相机" : "Switch camera"}><BroadcastIcon name="flip" /></button>
             ) : null}
-            <button type="button" onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}>{microphoneEnabled ? "🎤" : "🔇"}</button>
+            <button type="button" className={!microphoneEnabled ? "is-off" : ""} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /></button>
           </div>
         ) : null}
-        {overlay}
+        {phase === "live" ? overlay : null}
       </div>
-      {stream && !sessionActive ? (
+      {phase === "ended" ? (
+        <div className="broadcast-ended-summary">
+          <span className="broadcast-ended-icon" aria-hidden="true">✓</span>
+          <h4>{zh ? "直播已结束" : "Stream ended"}</h4>
+          <p>{zh ? `时长 ${lastDuration} · 峰值观众 ${peakViewers}` : `Duration ${lastDuration} · Peak viewers ${peakViewers}`}</p>
+          <button type="button" className="creator-primary-action" onClick={() => { setPeakViewers(0); setPhase("idle"); }}>{zh ? "完成" : "Done"}</button>
+        </div>
+      ) : stream && !sessionActive ? (
         <>
           <div className="broadcast-setup-heading">
             <div>
@@ -2444,9 +2356,9 @@ function QuickGoLive({
             </div>
           </div>
           <div className="quick-live-controls">
-            <button type="button" className="secondary" onClick={toggleCamera}>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</button>
-            <button type="button" className="secondary" onClick={toggleMicrophone}>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</button>
-            <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim()}>{zh ? "开始直播" : "Go Live"}</button>
+            <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
+            <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
+            <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim()}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
           </div>
         </>
       ) : stream && sessionActive ? (
@@ -2457,10 +2369,11 @@ function QuickGoLive({
             <span><small>{zh ? "麦克风" : "Microphone"}</small><strong>{microphoneEnabled ? (zh ? "开启" : "On") : zh ? "静音" : "Muted"}</strong></span>
           </div>
           <div className="quick-live-controls live-controls">
-            {cameras.length > 1 ? <button type="button" className="secondary" onClick={() => void switchCamera()}>{zh ? "切换相机" : "Switch camera"}</button> : null}
-            <button type="button" className="secondary" onClick={toggleCamera}>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</button>
-            <button type="button" className="secondary" onClick={toggleMicrophone}>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</button>
-            <button type="button" className="danger" onClick={() => setEndConfirmationOpen(true)}>{zh ? "结束直播" : "End live"}</button>
+            <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
+            <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
+            {cameras.length > 1 ? <button type="button" className="secondary" onClick={() => void switchCamera()}><BroadcastIcon name="flip" /><span>{zh ? "切换相机" : "Flip"}</span></button> : null}
+            <button type="button" className="secondary mobile-chat-trigger" onClick={onChatOpen}><BroadcastIcon name="chat" /><span>{zh ? "聊天" : "Chat"}</span></button>
+            <button type="button" className="danger" onClick={() => setEndConfirmationOpen(true)}><BroadcastIcon name="stop" /><span>{zh ? "结束直播" : "End stream"}</span></button>
           </div>
         </div>
       ) : (
@@ -2768,6 +2681,15 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
   const [activeSection, setActiveSection] = useState<
     "live" | "earnings" | "actions" | "private" | "profile" | "settings"
   >("live");
+  const [viewerCount, setViewerCount] = useState(0);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [runtime, setRuntime] = useState<BroadcasterRuntime>({
+    phase: "idle",
+    health: "ready",
+    duration: "00:00",
+  });
+  const updateRuntime = useCallback((next: BroadcasterRuntime) => setRuntime(next), []);
+  const updateViewerCount = useCallback((count: number) => setViewerCount(count), []);
   const refresh = () =>
     void request("/api/streamer/studio").then((d) => {
       setStudio(d);
@@ -2917,59 +2839,25 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
     Math.round((room.goal_progress / Math.max(1, room.goal_target)) * 100),
   );
   return (
-    <section className="workspace creator-studio">
-      <div className="creator-studio-heading">
-        <div>
-          <p className="eyebrow">{zh ? "主播控制台" : "Creator cockpit"}</p>
-          <h2>{zh ? "准备并管理您的直播" : "Run your live session"}</h2>
-          <p>
-            {zh
-              ? "画面、观众互动与收益集中在一个清晰的工作区。"
-              : "Your broadcast, audience activity, and support in one focused workspace."}
-          </p>
+    <section className={`workspace creator-studio broadcaster-runtime-${runtime.phase}`}>
+      <header className="broadcaster-header">
+        <strong className="broadcaster-brand">HOLIWYN</strong>
+        <div className="broadcaster-session-state" aria-live="polite">
+          <span className={runtime.phase === "live" ? "is-live" : ""}>
+            <i /> {runtime.phase === "live" ? (zh ? "直播中" : "LIVE") : runtime.phase === "connecting" ? (zh ? "正在开播" : "STARTING") : runtime.phase === "ending" ? (zh ? "正在结束" : "ENDING") : (zh ? "开始直播" : "GO LIVE")}
+          </span>
+          <time>{runtime.duration}</time>
+          <span className="broadcaster-viewers">◉ {viewerCount}</span>
         </div>
-        <div className={`creator-live-badge state-${broadcastState}`}>
-          <span />
-          <div>
-            <small>{zh ? "直播状态" : "Broadcast status"}</small>
-            <strong>{broadcastLabel(t, broadcastState)}</strong>
-          </div>
-        </div>
-      </div>
-
-      <nav
-        className="creator-section-nav"
-        aria-label={zh ? "主播工作区导航" : "Creator workspace navigation"}
-      >
-        {(
-          [
-            ["live", zh ? "直播" : "Live"],
-            ["earnings", zh ? "收益" : "Earnings"],
-            ["actions", zh ? "互动动作" : "Actions"],
-            ["private", zh ? "私密直播" : "Private Show"],
-            ["profile", zh ? "主页" : "Profile"],
-            ["settings", zh ? "设置" : "Settings"],
-          ] as const
-        ).map(([section, label]) => (
-          <button
-            key={section}
-            type="button"
-            className={activeSection === section ? "active" : ""}
-            aria-current={activeSection === section ? "page" : undefined}
-            onClick={() => {
-              setActiveSection(section);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+        <button type="button" className="broadcaster-profile-button" onClick={() => setActiveSection((current) => current === "profile" ? "live" : "profile")}>
+          {activeSection === "profile" ? (zh ? "返回直播" : "Back to live") : (zh ? "主页" : "Profile")}
+        </button>
+      </header>
 
       {activeSection === "live" ? (
-      <div className="creator-section creator-live-section">
-      <div className="creator-broadcast-layout">
-        <div className="creator-stage-column">
+      <div className={`creator-section broadcaster-page phase-${runtime.phase}`}>
+        <div className="broadcaster-layout">
+          <main className="broadcaster-stage">
           <QuickGoLive
             slug={room.slug}
             available={Boolean(studio.broadcastControls?.browserQuickLiveAvailable)}
@@ -2987,131 +2875,27 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
               setNotice(zh ? "直播标题已保存。" : "Stream title saved.");
             }}
             overlay={<CreatorRealtimeOverlay slug={room.slug} t={t} />}
+            viewerCount={viewerCount}
+            onRuntimeChange={updateRuntime}
+            onChatOpen={() => setMobileChatOpen(true)}
           />
-          {broadcastState !== "offline" ? (
-            <CreatorBroadcastPreview
-              slug={room.slug}
-              state={broadcastState}
-              transport={room.broadcast_transport}
-              configured={studio.broadcastControls?.cloudflareConfigured}
-              t={t}
-            />
-          ) : null}
-          <div className="creator-session-metrics">
-            <div>
-              <span>{zh ? "当前状态" : "Current state"}</span>
-              <strong>{broadcastLabel(t, broadcastState)}</strong>
+            <div className="broadcaster-stream-bar">
+              <span>{title || (zh ? "未命名直播" : "Untitled stream")}</span>
+              <span className={`compact-health health-${runtime.health}`}><i /> {runtime.health === "excellent" ? (zh ? "连接良好" : "Excellent") : runtime.health === "reconnecting" ? (zh ? "正在重新连接" : "Reconnecting") : runtime.health === "weak" ? (zh ? "连接较弱" : "Weak") : runtime.health === "connecting" ? (zh ? "正在连接" : "Connecting") : runtime.health === "unavailable" ? (zh ? "连接不可用" : "Unavailable") : (zh ? "准备就绪" : "Ready")}</span>
             </div>
-            <div>
-              <span>{zh ? "本地测试收益" : "Test earnings"}</span>
-              <strong>
-                {room.test_earnings} <small>{t.coins}</small>
-              </strong>
-            </div>
-            <div>
-              <span>{zh ? "目标进度" : "Goal progress"}</span>
-              <strong>{goalPercent}%</strong>
-            </div>
-            <div>
-              <span>{zh ? "关注者" : "Followers"}</span>
-              <strong>{room.followers}</strong>
-            </div>
-          </div>
+          </main>
+          <CreatorLiveMonitor
+            slug={room.slug}
+            t={t}
+            mobileOpen={mobileChatOpen}
+            onMobileClose={() => setMobileChatOpen(false)}
+            onViewerCountChange={updateViewerCount}
+          />
         </div>
-
-        <aside className="creator-control-rail">
-          <div className="control-rail-section">
-            <p className="eyebrow">{zh ? "开播流程" : "Go live"}</p>
-            <h3>
-              {broadcastState === "live"
-                ? zh
-                  ? "您的直播已上线"
-                  : "Your broadcast is live"
-                : zh
-                  ? "使用浏览器快速开播"
-                  : "Go live from your browser"}
-            </h3>
-            <p className="muted">
-              {creatorBroadcastMessage(t, broadcastState)}
-            </p>
-            <ol className="go-live-steps">
-              <li className="complete">
-                <span>1</span>
-                {zh ? "允许相机和麦克风" : "Allow camera and microphone"}
-              </li>
-              <li className="complete">
-                <span>2</span>
-                {zh ? "检查私密预览和音量" : "Check your private preview and audio"}
-              </li>
-              <li className={broadcastState === "live" ? "complete" : ""}>
-                <span>3</span>
-                {broadcastState === "live"
-                  ? zh
-                    ? "观众已可观看"
-                    : "Audience playback ready"
-                  : zh
-                    ? "点击“开始直播”"
-                    : "Select Go Live"}
-              </li>
-            </ol>
-            <a className="creator-primary-action" href="#quick-go-live">
-              {broadcastState === "live"
-                ? zh
-                  ? "查看直播控制"
-                  : "View live controls"
-                : zh
-                  ? "打开快速开播"
-                  : "Open Quick Go Live"}
-            </a>
-            <button type="button" className="secondary" onClick={() => void refreshBroadcast()} disabled={!studio.broadcastControls?.cloudflareConfigured}>
-              {zh ? "刷新直播状态" : "Refresh broadcast status"}
-            </button>
-            {!studio.broadcastControls?.cloudflareConfigured ? (
-              <p className="control-note">
-                {zh
-                  ? "此本地环境未连接直播服务；仍可测试全部界面状态。"
-                  : "This local environment is not connected to the broadcast service; all interface states remain testable."}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="control-rail-section quick-goal">
-            <div className="section-title-row">
-              <div>
-                <p className="eyebrow">{zh ? "直播目标" : "Live goal"}</p>
-                <h3>{room.goal_text}</h3>
-              </div>
-              <strong>{goalPercent}%</strong>
-            </div>
-            <div className="progress-track">
-              <span style={{ width: `${goalPercent}%` }} />
-            </div>
-            <small>
-              {room.goal_progress} / {room.goal_target} {t.coins}
-            </small>
-            <button type="button" onClick={() => setActiveSection("actions")}>
-              {zh ? "管理目标与互动动作" : "Manage goal and actions"}
-            </button>
-          </div>
-
-          <div className="control-rail-section broadcast-health">
-            <div>
-              <span>{zh ? "上次状态检查" : "Last status check"}</span>
-              <strong>
-                {room.broadcast_checked_at
-                  ? new Date(room.broadcast_checked_at).toLocaleTimeString()
-                  : "—"}
-              </strong>
-            </div>
-            <button type="button" className="text-button" onClick={() => setActiveSection("settings")}>
-              {zh ? "查看 OBS 设置帮助" : "View OBS setup help"}
-            </button>
-          </div>
-        </aside>
-      </div>
-
-      <CreatorLiveMonitor slug={room.slug} t={t} />
-      <CreatorSessionSummary slug={room.slug} state={broadcastState} t={t} />
+        {!studio.broadcastControls?.cloudflareConfigured ? (
+          <p className="control-note broadcaster-service-note">{zh ? "此环境可测试相机预览，但浏览器直播服务尚未连接。" : "Camera preview is available, but browser broadcasting is not connected in this environment."}</p>
+        ) : null}
+        {notice ? <p className="form-notice broadcaster-notice">{notice}</p> : null}
       </div>
       ) : null}
 

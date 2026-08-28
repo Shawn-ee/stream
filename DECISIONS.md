@@ -1,5 +1,13 @@
 # Architecture Decisions
 
+## 2026-08-27 - Broadcasting is a focused runtime, not a Creator Studio dashboard
+
+- The primary streamer route presents only preview/live media, stream title, understandable connection health, viewer count, chat, incoming gifts, microphone, camera, camera flip, and confirmed ending.
+- Desktop uses video and chat side by side. Mobile uses one camera-first surface, transient activity over video, and an on-demand chat bottom sheet. Landscape mobile maximizes video and suppresses nonessential chat.
+- Earnings, goals, action configuration, schedules, analytics, moderation tables, OBS guidance, and other operational tools must not appear inside the active broadcasting workflow.
+- Existing media and realtime ownership remains unchanged: the current `QuickGoLive` controller owns local tracks and WHIP publication; the existing room socket supplies chat, presence, and gift events.
+- Device permission remains deliberate. Preview is local until Go Live is selected, and End Stream always requires confirmation before the publisher and media tracks are closed.
+
 ## 2026-08-27 - Discovery requests are debounced, race-safe, and failure-aware
 
 - Creator text search waits 250ms after the last input before requesting rooms. Category changes and explicit retries remain immediate.

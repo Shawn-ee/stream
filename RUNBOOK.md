@@ -153,16 +153,15 @@ If WebRTC is unavailable, stop and use **Switch to professional OBS mode**. Do n
 
 The 2026-08-26 signed-WHEP repeat passed creator permission/private preview, WHIP ingest, provider live/offline lifecycle, server-signed creator and audience WHEP negotiation, real 640×480 playback with an advancing unmuted media clock, teardown, audience-ended behavior, and deterministic demo reset. The signing private JWK is Linux-only and must never be printed, copied to a browser, or committed. Every future physical broadcast still requires fresh immediate owner approval because it consumes Cloudflare Stream resources; audible quality must be confirmed by a human listener.
 
-## Verify the Creator Broadcast Cockpit locally
+## Verify the minimal Broadcaster interface locally
 
-1. Sign in as `demo-streamer` and confirm **Live** is selected by default. Camera/microphone permission, private preview, and the primary Go Live/End Broadcast path must appear before configuration tools.
-2. Visit Live, Earnings, Actions, Private Show, Profile, and Settings. Exactly one focused workspace should be visible, while the truthful broadcast badge remains available above navigation.
-3. In Settings, use the local development selector to verify `offline`, `connecting`, `live`, and `unavailable`; no Cloudflare call is made. Each state must update the Live surface without claiming playback when unavailable.
-4. In Live, confirm Chat, Gifts & support, and Audience tabs render independently and audience count uses unique audience identities. Confirm goal progress and support insight remain readable without opening settings.
-5. Confirm goal/action editing is under Actions, test summaries under Earnings, access controls under Private Show, audience-facing metadata under Profile, and OBS/moderation/local tools under Settings.
-6. Transition `live` to `offline` locally and confirm the owner-only session summary appears. An audience request to the same summary endpoint must be rejected.
-7. Check every workspace in English and Chinese at desktop width and at 390×844. The workspace navigation may scroll horizontally on phones, but the page must have no horizontal overflow and Quick Go Live content must not clip.
-8. Run `npm run verify:staging` and reset demo data. This local workflow does not authorize an encoder, Cloudflare usage, or Linux/public deployment.
+1. Sign in as `demo-streamer`. Confirm the primary screen contains only the Holiwyn broadcast header, camera preview, title, essential camera/microphone controls, compact health, and live chat. Earnings, analytics, goals, schedules, and operational dashboards must not appear in the broadcast workflow.
+2. Before permission, confirm the camera/microphone explanation is clear. After explicit owner approval, allow devices and verify the private preview, title field, camera and microphone selectors, microphone level, and camera/microphone toggles.
+3. At desktop width, verify video occupies roughly 70–75% and chat 25–30%. Chat must scroll independently, keep its input at the bottom, count unique audience identities, and show incoming gifts as highlighted events rather than a gift-purchase panel.
+4. At 390×844, verify the setup view is camera-first. During a locally simulated live state, verify full-height video, live duration/viewer overlay, transient chat/gift activity, large Mute/Camera-or-Flip/Chat controls, and the chat bottom sheet.
+5. At short landscape mobile size, verify video fills the viewport and chat remains hidden until explicitly requested.
+6. Select End Stream and verify the confirmation appears before any termination. After confirmation, verify local media tracks stop and the simple duration/peak-viewer summary appears.
+7. Run `npm run verify:broadcaster-ui`, `npm run verify:mobile-broadcast`, and `npm run verify:staging`, then reset demo data. This local workflow does not authorize a camera/microphone permission, encoder, Cloudflare usage, Linux deployment, or public release without explicit owner approval.
 
 ## Activate the approved public Stream input
 

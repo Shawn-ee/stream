@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-27 - Minimal broadcaster interface redesign
+
+- Replaced the card-heavy Creator Cockpit live workflow with a dedicated broadcaster surface built around camera preview, live video, chat, incoming gifts, connection health, and essential media controls.
+- Desktop now uses a minimal Holiwyn/live-duration/viewer header and a roughly 75/25 video-plus-chat layout with the stream title and one compact health line beneath the video.
+- Mobile now uses a camera-first setup flow before broadcasting and an immersive full-viewport live presentation with recent chat/gift overlays, Mute, Camera/Flip, Chat, and confirmed End Stream controls.
+- Incoming gifts render as highlighted chat events; the broadcaster has no gift-purchasing surface.
+- Added Preparing, Preview, Connecting, Live, Reconnecting, Ending, Ended, and permission-failure presentation, including a simple duration/peak-viewer end summary.
+- Preserved the existing camera/microphone acquisition, WHIP publisher, active track replacement, Socket.IO room events, title save, safe publish-session deletion, and media-track cleanup.
+- Added `verify:broadcaster-ui` to guard the responsive layout, essential controls, safe ending, and exclusion of earnings/analytics/goal panels from the broadcast workflow.
+- Type checks, focused broadcaster checks, production build, and frontend bundle budget pass. A physical camera/microphone and Cloudflare broadcast still require explicit owner confirmation immediately before testing.
+
 ## 2026-08-27 - Frontend modernization Phase 9 polish and performance
 
 - Added a stable bilingual Holiwyn boot surface while the session is checked, preventing the signed-out test console from flashing before a valid session resolves.
