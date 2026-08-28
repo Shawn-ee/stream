@@ -15,6 +15,11 @@ import {
 } from "./cloudflare-webrtc.js";
 import { createBroadcastPoller } from "./broadcast-poller.js";
 import {
+  broadcastLifecycleEvent,
+  broadcastRecoveryMessage,
+  statusDuringRecovery,
+} from "./broadcast-recovery.js";
+import {
   cloudflareBroadcastStatus,
   localBroadcastStatus,
   type BroadcastStatus,
@@ -64,8 +69,12 @@ type WebRtcResource = {
   kind: "publish" | "playback";
   expiresAt: number;
 };
+const publishResourceTtlMilliseconds = 50_000;
+const playbackResourceTtlMilliseconds = 3 * 60_000;
+const broadcastRecoveryGraceMilliseconds = 45_000;
 const roles: Role[] = ["audience", "streamer", "admin"];
 let realtime: Server | null = null;
+const broadcastRecoveryWindows = new Map<string, number>();
 const runtimeMetrics = {
   httpRequestsTotal: 0,
   httpErrorsTotal: 0,
@@ -165,18 +174,16 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
       return null;
     }
     const changed = previous.rows[0].broadcast_state !== status.state;
+    const recovering = broadcastRecoveryWindows.has(slug);
     await client.query(
       "UPDATE live_rooms SET status=CASE WHEN $1::broadcast_lifecycle_state='live' THEN 'live'::room_status ELSE 'offline'::room_status END,broadcast_state=$1::broadcast_lifecycle_state,broadcast_checked_at=NOW(),broadcast_status_message=$2,updated_at=NOW() WHERE slug=$3",
       [status.state, status.message, slug],
     );
-    const eventType =
-      status.state === "unavailable"
-        ? "broadcast_status_unavailable"
-        : status.state === "live" && changed
-          ? "broadcast_started"
-          : previous.rows[0].broadcast_state === "live" && changed
-            ? "broadcast_ended"
-            : "broadcast_status_checked";
+    const eventType = broadcastLifecycleEvent(
+      previous.rows[0].broadcast_state as BroadcastStatus["state"],
+      status.state,
+      recovering,
+    );
     const lifecycleEventId = changed ? crypto.randomUUID() : null;
     if (changed)
       await client.query(
@@ -226,6 +233,14 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
     await client.end();
   }
 }
+
+async function persistPolledBroadcastStatus(slug: string, status: BroadcastStatus) {
+  const recoveryDeadline = broadcastRecoveryWindows.get(slug);
+  const recovered = statusDuringRecovery(status, recoveryDeadline);
+  const result = await persistBroadcastStatus(slug, recovered.status);
+  if (recovered.recoveryComplete) broadcastRecoveryWindows.delete(slug);
+  return result;
+}
 export function buildApi() {
   const api = Fastify({
     logger: {
@@ -245,14 +260,43 @@ export function buildApi() {
   });
   const rateBuckets = new Map<string, { count: number; resetAt: number }>();
   const webRtcResources = new Map<string, WebRtcResource>();
+  const expireWebRtcResource = async (sessionId: string, resource: WebRtcResource) => {
+    webRtcResources.delete(sessionId);
+    await endWebRtcResource(resource.resourceUrl);
+    if (resource.kind !== "publish") return;
+    if (!broadcastRecoveryWindows.has(resource.roomSlug))
+      broadcastRecoveryWindows.set(
+        resource.roomSlug,
+        Date.now() + broadcastRecoveryGraceMilliseconds,
+      );
+    const client = database();
+    await client.connect();
+    try {
+      await client.query(
+        "UPDATE broadcast_sessions SET state='ended',ended_at=NOW(),failure_code='heartbeat_expired',updated_at=NOW() WHERE id=$1 AND state IN ('connecting','active')",
+        [sessionId],
+      );
+    } finally {
+      await client.end();
+    }
+    await persistBroadcastStatus(resource.roomSlug, {
+      state: "connecting",
+      message: broadcastRecoveryMessage,
+      source: "cloudflare",
+    });
+  };
   const webRtcResourcePruner = setInterval(() => {
     const now = Date.now();
     for (const [sessionId, resource] of webRtcResources) {
       if (resource.expiresAt > now) continue;
-      webRtcResources.delete(sessionId);
-      void endWebRtcResource(resource.resourceUrl);
+      void expireWebRtcResource(sessionId, resource).catch((error) =>
+        api.log.error(
+          { name: (error as Error).name, slug: resource.roomSlug },
+          "Unable to expire WebRTC resource",
+        ),
+      );
     }
-  }, 60_000);
+  }, 10_000);
   webRtcResourcePruner.unref();
   api.addHook("onClose", async () => {
     clearInterval(webRtcResourcePruner);
@@ -1200,7 +1244,7 @@ export function buildApi() {
           roomSlug: request.params.slug,
           userId: streamer.id,
           kind: "publish",
-          expiresAt: Date.now() + 3 * 60_000,
+          expiresAt: Date.now() + publishResourceTtlMilliseconds,
         });
         const update = database();
         await update.connect();
@@ -1267,6 +1311,7 @@ export function buildApi() {
         message: "Broadcast ended.",
         source: "cloudflare",
       });
+      broadcastRecoveryWindows.delete(request.params.slug);
       return reply.code(204).send();
     },
   );
@@ -1285,17 +1330,93 @@ export function buildApi() {
         resource.userId !== streamer.id
       )
         return reply.code(404).send({ error: "broadcast_session_not_found" });
-      resource.expiresAt = Date.now() + 3 * 60_000;
+      resource.expiresAt = Date.now() + publishResourceTtlMilliseconds;
       const client = database();
       await client.connect();
       try {
         await client.query(
-          "UPDATE broadcast_sessions SET updated_at=NOW() WHERE id=$1 AND creator_id=$2 AND state IN ('connecting','active')",
+          "UPDATE broadcast_sessions SET failure_code=NULL,updated_at=NOW() WHERE id=$1 AND creator_id=$2 AND state IN ('connecting','active')",
           [request.params.sessionId, streamer.id],
         );
       } finally {
         await client.end();
       }
+      return reply.code(204).send();
+    },
+  );
+  api.post<{ Params: { slug: string; sessionId: string } }>(
+    "/api/streamer/rooms/:slug/webrtc/publish/:sessionId/resume",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+      const client = database();
+      await client.connect();
+      try {
+        const result = await client.query(
+          "UPDATE broadcast_sessions s SET state='ended',ended_at=NOW(),failure_code='creator_resume',updated_at=NOW() FROM live_rooms r WHERE s.id=$1 AND s.room_id=r.id AND r.slug=$2 AND s.creator_id=$3 AND s.state IN ('connecting','active') RETURNING s.id",
+          [request.params.sessionId, request.params.slug, streamer.id],
+        );
+        if (!result.rows[0])
+          return reply.code(404).send({ error: "broadcast_session_not_found" });
+      } finally {
+        await client.end();
+      }
+      const resource = webRtcResources.get(request.params.sessionId);
+      if (resource?.userId === streamer.id && resource.kind === "publish") {
+        webRtcResources.delete(request.params.sessionId);
+        await endWebRtcResource(resource.resourceUrl);
+      }
+      broadcastRecoveryWindows.set(
+        request.params.slug,
+        Date.now() + broadcastRecoveryGraceMilliseconds,
+      );
+      await persistBroadcastStatus(request.params.slug, {
+        state: "connecting",
+        message: broadcastRecoveryMessage,
+        source: "cloudflare",
+      });
+      return reply.code(204).send();
+    },
+  );
+  api.post<{
+    Params: { slug: string; sessionId: string };
+    Body: { reason?: string };
+  }>(
+    "/api/streamer/rooms/:slug/webrtc/publish/:sessionId/interruption",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+      const resource = webRtcResources.get(request.params.sessionId);
+      if (
+        !resource ||
+        resource.kind !== "publish" ||
+        resource.roomSlug !== request.params.slug ||
+        resource.userId !== streamer.id
+      )
+        return reply.code(404).send({ error: "broadcast_session_not_found" });
+      broadcastRecoveryWindows.set(
+        request.params.slug,
+        Math.max(Date.now(), resource.expiresAt) + broadcastRecoveryGraceMilliseconds,
+      );
+      const client = database();
+      await client.connect();
+      try {
+        await client.query(
+          "UPDATE broadcast_sessions SET failure_code=$1,updated_at=NOW() WHERE id=$2 AND creator_id=$3 AND state IN ('connecting','active')",
+          [request.body?.reason === "page_hidden" ? "client_backgrounded" : "client_interrupted", request.params.sessionId, streamer.id],
+        );
+      } finally {
+        await client.end();
+      }
+      await persistBroadcastStatus(request.params.slug, {
+        state: "connecting",
+        message: broadcastRecoveryMessage,
+        source: "cloudflare",
+      });
       return reply.code(204).send();
     },
   );
@@ -1440,7 +1561,7 @@ export function buildApi() {
           roomSlug: request.params.slug,
           userId: user.id,
           kind: "playback",
-          expiresAt: Date.now() + 3 * 60_000,
+          expiresAt: Date.now() + playbackResourceTtlMilliseconds,
         });
         reply.header("cache-control", "no-store");
         return { sessionId, answerSdp: exchange.answerSdp };
@@ -1482,7 +1603,7 @@ export function buildApi() {
         resource.userId !== user.id
       )
         return reply.code(404).send({ error: "playback_session_not_found" });
-      resource.expiresAt = Date.now() + 3 * 60_000;
+      resource.expiresAt = Date.now() + playbackResourceTtlMilliseconds;
       return reply.code(204).send();
     },
   );
@@ -3073,7 +3194,7 @@ const broadcastPoller = createBroadcastPoller({
     }
   },
   readStatus: cloudflareBroadcastStatus,
-  persistStatus: persistBroadcastStatus,
+  persistStatus: persistPolledBroadcastStatus,
   onError: (error, slug) =>
     api.log.error(
       { name: (error as Error).name, slug },

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-28 - Immersive mobile broadcast and interruption recovery
+
+- Made the active mobile broadcast a true viewport-filling camera surface with floating status, auto-hiding controls, compact confirmed ending, and upper-right transient creator chat/gift activity.
+- Removed the broadcaster's large activity toggle and duplicate live camera controls; normal activity slides in from the right and expires naturally without taking video space.
+- Reworked camera flip to prefer explicit front/rear `facingMode`, fall back to device identifiers, handle phones that cannot open two cameras concurrently, restore the prior camera after a failed switch, replace the published WebRTC track without renegotiation, mirror only the front local preview, and report switching progress/failure.
+- Added progressive mobile fullscreen and Screen Wake Lock requests after the creator's explicit Go Live action; unsupported browsers continue without failing the broadcast.
+- Added foreground/background guidance, tab/background and `pagehide` interruption signaling, a visible Resume Live action, and a 15-second publisher heartbeat.
+- Added server-owned publisher expiry: missing heartbeats terminate the exact Cloudflare WebRTC resource, close the database session with `heartbeat_expired`, emit a truthful connecting recovery state, and allow a bounded 45-second recovery window before offline.
+- Separated recovery from intentional End Stream: a resume retires only the stale WebRTC session, keeps the room in its recovery window, and avoids false ended/started follower notifications.
+- Added recovery-state unit tests and `verify:broadcast-resilience` coverage. No Cloudflare broadcast was started during development verification.
+
 ## 2026-08-27 - Minimal broadcaster interface redesign
 
 - Replaced the card-heavy Creator Cockpit live workflow with a dedicated broadcaster surface built around camera preview, live video, chat, incoming gifts, connection health, and essential media controls.

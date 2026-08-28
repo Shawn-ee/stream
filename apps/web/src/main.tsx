@@ -1842,6 +1842,13 @@ type BroadcasterRuntime = {
   duration: string;
 };
 
+type CameraFacingMode = "user" | "environment";
+
+type WakeLockHandle = {
+  released: boolean;
+  release: () => Promise<void>;
+};
+
 function BroadcastIcon({ name }: { name: "microphone" | "camera" | "flip" | "chat" | "stop" }) {
   const paths = {
     microphone: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" /></>,
@@ -1857,10 +1864,12 @@ function VideoActivityOverlay({
   messages,
   gift,
   t,
+  variant = "viewer",
 }: {
   messages: any[];
   gift: any | null;
   t: Record<string, string>;
+  variant?: "viewer" | "creator";
 }) {
   const [visible, setVisible] = useState(true);
   const [clock, setClock] = useState(Date.now());
@@ -1876,15 +1885,17 @@ function VideoActivityOverlay({
     })
     .slice(-5);
   return (
-    <div className={`video-activity-overlay ${visible ? "is-visible" : "is-hidden"}`}>
-      <button
-        type="button"
-        className="video-overlay-toggle"
-        onClick={() => setVisible((current) => !current)}
-        aria-pressed={visible}
-      >
-        {visible ? (zh ? "隐藏互动" : "Hide activity") : zh ? "显示互动" : "Show activity"}
-      </button>
+    <div className={`video-activity-overlay ${variant === "creator" ? "creator-activity-overlay" : "viewer-activity-overlay"} ${visible ? "is-visible" : "is-hidden"}`}>
+      {variant === "viewer" ? (
+        <button
+          type="button"
+          className="video-overlay-toggle"
+          onClick={() => setVisible((current) => !current)}
+          aria-pressed={visible}
+        >
+          {visible ? (zh ? "隐藏互动" : "Hide activity") : zh ? "显示互动" : "Show activity"}
+        </button>
+      ) : null}
       {visible ? (
         <>
           <div className="video-overlay-comments" aria-live="polite">
@@ -1935,14 +1946,14 @@ function CreatorRealtimeOverlay({ slug, t }: { slug: string; t: typeof copy.en }
     socket.on("gift:sent", (event) => {
       window.clearTimeout(giftTimer);
       setGift(event);
-      giftTimer = window.setTimeout(() => setGift(null), 6_000);
+      giftTimer = window.setTimeout(() => setGift(null), 3_500);
     });
     return () => {
       window.clearTimeout(giftTimer);
       socket.disconnect();
     };
   }, [slug]);
-  return <VideoActivityOverlay messages={messages} gift={gift} t={t} />;
+  return <VideoActivityOverlay messages={messages} gift={gift} t={t} variant="creator" />;
 }
 
 function QuickGoLive({
@@ -1985,6 +1996,10 @@ function QuickGoLive({
   const [micLevel, setMicLevel] = useState(0);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>("user");
+  const [cameraSwitching, setCameraSwitching] = useState(false);
+  const [backgroundNotice, setBackgroundNotice] = useState("");
+  const [controlsVisible, setControlsVisible] = useState(true);
   const [error, setError] = useState("");
   const [endConfirmationOpen, setEndConfirmationOpen] = useState(false);
   const [liveStartedAt, setLiveStartedAt] = useState<number | null>(null);
@@ -1995,6 +2010,9 @@ function QuickGoLive({
   const controllerRef = useRef<WebRtcController | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const pageHidingRef = useRef(false);
+  const controlsTimerRef = useRef(0);
+  const wakeLockRef = useRef<WakeLockHandle | null>(null);
 
   useEffect(() => {
     streamRef.current = stream;
@@ -2010,7 +2028,13 @@ function QuickGoLive({
       setConnectionHealth("excellent");
       setLiveStartedAt((current) => current ?? Date.now());
     }
-    else if (phase === "live" && broadcastState !== "live")
+    else if (
+      phase === "live" &&
+      broadcastState === "connecting" &&
+      transport === "browser_webrtc"
+    )
+      setConnectionHealth("reconnecting");
+    else if (phase === "live" && !["live", "connecting"].includes(broadcastState))
       setPhase(stream ? "preview" : "idle");
   }, [broadcastState, transport, phase, stream]);
   useEffect(() => {
@@ -2049,7 +2073,7 @@ function QuickGoLive({
       stopMediaStream(streamRef.current);
       const sessionId = sessionIdRef.current;
       const csrf = csrfToken();
-      if (sessionId && csrf)
+      if (sessionId && csrf && !pageHidingRef.current)
         void fetch(`/api/streamer/rooms/${slug}/webrtc/publish/${sessionId}`, {
           method: "DELETE",
           credentials: "include",
@@ -2060,6 +2084,59 @@ function QuickGoLive({
     [slug],
   );
   useEffect(() => {
+    const markInterrupted = () => {
+      const sessionId = sessionIdRef.current;
+      const csrf = csrfToken();
+      if (!sessionId || !csrf) return;
+      pageHidingRef.current = true;
+      void fetch(`/api/streamer/rooms/${slug}/webrtc/publish/${sessionId}/interruption`, {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+        headers: { "content-type": "application/json", "x-csrf-token": csrf },
+        body: JSON.stringify({ reason: "page_hidden" }),
+      });
+    };
+    const restorePage = () => {
+      pageHidingRef.current = false;
+    };
+    const handleVisibility = () => {
+      if (!sessionIdRef.current) return;
+      if (document.hidden) {
+        markInterrupted();
+        setBackgroundNotice(
+          zh
+            ? "请保持 Holiwyn 在前台。手机可能会暂停相机和直播。"
+            : "Keep Holiwyn in the foreground. Your phone may pause the camera and broadcast.",
+        );
+        return;
+      }
+      pageHidingRef.current = false;
+      void requestWakeLock();
+      if (controllerRef.current?.peer.connectionState === "connected") {
+        setPhase("live");
+        setConnectionHealth("excellent");
+        window.setTimeout(() => setBackgroundNotice(""), 4_000);
+      } else {
+        setPhase("error");
+        setConnectionHealth("reconnecting");
+        setBackgroundNotice(
+          zh
+            ? "直播已中断。点击恢复直播以重新连接观众。"
+            : "Your broadcast was interrupted. Tap Resume Live to reconnect viewers.",
+        );
+      }
+    };
+    window.addEventListener("pagehide", markInterrupted);
+    window.addEventListener("pageshow", restorePage);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("pagehide", markInterrupted);
+      window.removeEventListener("pageshow", restorePage);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [slug, zh]);
+  useEffect(() => {
     const heartbeat = window.setInterval(() => {
       const sessionId = sessionIdRef.current;
       if (!sessionId) return;
@@ -2068,16 +2145,55 @@ function QuickGoLive({
         { method: "PATCH" },
       ).catch(() => {
         setPhase("error");
-        setConnectionHealth("unavailable");
+        setConnectionHealth("reconnecting");
         setError(
           zh
-            ? "直播会话已失去联系。请结束后重新开始。"
-            : "The broadcast session lost contact. End it before trying again.",
+            ? "直播会话已失去联系。点击恢复直播以重新连接。"
+            : "The broadcast session lost contact. Tap Resume Live to reconnect.",
         );
       });
-    }, 60_000);
+    }, 15_000);
     return () => window.clearInterval(heartbeat);
   }, [slug, zh]);
+  useEffect(() => {
+    if (phase !== "live") {
+      window.clearTimeout(controlsTimerRef.current);
+      setControlsVisible(true);
+      return;
+    }
+    void requestWakeLock();
+    showBroadcastControls();
+    return () => {
+      window.clearTimeout(controlsTimerRef.current);
+      void wakeLockRef.current?.release();
+      wakeLockRef.current = null;
+    };
+  }, [phase]);
+
+  async function requestWakeLock() {
+    if (document.hidden || wakeLockRef.current) return;
+    const wakeLock = (navigator as Navigator & {
+      wakeLock?: { request: (type: "screen") => Promise<WakeLockHandle> };
+    }).wakeLock;
+    if (!wakeLock) return;
+    try {
+      wakeLockRef.current = await wakeLock.request("screen");
+    } catch {
+      // Wake lock is a progressive enhancement; the broadcast must continue without it.
+    }
+  }
+
+  function showBroadcastControls() {
+    setControlsVisible(true);
+    window.clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 5_000);
+  }
+
+  function enterMobileFullscreen() {
+    if (!window.matchMedia("(max-width: 767px)").matches || document.fullscreenElement)
+      return;
+    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }
 
   async function enableDevices(nextCamera = cameraId, nextMicrophone = microphoneId) {
     setPhase("requesting");
@@ -2096,7 +2212,10 @@ function QuickGoLive({
       setStream(next);
       const availableDevices = await navigator.mediaDevices.enumerateDevices();
       setDevices(availableDevices);
-      setCameraId(next.getVideoTracks()[0]?.getSettings().deviceId ?? nextCamera);
+      const videoSettings = next.getVideoTracks()[0]?.getSettings();
+      setCameraId(videoSettings?.deviceId ?? nextCamera);
+      if (["user", "environment"].includes(videoSettings?.facingMode ?? ""))
+        setCameraFacingMode(videoSettings?.facingMode as CameraFacingMode);
       setMicrophoneId(next.getAudioTracks()[0]?.getSettings().deviceId ?? nextMicrophone);
       setCameraEnabled(true);
       setMicrophoneEnabled(true);
@@ -2120,55 +2239,167 @@ function QuickGoLive({
     kind: "video" | "audio",
     deviceId: string,
   ) {
-    if (!stream || !deviceId) return;
+    if (!deviceId) return;
+    if (kind === "video") {
+      await replaceCameraTrack({ deviceId: { exact: deviceId } });
+      return;
+    }
+    const currentStream = streamRef.current;
+    if (!currentStream) return;
     setError("");
     try {
       const replacement = await navigator.mediaDevices.getUserMedia({
-        video: kind === "video" ? { deviceId: { exact: deviceId } } : false,
-        audio: kind === "audio" ? { deviceId: { exact: deviceId } } : false,
+        video: false,
+        audio: { deviceId: { exact: deviceId } },
       });
-      const nextTrack =
-        kind === "video"
-          ? replacement.getVideoTracks()[0]
-          : replacement.getAudioTracks()[0];
+      const nextTrack = replacement.getAudioTracks()[0];
       if (!nextTrack) throw new Error("replacement_track_unavailable");
-      const oldTrack =
-        kind === "video"
-          ? stream.getVideoTracks()[0]
-          : stream.getAudioTracks()[0];
+      const oldTrack = currentStream.getAudioTracks()[0];
       if (controllerRef.current)
         await replacePublishedTrack(controllerRef.current, nextTrack);
-      const nextTracks = stream
+      const nextTracks = currentStream
         .getTracks()
-        .filter((track) => track.kind !== kind)
+        .filter((track) => track.kind !== "audio")
         .concat(nextTrack);
       oldTrack?.stop();
       setStream(new MediaStream(nextTracks));
-      if (kind === "video") {
-        setCameraId(deviceId);
-        setCameraEnabled(true);
-      } else {
-        setMicrophoneId(deviceId);
-        setMicrophoneEnabled(true);
-      }
+      setMicrophoneId(deviceId);
+      setMicrophoneEnabled(true);
       setDevices(await navigator.mediaDevices.enumerateDevices());
     } catch {
       setError(
         zh
-          ? `${kind === "video" ? "相机" : "麦克风"}切换失败。当前设备保持不变。`
-          : `${kind === "video" ? "Camera" : "Microphone"} switching failed. The current device remains active.`,
+          ? "麦克风切换失败。当前设备保持不变。"
+          : "Microphone switching failed. The current device remains active.",
       );
     }
   }
+
+  async function replaceCameraTrack(
+    constraints: MediaTrackConstraints,
+    requestedFacingMode?: CameraFacingMode,
+    reportFailure = true,
+  ) {
+    const currentStream = streamRef.current;
+    if (!currentStream || cameraSwitching) return false;
+    setCameraSwitching(true);
+    setError("");
+    let replacement: MediaStream | null = null;
+    const oldTrack = currentStream.getVideoTracks()[0];
+    const oldSettings = oldTrack?.getSettings();
+    let releasedOldTrack = false;
+    try {
+      try {
+        replacement = await navigator.mediaDevices.getUserMedia({
+          video: constraints,
+          audio: false,
+        });
+      } catch (firstError) {
+        if (!requestedFacingMode || oldTrack?.readyState !== "live") throw firstError;
+        // Some mobile browsers cannot open the other physical camera while the first is held.
+        oldTrack.stop();
+        releasedOldTrack = true;
+        replacement = await navigator.mediaDevices.getUserMedia({
+          video: constraints,
+          audio: false,
+        });
+      }
+      const nextTrack = replacement.getVideoTracks()[0];
+      if (!nextTrack) throw new Error("replacement_track_unavailable");
+      if (controllerRef.current)
+        await replacePublishedTrack(controllerRef.current, nextTrack);
+      const nextStream = new MediaStream(
+        currentStream.getTracks().filter((track) => track.kind !== "video").concat(nextTrack),
+      );
+      oldTrack?.stop();
+      streamRef.current = nextStream;
+      setStream(nextStream);
+      const settings = nextTrack.getSettings();
+      setCameraId(settings.deviceId ?? "");
+      const facing = settings.facingMode;
+      if (facing === "user" || facing === "environment")
+        setCameraFacingMode(facing);
+      else if (requestedFacingMode)
+        setCameraFacingMode(requestedFacingMode);
+      setCameraEnabled(true);
+      setDevices(await navigator.mediaDevices.enumerateDevices());
+      return true;
+    } catch {
+      replacement?.getTracks().forEach((track) => track.stop());
+      if (releasedOldTrack) {
+        try {
+          const restoreConstraints: boolean | MediaTrackConstraints = oldSettings?.deviceId
+            ? { deviceId: { exact: oldSettings.deviceId } }
+            : oldSettings?.facingMode
+              ? { facingMode: oldSettings.facingMode }
+              : true;
+          const restored = await navigator.mediaDevices.getUserMedia({
+            video: restoreConstraints,
+            audio: false,
+          });
+          const restoredTrack = restored.getVideoTracks()[0];
+          if (restoredTrack) {
+            if (controllerRef.current)
+              await replacePublishedTrack(controllerRef.current, restoredTrack);
+            const restoredStream = new MediaStream(
+              currentStream
+                .getTracks()
+                .filter((track) => track.kind !== "video")
+                .concat(restoredTrack),
+            );
+            streamRef.current = restoredStream;
+            setStream(restoredStream);
+          }
+        } catch {
+          setCameraEnabled(false);
+        }
+      }
+      if (reportFailure)
+        setError(
+          zh
+            ? "无法切换相机。请确认手机具有可用的前置和后置相机。"
+            : "Camera switching failed. Confirm that this phone exposes usable front and rear cameras.",
+        );
+      return false;
+    } finally {
+      setCameraSwitching(false);
+    }
+  }
+
   async function switchCamera() {
+    if (cameraSwitching) return;
+    const targetFacingMode: CameraFacingMode =
+      cameraFacingMode === "user" ? "environment" : "user";
+    if (
+      await replaceCameraTrack(
+        { facingMode: { exact: targetFacingMode } },
+        targetFacingMode,
+        false,
+      )
+    )
+      return;
     const cameras = devices.filter((device) => device.kind === "videoinput");
-    if (cameras.length < 2) return;
+    if (cameras.length < 2) {
+      setError(
+        zh
+          ? "此浏览器只提供了一个可用相机。"
+          : "This browser exposes only one usable camera.",
+      );
+      return;
+    }
     const currentIndex = cameras.findIndex((device) => device.deviceId === cameraId);
     const next = cameras[(currentIndex + 1 + cameras.length) % cameras.length];
-    if (next) await replaceInputDevice("video", next.deviceId);
+    if (next)
+      await replaceCameraTrack(
+        { deviceId: { exact: next.deviceId } },
+        targetFacingMode,
+      );
   }
   async function goLive() {
     if (!stream || !available || !title.trim()) return;
+    enterMobileFullscreen();
+    pageHidingRef.current = false;
+    setBackgroundNotice("");
     setPhase("connecting");
     setConnectionHealth("connecting");
     setError("");
@@ -2192,13 +2423,16 @@ function QuickGoLive({
             onChanged();
           } else if (state === "disconnected") {
             setConnectionHealth("reconnecting");
+            setBackgroundNotice(
+              zh ? "连接暂时中断，正在等待恢复…" : "Connection interrupted. Waiting to recover…",
+            );
           } else if (state === "failed") {
             setPhase("error");
-            setConnectionHealth("unavailable");
+            setConnectionHealth("reconnecting");
             setError(
               zh
-                ? "直播连接已中断。请结束后重试。"
-                : "The broadcast connection was interrupted. End it and try again.",
+                ? "直播连接已中断。点击恢复直播以重新连接。"
+                : "The broadcast connection was interrupted. Tap Resume Live to reconnect.",
             );
           }
         },
@@ -2221,6 +2455,24 @@ function QuickGoLive({
       );
     }
   }
+  async function resumeBroadcast() {
+    const previousSessionId = sessionIdRef.current;
+    controllerRef.current?.close();
+    controllerRef.current = null;
+    sessionIdRef.current = null;
+    if (previousSessionId)
+      await request(
+        `/api/streamer/rooms/${slug}/webrtc/publish/${previousSessionId}/resume`,
+        { method: "POST" },
+      ).catch(() => undefined);
+    setError("");
+    setBackgroundNotice(zh ? "正在恢复直播…" : "Restoring your broadcast…");
+    if (!streamRef.current?.active) {
+      await enableDevices();
+      return;
+    }
+    await goLive();
+  }
   async function endBroadcast() {
     setPhase("ending");
     setLastDuration(duration);
@@ -2237,7 +2489,10 @@ function QuickGoLive({
     setPhase("ended");
     setConnectionHealth("ready");
     setLiveStartedAt(null);
+    setBackgroundNotice("");
     setEndConfirmationOpen(false);
+    if (document.fullscreenElement)
+      await document.exitFullscreen?.().catch(() => undefined);
     onChanged();
   }
   function toggleCamera() {
@@ -2278,7 +2533,7 @@ function QuickGoLive({
     onRuntimeChange({ phase, health: connectionHealth, duration });
   }, [connectionHealth, duration, onRuntimeChange, phase, viewerCount]);
   return (
-    <section className={`quick-live-panel phase-${phase}`} id="quick-go-live">
+    <section className={`quick-live-panel phase-${phase} camera-facing-${cameraFacingMode} controls-${controlsVisible ? "visible" : "hidden"}`} id="quick-go-live">
       <div className="quick-live-heading">
         <div>
           <p className="eyebrow">{zh ? "快速开播" : "Quick Go Live"}</p>
@@ -2286,9 +2541,9 @@ function QuickGoLive({
         </div>
         <span>{phase === "live" ? (zh ? "直播中" : "LIVE") : zh ? "开播预览" : "Broadcast preview"}</span>
       </div>
-      <div className="quick-live-video-shell">
+      <div className="quick-live-video-shell" onPointerDown={phase === "live" ? showBroadcastControls : undefined}>
         {stream ? (
-          <video ref={videoRef} className="quick-live-preview" autoPlay muted playsInline />
+          <video ref={videoRef} className={`quick-live-preview ${cameraFacingMode === "user" ? "is-mirrored" : ""}`} autoPlay muted playsInline />
         ) : (
           <div className="quick-live-empty">
             <strong>{zh ? "您的预览仅在授权后显示" : "Your preview appears only after permission"}</strong>
@@ -2300,15 +2555,14 @@ function QuickGoLive({
           <strong>{healthLabel[connectionHealth]}</strong>
           {phase === "live" ? <><time>{duration}</time><span className="stage-viewers" aria-label={zh ? `${viewerCount} 位观众` : `${viewerCount} viewers`}>◉ {viewerCount}</span></> : null}
         </div>
-        {stream ? (
+        {stream && phase !== "live" ? (
           <div className="broadcast-stage-controls">
-            {cameras.length > 1 ? (
-              <button type="button" onClick={() => void switchCamera()} aria-label={zh ? "切换相机" : "Switch camera"}><BroadcastIcon name="flip" /></button>
-            ) : null}
+            <button type="button" disabled={cameraSwitching} onClick={() => void switchCamera()} aria-label={cameraSwitching ? (zh ? "正在切换相机" : "Switching camera") : zh ? "切换相机" : "Switch camera"}><BroadcastIcon name="flip" /></button>
             <button type="button" className={!microphoneEnabled ? "is-off" : ""} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /></button>
           </div>
         ) : null}
         {phase === "live" ? overlay : null}
+        {backgroundNotice && sessionActive ? <p className="broadcast-background-notice" role="status">{backgroundNotice}</p> : null}
       </div>
       {phase === "ended" ? (
         <div className="broadcast-ended-summary">
@@ -2368,10 +2622,15 @@ function QuickGoLive({
             <span><small>{zh ? "连接" : "Connection"}</small><strong>{healthLabel[connectionHealth]}</strong></span>
             <span><small>{zh ? "麦克风" : "Microphone"}</small><strong>{microphoneEnabled ? (zh ? "开启" : "On") : zh ? "静音" : "Muted"}</strong></span>
           </div>
+          {phase === "error" ? (
+            <button type="button" className="broadcast-resume-button" onClick={() => void resumeBroadcast()}>
+              {zh ? "恢复直播" : "Resume Live"}
+            </button>
+          ) : null}
           <div className="quick-live-controls live-controls">
             <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
             <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
-            {cameras.length > 1 ? <button type="button" className="secondary" onClick={() => void switchCamera()}><BroadcastIcon name="flip" /><span>{zh ? "切换相机" : "Flip"}</span></button> : null}
+            <button type="button" className="secondary" disabled={cameraSwitching} onClick={() => void switchCamera()}><BroadcastIcon name="flip" /><span>{cameraSwitching ? (zh ? "切换中…" : "Switching…") : zh ? "切换相机" : "Flip"}</span></button>
             <button type="button" className="secondary mobile-chat-trigger" onClick={onChatOpen}><BroadcastIcon name="chat" /><span>{zh ? "聊天" : "Chat"}</span></button>
             <button type="button" className="danger" onClick={() => setEndConfirmationOpen(true)}><BroadcastIcon name="stop" /><span>{zh ? "结束直播" : "End stream"}</span></button>
           </div>

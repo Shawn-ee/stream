@@ -28,7 +28,7 @@ assert.match(transport, /getSenders\(\)/);
 assert.match(transport, /await sender\.replaceTrack\(track\)/);
 assert.match(app, /await replacePublishedTrack\(controllerRef\.current, nextTrack\)/);
 assert.match(app, /async function switchCamera\(\)/);
-assert.match(app, /aria-label=\{zh \? "切换相机" : "Switch camera"\}/);
+assert.match(app, /aria-label=\{cameraSwitching \?[\s\S]*"Switch camera"\}/);
 assert.match(app, /Microphone on, tap to mute/);
 
 for (const health of ["ready", "connecting", "excellent", "reconnecting", "unavailable"])

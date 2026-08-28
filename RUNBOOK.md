@@ -1,5 +1,13 @@
 # Local Runbook
 
+## Immersive mobile broadcast and interruption recovery verification
+
+Run `npm run verify:broadcast-resilience`, `npm run verify:mobile-broadcast`, and `npm run verify:broadcaster-ui`. At 320×568, 390×844, and 430×932, confirm active broadcast video occupies the viewport, creator activity is limited to the upper-right area, controls return after tapping video and auto-hide after five seconds, End Stream remains confirmed, and no horizontal overflow exists.
+
+On an owner-approved physical-device test, verify front → rear → front camera switching while live, local mirroring only on the front preview, uninterrupted audience playback after each track replacement, screen wake lock where supported, and graceful behavior when fullscreen is unavailable. Briefly background and restore the browser: a connected peer should continue; an interrupted peer should offer **Resume Live** without generating false ended/started follower notifications. Close the tab once and confirm viewers see **Creator reconnecting** through the remaining publisher lease plus the bounded 45-second recovery grace, then offline if the creator does not reopen and resume. Confirm the expired publisher database session records `heartbeat_expired` and no Cloudflare WebRTC resource remains.
+
+The physical camera, microphone, and Cloudflare portion requires explicit owner confirmation immediately before each test. Automated/local verification must not begin a broadcast or consume Cloudflare quota.
+
 ## Frontend polish and performance verification
 
 Run `npm run verify:frontend-polish` to verify stable session boot, debounced/race-safe discovery, explicit failure states, localized skeleton status, and deferred below-fold rendering. Run `npm run verify:web-bundle-budget` to create a production web build and enforce the asset budgets. In browser QA, rapidly type a multi-character creator query and confirm the API receives only the final query after the debounce window. Check 320×568, 390×844, 768×1024, and 1440×900 for zero horizontal overflow, correct mobile/desktop shell switching, and an empty warning/error console. Reset any temporary viewport override after testing.

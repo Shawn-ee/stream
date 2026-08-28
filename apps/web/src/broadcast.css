@@ -583,6 +583,89 @@
   background: var(--color-error);
 }
 
+.creator-activity-overlay {
+  background: linear-gradient(225deg, rgba(3, 5, 12, 0.7), transparent 78%);
+  bottom: auto;
+  left: auto;
+  min-height: 0;
+  right: var(--space-3);
+  top: var(--space-3);
+  width: min(38%, 24rem);
+}
+
+.creator-activity-overlay .video-overlay-comments {
+  align-items: flex-end;
+  margin-left: auto;
+  max-width: 100%;
+  width: 100%;
+}
+
+.creator-activity-overlay .overlay-comment {
+  animation: creator-activity-in 260ms ease-out;
+  background: rgba(8, 11, 23, 0.72);
+  text-align: left;
+}
+
+.creator-activity-overlay .overlay-gift,
+.creator-activity-overlay .overlay-gift.premium {
+  align-self: flex-end;
+  inset: auto;
+  max-width: 100%;
+  position: static;
+}
+
+.creator-activity-overlay .overlay-gift.premium {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
+  grid-template-columns: auto 1fr;
+  padding: var(--space-3);
+}
+
+.creator-activity-overlay .overlay-gift.premium .overlay-gift-symbol {
+  font-size: 2.5rem;
+}
+
+.quick-live-preview.is-mirrored {
+  transform: scaleX(-1);
+}
+
+.broadcast-background-notice {
+  backdrop-filter: blur(12px);
+  background: rgba(9, 12, 25, 0.82);
+  border: 1px solid rgba(246, 183, 60, 0.42);
+  border-radius: 999px;
+  color: var(--color-text-primary);
+  left: 50%;
+  margin: 0;
+  max-width: min(86%, 34rem);
+  padding: var(--space-2) var(--space-3);
+  position: absolute;
+  text-align: center;
+  top: 4.5rem;
+  transform: translateX(-50%);
+  z-index: 16;
+}
+
+.broadcast-resume-button {
+  background: var(--color-live);
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 800;
+  left: 50%;
+  min-height: 3rem;
+  padding: 0 var(--space-5);
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 18;
+}
+
+@keyframes creator-activity-in {
+  from { opacity: 0; transform: translateX(1.25rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .broadcaster-chat {
   background: var(--color-surface);
   border: 1px solid rgba(255, 255, 255, 0.09);
@@ -839,6 +922,13 @@
     position: fixed;
     right: 0;
     z-index: 20;
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  .broadcaster-stage .phase-live.controls-hidden .quick-live-controls.live-controls {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(1.5rem);
   }
 
   .quick-live-controls.live-controls button {
@@ -857,7 +947,10 @@
     background: rgba(255, 77, 109, 0.16);
     border: 1px solid rgba(255, 77, 109, 0.5);
     grid-column: 1 / -1;
+    justify-self: center;
     margin: var(--space-2) 0 0;
+    min-height: 2.65rem;
+    width: min(11rem, 56vw);
   }
 
   .broadcaster-runtime-live .broadcaster-stream-bar {
@@ -896,8 +989,34 @@
   }
 
   .broadcaster-runtime-live .video-activity-overlay {
-    bottom: 9.5rem;
-    max-width: min(78%, 22rem);
+    bottom: auto;
+    left: auto;
+    max-width: none;
+    min-height: 0;
+    padding: 0;
+    right: max(var(--space-3), env(safe-area-inset-right));
+    top: max(4.25rem, calc(env(safe-area-inset-top) + 3.5rem));
+    width: min(44vw, 12rem);
+  }
+
+  .broadcaster-runtime-live .creator-activity-overlay .video-overlay-comments {
+    gap: var(--space-1);
+  }
+
+  .broadcaster-runtime-live .creator-activity-overlay .overlay-comment {
+    font-size: 0.72rem;
+    max-width: 100%;
+    padding: 0.35rem 0.5rem;
+  }
+
+  .broadcaster-runtime-live .creator-activity-overlay .overlay-gift {
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    padding: 0.45rem 0.55rem;
+  }
+
+  .broadcaster-runtime-live .broadcast-background-notice {
+    top: max(4.25rem, calc(env(safe-area-inset-top) + 3.5rem));
   }
 
   .broadcaster-service-note,

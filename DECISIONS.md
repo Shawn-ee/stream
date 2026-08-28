@@ -1,5 +1,14 @@
 # Architecture Decisions
 
+## 2026-08-28 - Browser broadcasting fails through a bounded recovery state
+
+- A browser publisher sends a 15-second authenticated heartbeat and receives a 50-second server resource lease. A missing heartbeat never leaves an unlimited Cloudflare resource or permanently active database session.
+- Page exit sends a best-effort, keepalive interruption signal. Mobile backgrounding remains browser-dependent, so the UI warns the creator, requests a screen wake lock while visible, and offers one-tap republishing when the peer cannot recover.
+- An interrupted room uses the existing `connecting` lifecycle through the remaining publisher lease and a 45-second recovery grace. Viewers retain the room and chat but do not receive a false live player. A recovered Cloudflare live input returns to `live`; expiry returns truthfully to `offline` without an offline-to-connecting state reversal.
+- Resume Live uses a dedicated session-handoff route. It must not reuse intentional End Stream or generate false offline/live follower notifications; only an explicit end or expired recovery becomes a genuine ended lifecycle.
+- Camera flip prefers the semantic `user`/`environment` constraint and falls back to a different enumerated device. The current published track is replaced in place. On mobile hardware that cannot open both cameras concurrently, the old camera is released only after the seamless attempt fails; a failed retry attempts to restore the prior camera and always gives the creator feedback.
+- Recovery remains bounded to one API process for this deployment. Moving publisher lease ownership across multiple API replicas requires Redis-backed resource/recovery coordination before horizontal media-control scaling.
+
 ## 2026-08-27 - Broadcasting is a focused runtime, not a Creator Studio dashboard
 
 - The primary streamer route presents only preview/live media, stream title, understandable connection health, viewer count, chat, incoming gifts, microphone, camera, camera flip, and confirmed ending.

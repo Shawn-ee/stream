@@ -2,6 +2,8 @@
 
 ## Active frontend modernization
 
+- Immersive mobile broadcast and interruption recovery completed locally: full-viewport video, upper-right transient activity, semantic front/rear switching with track replacement, wake lock/fullscreen enhancement, page-exit signaling, one-tap resume, server resource expiry, and a 45-second truthful viewer recovery window. Physical-device and live Cloudflare verification remain owner-assisted.
+
 - Dedicated broadcaster redesign completed locally: minimal desktop video/chat split, camera-first mobile setup/live layouts, essential media controls, incoming gifts in chat, compact health, safe ending, and simple ended summary. Physical-device and Cloudflare broadcast validation remains owner-assisted.
 
 - Phase 0 completed locally: audited React/Vite state routing, global CSS, authentication, discovery, room/chat/gift/follow/profile flows, Creator Studio, Socket.IO, WHIP/WHEP/HLS and API boundaries. See `docs/Frontend-Modernization-Implementation-Map.md`.
