@@ -65,6 +65,18 @@ The owner-approved upgrade moved the public launch candidate to `2a0ac1ef1a7ad6c
 - The synthetic demo dataset was reset. The production readiness verifier confirmed the configured creator, truthful offline lifecycle, fail-closed playback, absent fake-live production route, and no Stream credential exposure.
 - The public origin returned HTTP 200 and served the new Creator Studio/Live Session application bundle.
 
+## Immersive mobile broadcaster and interruption-recovery upgrade
+
+On 2026-08-28, owner approval advanced the public preview from `a2437eccdd29cd7a74cf1ad8a33ba50d7832c323` to application commit `8e98ca2fc75291ed24aaaa157fb98fa0bc94a872`.
+
+- The actual Stream checkout was confirmed at `/home/shawn/projects/stream/launch-candidate`; the unrelated outer repository at `/home/shawn/projects/stream` was not modified.
+- Before the fast-forward pull, a mode-`600` PostgreSQL custom-format backup and tracked-source archive were written beneath the checkout's ignored `backups` directory. Their SHA-256 values are `024f8dfbe95de9069301175e70f49dd96b610f3e03e959c937ff4494fe85407e` and `0d16039a6aa43d29213baccaa3b8bc3811baa985c9215be8990996644543a9a3`.
+- The API/migration and web images built successfully and ordered migrations completed. Only the Stream API and web containers were recreated; PostgreSQL retained its 45-hour uptime and Redis retained its two-day uptime during acceptance.
+- Deployed API image: `sha256:1d1a5e1e094f4dabfde42ee85743f6c2e650610eed467e632b684cc1884f2ff7`. Deployed web image: `sha256:a653ef101f54d7c9d2673a6c9e68de5368459510896a3c3236794dafdd3ec4b7`.
+- API and web reported healthy with zero restarts. The local gateway returned `ok`, API readiness reported database and Redis `ok`, and Socket.IO polling returned a valid session with WebSocket upgrade support.
+- The public origin served the new `index-DAwT7kcB.js` bundle. A read-only Chrome smoke test reached the signed-in streamlined broadcaster preview with no application console errors and did not request camera/microphone permission or begin a Cloudflare broadcast.
+- This deployment adds viewport-filling mobile broadcasting, upper-right transient chat/gift activity, robust front/rear camera fallback, auto-hiding controls, publisher heartbeat/expiry, and bounded interruption recovery. A physical tab-exit/camera-flip audience test remains owner-assisted and was not repeated during deployment.
+
 ## Deployment evidence
 
 - Digest-locked API and web images built successfully on the Linux host.
