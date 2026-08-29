@@ -2,6 +2,10 @@
 
 ## Active frontend modernization
 
+- Desktop broadcaster presentation cleanup completed locally: full-width video stage, compact controls, transparent creator chat/gift overlays, and preserved mobile fullscreen behavior. Physical desktop broadcast review remains owner-assisted.
+
+- Streamer live-session-safe navigation completed locally: persistent publisher mounting across Profile, same-document Back to Live/browser history, mobile return access, live continuation notice, and true document-exit protection. A physical live navigation acceptance test remains owner-assisted.
+
 - Immersive mobile broadcast and interruption recovery completed locally: full-viewport video, upper-right transient activity, semantic front/rear switching with track replacement, wake lock/fullscreen enhancement, page-exit signaling, one-tap resume, server resource expiry, and a 45-second truthful viewer recovery window. Physical-device and live Cloudflare verification remain owner-assisted.
 
 - Dedicated broadcaster redesign completed locally: minimal desktop video/chat split, camera-first mobile setup/live layouts, essential media controls, incoming gifts in chat, compact health, safe ending, and simple ended summary. Physical-device and Cloudflare broadcast validation remains owner-assisted.

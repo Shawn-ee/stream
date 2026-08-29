@@ -43,6 +43,11 @@ assert.doesNotMatch(
 for (const rule of [
   /\.broadcaster-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(19rem, 1fr\)/,
   /\.broadcaster-chat\s*\{[\s\S]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/,
+  /\.broadcaster-stage \.quick-live-panel\s*\{[\s\S]*flex:\s*0 0 auto/,
+  /\.broadcaster-stage \.quick-live-video-shell\s*\{[\s\S]*height:\s*auto;[\s\S]*width:\s*100%/,
+  /\.creator-activity-overlay\s*\{[\s\S]*background:\s*transparent/,
+  /\.creator-activity-overlay \.overlay-comment\s*\{[\s\S]*background:\s*transparent;[\s\S]*text-shadow:/,
+  /\.creator-activity-overlay \.overlay-gift,[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-runtime-live \.broadcaster-stage \.quick-live-video-shell\s*\{[\s\S]*height:\s*100dvh/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-chat\.is-open\s*\{[\s\S]*display:\s*grid/,
   /@media \(max-width: 932px\) and \(orientation: landscape\)/,

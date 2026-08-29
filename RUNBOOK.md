@@ -1,5 +1,17 @@
 # Local Runbook
 
+## Desktop broadcaster presentation verification
+
+Run `npm run verify:broadcaster-ui`, `npm run verify:streamer-navigation`, `npm run check`, and `npm run build`. At desktop width, confirm the camera fills the available stage column, controls follow immediately below it, and creator-side transient comments/gifts have no opaque card or full-overlay dimming. Confirm premium gifts remain readable through color, motion, symbol glow, and text shadow. Repeat at mobile width to ensure the existing viewport-filling live layout is unchanged.
+
+The Vite development server uses `http://127.0.0.1:3001` by default. For an explicitly owner-approved UI-only review, `VITE_DEV_API_TARGET` may point the local frontend proxy at another origin. That mode is not isolated: login, chat, gifts, profile edits, and broadcasting affect the target environment. Do not use it for mutation testing unless those exact actions are approved.
+
+## Streamer live-session navigation verification
+
+Run `npm run verify:streamer-navigation`, `npm run verify:broadcaster-ui`, and `npm run verify:broadcast-resilience`. Without device permission, confirm Profile changes the URL to `#streamer-profile`, shows Back to Live, and browser Back restores the same preview/setup state. At mobile width, confirm Profile and Back remain reachable with no horizontal overflow.
+
+During an owner-approved physical broadcast, open Profile and confirm the audience playback, publisher heartbeat, elapsed timer, viewer count, chat, and gifts continue without a second publish session. Return using the in-page action, repeat using browser Back, and confirm neither path emits ended/started lifecycle notifications. Finally attempt a real reload in a disposable test session and confirm the browser warns before leaving. This physical test requires immediate camera/microphone and Cloudflare approval; ordinary automated checks must not start it.
+
 ## Immersive mobile broadcast and interruption recovery verification
 
 Run `npm run verify:broadcast-resilience`, `npm run verify:mobile-broadcast`, and `npm run verify:broadcaster-ui`. At 320×568, 390×844, and 430×932, confirm active broadcast video occupies the viewport, creator activity is limited to the upper-right area, controls return after tapping video and auto-hide after five seconds, End Stream remains confirmed, and no horizontal overflow exists.

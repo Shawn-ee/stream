@@ -1,5 +1,16 @@
 # Architecture Decisions
 
+## 2026-08-29 - Creator overlays remain legible without becoming video cards
+
+- Transient creator chat and gift activity is rendered as foreground information over the camera, not as opaque panels. Text shadow, role color, animation, and gift-symbol glow provide hierarchy without hiding a large part of the broadcast preview.
+- The desktop stage sizes from its available width; tablet and mobile keep their explicit device-specific height and fullscreen rules. Camera, WebRTC publishing, chat, gift, and ending behavior are unchanged.
+
+## 2026-08-28 - Streamer auxiliary views must not own the publisher lifecycle
+
+- `QuickGoLive` remains mounted for the lifetime of the signed-in streamer workspace. Profile and future lightweight session tools are presentation views layered around that owner; hiding a view must never invoke WebRTC/media cleanup.
+- Profile navigation writes a small same-document history entry. UI Back to Live and browser Back restore the live view without renegotiation. A true document exit remains distinct and receives a browser leave warning while a publish session exists.
+- Mobile retains a compact Profile/Back entry in the broadcaster header. The active camera surface stays minimal, but navigation may not become an invisible trap.
+
 ## 2026-08-28 - Browser broadcasting fails through a bounded recovery state
 
 - A browser publisher sends a 15-second authenticated heartbeat and receives a 50-second server resource lease. A missing heartbeat never leaves an unlimited Cloudflare resource or permanently active database session.

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-29 - Desktop broadcaster stage cleanup
+
+- Expanded the desktop camera surface across the available broadcast column instead of constraining its width through a fixed video height, eliminating the unused strip around the live controls.
+- Removed opaque creator-side chat and gift cards from the camera overlay. Messages now use clean foreground text with restrained shadowing, while premium gifts retain motion, color, and symbol glow without dimming the video.
+- Preserved the existing mobile fullscreen broadcaster rules and added focused broadcaster UI assertions for the desktop sizing and transparent overlay behavior.
+- Added an opt-in `VITE_DEV_API_TARGET` development proxy override for owner-approved local UI review while retaining the isolated local API as the default.
+
+## 2026-08-28 - Streamer live-session-safe navigation
+
+- Kept the browser publisher, camera/microphone tracks, heartbeat, chat, gifts, viewer presence, and runtime timer mounted when a streamer opens Profile; auxiliary views now hide the live surface instead of destroying it.
+- Added history-aware Profile navigation so the browser Back action and both visible Back to Live actions return to the existing session without ending or republishing it.
+- Added a clear live-session continuation banner inside Profile and restored mobile access to Profile/Back without adding a dashboard navigation bar.
+- Added an active-session browser leave warning for real refresh, tab close, or external navigation while preserving the existing bounded server recovery path when the creator confirms leaving.
+- Added `verify:streamer-navigation` to the staging gate. No camera permission or Cloudflare broadcast was used during implementation.
+
 ## 2026-08-28 - Immersive mobile broadcast and interruption recovery
 
 - Made the active mobile broadcast a true viewport-filling camera surface with floating status, auto-hiding controls, compact confirmed ending, and upper-right transient creator chat/gift activity.

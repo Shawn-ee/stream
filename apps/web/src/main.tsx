@@ -2084,6 +2084,15 @@ function QuickGoLive({
     [slug],
   );
   useEffect(() => {
+    const protectActiveBroadcast = (event: BeforeUnloadEvent) => {
+      if (!sessionIdRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectActiveBroadcast);
+    return () => window.removeEventListener("beforeunload", protectActiveBroadcast);
+  }, []);
+  useEffect(() => {
     const markInterrupted = () => {
       const sessionId = sessionIdRef.current;
       const csrf = csrfToken();
@@ -2949,6 +2958,27 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
   });
   const updateRuntime = useCallback((next: BroadcasterRuntime) => setRuntime(next), []);
   const updateViewerCount = useCallback((count: number) => setViewerCount(count), []);
+  const returnToLive = useCallback(() => {
+    if (window.history.state?.holiwynStreamerSection === "profile") {
+      window.history.back();
+      return;
+    }
+    window.history.replaceState(
+      { ...window.history.state, holiwynStreamerSection: "live" },
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+    setActiveSection("live");
+  }, []);
+  const openProfile = useCallback(() => {
+    if (activeSection === "profile") return;
+    window.history.pushState(
+      { ...window.history.state, holiwynStreamerSection: "profile" },
+      "",
+      "#streamer-profile",
+    );
+    setActiveSection("profile");
+  }, [activeSection]);
   const refresh = () =>
     void request("/api/streamer/studio").then((d) => {
       setStudio(d);
@@ -2976,6 +3006,23 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       setPerMinuteCost(d.room?.private_show_per_minute_cost ?? 10);
     });
   useEffect(refresh, []);
+  useEffect(() => {
+    window.history.replaceState(
+      { ...window.history.state, holiwynStreamerSection: "live" },
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+    const restoreStudioSection = (event: PopStateEvent) => {
+      const section =
+        event.state?.holiwynStreamerSection === "profile" ||
+        window.location.hash === "#streamer-profile"
+          ? "profile"
+          : "live";
+      setActiveSection(section);
+    };
+    window.addEventListener("popstate", restoreStudioSection);
+    return () => window.removeEventListener("popstate", restoreStudioSection);
+  }, []);
   useEffect(() => {
     const slug = studio?.room?.slug;
     if (!slug) return;
@@ -3093,6 +3140,9 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       </section>
     );
   const broadcastState = room.broadcast_state ?? "offline";
+  const liveSessionActive = ["connecting", "live", "error", "ending"].includes(
+    runtime.phase,
+  );
   const goalPercent = Math.min(
     100,
     Math.round((room.goal_progress / Math.max(1, room.goal_target)) * 100),
@@ -3108,13 +3158,19 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
           <time>{runtime.duration}</time>
           <span className="broadcaster-viewers">◉ {viewerCount}</span>
         </div>
-        <button type="button" className="broadcaster-profile-button" onClick={() => setActiveSection((current) => current === "profile" ? "live" : "profile")}>
+        <button
+          type="button"
+          className={`broadcaster-profile-button ${activeSection === "profile" ? "is-return" : ""}`}
+          onClick={activeSection === "profile" ? returnToLive : openProfile}
+        >
           {activeSection === "profile" ? (zh ? "返回直播" : "Back to live") : (zh ? "主页" : "Profile")}
         </button>
       </header>
 
-      {activeSection === "live" ? (
-      <div className={`creator-section broadcaster-page phase-${runtime.phase}`}>
+      <div
+        className={`creator-section broadcaster-page phase-${runtime.phase} ${activeSection === "live" ? "studio-view-active" : "studio-view-inactive"}`}
+        aria-hidden={activeSection !== "live"}
+      >
         <div className="broadcaster-layout">
           <main className="broadcaster-stage">
           <QuickGoLive
@@ -3156,7 +3212,6 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
         ) : null}
         {notice ? <p className="form-notice broadcaster-notice">{notice}</p> : null}
       </div>
-      ) : null}
 
       {activeSection === "earnings" ? (
         <section className="creator-section creator-config-page">
@@ -3228,6 +3283,12 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
 
       {activeSection === "profile" ? (
         <section className="creator-section creator-config-page">
+          {liveSessionActive ? (
+            <div className="broadcast-continues-banner" role="status">
+              <span><i />{zh ? "您的直播仍在继续，观众仍可观看和互动。" : "Your live broadcast is still running for viewers."}</span>
+              <button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button>
+            </div>
+          ) : null}
           <div className="creator-page-heading"><div><p className="eyebrow">{zh ? "公开主页" : "Public profile"}</p><h3>{zh ? "观众看到的主播信息" : "What viewers see about you"}</h3></div></div>
           <div className="creator-settings-grid">
             <section><h3>{zh ? "直播间信息" : "Room details"}</h3><form className="studio-form" onSubmit={(e) => void save(e)}><label>{t.roomTitle}<input value={title} onChange={(e) => setTitle(e.target.value)} /></label><button>{t.saveRoom}</button></form></section>
