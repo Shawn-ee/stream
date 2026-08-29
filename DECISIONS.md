@@ -1,5 +1,12 @@
 # Architecture Decisions
 
+## 2026-08-29 - Pre-live setup is a companion rail, not a second dashboard
+
+- On desktop, the private camera preview and essential setup controls share one viewport. The preview owns the larger column; title, device selection, microphone confidence, and Go Live use one compact companion rail.
+- An action appears only once in the pre-live workflow. Camera flip may remain over the preview because it directly affects framing; microphone and camera state changes live in the labeled setup controls.
+- Profile editing uses the existing room and profile endpoints behind one visible save action. A lightweight viewer preview provides context without creating new creator-profile data, analytics, or media fields.
+- Tablet and mobile continue to use their purpose-built stacked/camera-first layouts; the desktop grid is presentation-only and does not create another media controller.
+
 ## 2026-08-29 - Creator overlays remain legible without becoming video cards
 
 - Transient creator chat and gift activity is rendered as foreground information over the camera, not as opaque panels. Text shadow, role color, animation, and gift-symbol glow provide hierarchy without hiding a large part of the broadcast preview.

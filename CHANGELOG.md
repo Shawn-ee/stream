@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-29 - One-screen broadcaster setup and compact public profile
+
+- Reorganized the desktop pre-live experience into a video-first two-column surface: the private preview remains dominant while title, device choices, microphone level, and the primary Go Live action stay visible in one ordinary laptop viewport.
+- Removed the duplicate microphone control from the preview overlay, retained one clearly labeled microphone action in the setup rail, and changed ambiguous ready copy to explicit **Preview ready** / **预览就绪** state language.
+- Replaced the stretched two-card Profile screen and its duplicate save actions with a compact viewer preview, one responsive settings form, a curated timezone selector, and one atomic user-facing save action backed by the existing room/profile APIs.
+- Preserved the existing browser media, WHIP publication, realtime chat/gifts, navigation persistence, mobile camera-first setup, and fullscreen live layouts.
+- Type checks, focused broadcaster/navigation/resilience/profile/mobile gates, production builds, and bundle budgets pass. Database-backed staging and physical camera/Cloudflare checks were not run because local Docker was unavailable and live media still requires immediate owner approval.
+
 ## 2026-08-29 - Desktop broadcaster stage cleanup
 
 - Expanded the desktop camera surface across the available broadcast column instead of constraining its width through a fixed video height, eliminating the unused strip around the live controls.

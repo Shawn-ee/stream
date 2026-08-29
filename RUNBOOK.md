@@ -175,13 +175,14 @@ The 2026-08-26 signed-WHEP repeat passed creator permission/private preview, WHI
 
 ## Verify the minimal Broadcaster interface locally
 
-1. Sign in as `demo-streamer`. Confirm the primary screen contains only the Holiwyn broadcast header, camera preview, title, essential camera/microphone controls, compact health, and live chat. Earnings, analytics, goals, schedules, and operational dashboards must not appear in the broadcast workflow.
+1. Sign in as `demo-streamer`. Confirm the primary screen contains only the Holiwyn broadcast header, camera preview, title, essential camera/microphone controls, compact health, and live chat. At desktop width after permission, the preview and compact setup rail must fit in one ordinary laptop viewport without scrolling to reach **Go Live**. Earnings, analytics, goals, schedules, and operational dashboards must not appear in the broadcast workflow.
 2. Before permission, confirm the camera/microphone explanation is clear. After explicit owner approval, allow devices and verify the private preview, title field, camera and microphone selectors, microphone level, and camera/microphone toggles.
 3. At desktop width, verify video occupies roughly 70–75% and chat 25–30%. Chat must scroll independently, keep its input at the bottom, count unique audience identities, and show incoming gifts as highlighted events rather than a gift-purchase panel.
 4. At 390×844, verify the setup view is camera-first. During a locally simulated live state, verify full-height video, live duration/viewer overlay, transient chat/gift activity, large Mute/Camera-or-Flip/Chat controls, and the chat bottom sheet.
 5. At short landscape mobile size, verify video fills the viewport and chat remains hidden until explicitly requested.
 6. Select End Stream and verify the confirmation appears before any termination. After confirmation, verify local media tracks stop and the simple duration/peak-viewer summary appears.
 7. Run `npm run verify:broadcaster-ui`, `npm run verify:mobile-broadcast`, and `npm run verify:staging`, then reset demo data. This local workflow does not authorize a camera/microphone permission, encoder, Cloudflare usage, Linux deployment, or public release without explicit owner approval.
+8. Open **Profile** without starting media. Confirm the viewer preview and all public fields appear in one compact responsive editor, timezone uses a supported selection, and only one **Save all public details** action is presented. Do not submit during a read-only smoke test.
 
 ## Activate the approved public Stream input
 

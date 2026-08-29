@@ -32,7 +32,16 @@ for (const essential of [
   /Stream ended/,
   /Peak viewers/,
   /Your broadcast will stop for every viewer/,
+  /Preview ready/,
+  /PREVIEW READY/,
+  /streamer-profile-editor/,
+  /Save all public details/,
+  /stream \? "has-media" : "no-media"/,
 ]) assert.match(app, essential);
+
+const previewOverlay = app.match(/<div className="broadcast-stage-controls">[\s\S]*?<\/div>/)?.[0] ?? "";
+assert.match(previewOverlay, /name="flip"/, "preview overlay must retain camera switching");
+assert.doesNotMatch(previewOverlay, /name="microphone"/, "preview overlay must not duplicate the microphone control");
 
 assert.doesNotMatch(
   app.match(/activeSection === "live"[\s\S]*?activeSection === "earnings"/)?.[0] ?? "",
@@ -48,6 +57,9 @@ for (const rule of [
   /\.creator-activity-overlay\s*\{[\s\S]*background:\s*transparent/,
   /\.creator-activity-overlay \.overlay-comment\s*\{[\s\S]*background:\s*transparent;[\s\S]*text-shadow:/,
   /\.creator-activity-overlay \.overlay-gift,[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none/,
+  /@media \(min-width: 1024px\)[\s\S]*\.broadcaster-stage \.quick-live-panel\.phase-preview,[\s\S]*grid-template-columns:\s*minmax\(0, 2\.15fr\) minmax\(20rem, 0\.85fr\)/,
+  /\.broadcaster-stage \.quick-live-panel\.no-media:not\(\.phase-ended\) \.broadcast-permission-step\s*\{[\s\S]*grid-column:\s*2/,
+  /\.streamer-profile-editor\s*\{[\s\S]*grid-template-columns:\s*minmax\(16rem, 0\.72fr\) minmax\(0, 1\.5fr\)/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-runtime-live \.broadcaster-stage \.quick-live-video-shell\s*\{[\s\S]*height:\s*100dvh/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-chat\.is-open\s*\{[\s\S]*display:\s*grid/,
   /@media \(max-width: 932px\) and \(orientation: landscape\)/,

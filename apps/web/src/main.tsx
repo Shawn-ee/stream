@@ -2530,7 +2530,7 @@ function QuickGoLive({
     .toString()
     .padStart(2, "0")}:${(durationSeconds % 60).toString().padStart(2, "0")}`;
   const healthLabel: Record<BroadcastConnectionHealth, string> = {
-    ready: zh ? "准备就绪" : "Ready",
+    ready: stream ? (zh ? "预览就绪" : "Preview ready") : (zh ? "等待设置" : "Ready to set up"),
     connecting: zh ? "正在连接" : "Connecting",
     excellent: zh ? "连接良好" : "Excellent",
     weak: zh ? "连接较弱" : "Weak",
@@ -2542,7 +2542,7 @@ function QuickGoLive({
     onRuntimeChange({ phase, health: connectionHealth, duration });
   }, [connectionHealth, duration, onRuntimeChange, phase, viewerCount]);
   return (
-    <section className={`quick-live-panel phase-${phase} camera-facing-${cameraFacingMode} controls-${controlsVisible ? "visible" : "hidden"}`} id="quick-go-live">
+    <section className={`quick-live-panel phase-${phase} ${stream ? "has-media" : "no-media"} camera-facing-${cameraFacingMode} controls-${controlsVisible ? "visible" : "hidden"}`} id="quick-go-live">
       <div className="quick-live-heading">
         <div>
           <p className="eyebrow">{zh ? "快速开播" : "Quick Go Live"}</p>
@@ -2567,7 +2567,6 @@ function QuickGoLive({
         {stream && phase !== "live" ? (
           <div className="broadcast-stage-controls">
             <button type="button" disabled={cameraSwitching} onClick={() => void switchCamera()} aria-label={cameraSwitching ? (zh ? "正在切换相机" : "Switching camera") : zh ? "切换相机" : "Switch camera"}><BroadcastIcon name="flip" /></button>
-            <button type="button" className={!microphoneEnabled ? "is-off" : ""} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /></button>
           </div>
         ) : null}
         {phase === "live" ? overlay : null}
@@ -2620,7 +2619,7 @@ function QuickGoLive({
           </div>
           <div className="quick-live-controls">
             <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
-            <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
+            <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
             <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim()}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
           </div>
         </>
@@ -3110,8 +3109,12 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
     setNotice(t.metadataSaved);
     refresh();
   }
-  async function saveProfile(e: FormEvent) {
+  async function savePublicPresence(e: FormEvent) {
     e.preventDefault();
+    await request(`/api/streamer/rooms/${studio.room.slug}`, {
+      method: "PUT",
+      body: JSON.stringify({ title, goalText: goal, goalTarget }),
+    });
     await request("/api/streamer/profile", {
       method: "PUT",
       body: JSON.stringify({
@@ -3122,11 +3125,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
         scheduleTimezone,
       }),
     });
-    setNotice(
-      t.title === "Stream MVP"
-        ? "Test profile saved."
-        : "测试主页信息已保存。 ",
-    );
+    setNotice(zh ? "公开主页和直播间信息已保存。" : "Public profile and room details saved.");
     refresh();
   }
   if (!studio) return <section className="workspace">{t.preparing}</section>;
@@ -3153,7 +3152,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
         <strong className="broadcaster-brand">HOLIWYN</strong>
         <div className="broadcaster-session-state" aria-live="polite">
           <span className={runtime.phase === "live" ? "is-live" : ""}>
-            <i /> {runtime.phase === "live" ? (zh ? "直播中" : "LIVE") : runtime.phase === "connecting" ? (zh ? "正在开播" : "STARTING") : runtime.phase === "ending" ? (zh ? "正在结束" : "ENDING") : (zh ? "开始直播" : "GO LIVE")}
+            <i /> {runtime.phase === "live" ? (zh ? "直播中" : "LIVE") : runtime.phase === "connecting" ? (zh ? "正在开播" : "STARTING") : runtime.phase === "ending" ? (zh ? "正在结束" : "ENDING") : runtime.phase === "preview" ? (zh ? "预览就绪" : "PREVIEW READY") : (zh ? "准备开播" : "SET UP")}
           </span>
           <time>{runtime.duration}</time>
           <span className="broadcaster-viewers">◉ {viewerCount}</span>
@@ -3282,18 +3281,39 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       ) : null}
 
       {activeSection === "profile" ? (
-        <section className="creator-section creator-config-page">
+        <section className="creator-section creator-config-page streamer-profile-page">
           {liveSessionActive ? (
             <div className="broadcast-continues-banner" role="status">
               <span><i />{zh ? "您的直播仍在继续，观众仍可观看和互动。" : "Your live broadcast is still running for viewers."}</span>
               <button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button>
             </div>
           ) : null}
-          <div className="creator-page-heading"><div><p className="eyebrow">{zh ? "公开主页" : "Public profile"}</p><h3>{zh ? "观众看到的主播信息" : "What viewers see about you"}</h3></div></div>
-          <div className="creator-settings-grid">
-            <section><h3>{zh ? "直播间信息" : "Room details"}</h3><form className="studio-form" onSubmit={(e) => void save(e)}><label>{t.roomTitle}<input value={title} onChange={(e) => setTitle(e.target.value)} /></label><button>{t.saveRoom}</button></form></section>
-            <section><h3>{zh ? "主播资料与日程" : "Creator profile and schedule"}</h3><form className="studio-form" onSubmit={(e) => void saveProfile(e)}><label>{zh ? "简介" : "Bio"}<input value={bio} onChange={(e) => setBio(e.target.value)} maxLength={500} /></label><label>{zh ? "分类" : "Category"}<input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={60} /></label><label>{zh ? "常规直播时间说明" : "Regular schedule description"}<input value={schedule} onChange={(e) => setSchedule(e.target.value)} maxLength={160} /></label><label>{zh ? "下一场直播（可选）" : "Next stream (optional)"}<input type="datetime-local" value={nextStreamAt} onChange={(e) => setNextStreamAt(e.target.value)} /></label><label>{zh ? "日程时区" : "Schedule timezone"}<input value={scheduleTimezone} onChange={(e) => setScheduleTimezone(e.target.value)} maxLength={64} placeholder="America/Chicago" /></label><p className="form-help">{zh ? "时间会按观众所在语言和所选时区显示。清空“下一场直播”可移除单次日程。" : "The next stream is displayed in the selected timezone. Clear it to remove the one-time schedule."}</p><button>{zh ? "保存公开主页" : "Save public profile"}</button></form></section>
-          </div>
+          <div className="creator-page-heading"><div><p className="eyebrow">{zh ? "公开主页" : "Public profile"}</p><h3>{zh ? "观众看到的主播信息" : "What viewers see about you"}</h3><p className="muted">{zh ? "在一个页面检查直播间外观、简介和下一场直播。" : "Review your room, bio, and next stream in one place."}</p></div></div>
+          <form className="streamer-profile-editor" onSubmit={(e) => void savePublicPresence(e)}>
+            <aside className="streamer-profile-preview" aria-label={zh ? "公开主页预览" : "Public profile preview"}>
+              <span className="streamer-profile-avatar" aria-hidden="true">{(title.trim()[0] || "H").toUpperCase()}</span>
+              <p className="eyebrow">{zh ? "观众预览" : "Viewer preview"}</p>
+              <h3>{title || (zh ? "未命名直播" : "Untitled stream")}</h3>
+              <p>{bio || (zh ? "添加一句简介，告诉观众您的直播内容。" : "Add a short bio so viewers know what you stream.")}</p>
+              <div className="streamer-profile-preview-meta">
+                <span>{category || (zh ? "未选择分类" : "No category")}</span>
+                <span>{schedule || (zh ? "尚未添加常规时间" : "No regular schedule yet")}</span>
+              </div>
+            </aside>
+            <div className="streamer-profile-fields">
+              <div className="streamer-profile-field-row">
+                <label>{t.roomTitle}<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} /></label>
+                <label>{zh ? "分类" : "Category"}<input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={60} /></label>
+              </div>
+              <label>{zh ? "简介" : "Bio"}<textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={500} rows={3} /></label>
+              <label>{zh ? "常规直播时间说明" : "Regular schedule description"}<input value={schedule} onChange={(e) => setSchedule(e.target.value)} maxLength={160} placeholder={zh ? "例如：每周二、周四晚上 8 点" : "For example: Tuesdays and Thursdays at 8 PM"} /></label>
+              <div className="streamer-profile-field-row">
+                <label>{zh ? "下一场直播（可选）" : "Next stream (optional)"}<input type="datetime-local" value={nextStreamAt} onChange={(e) => setNextStreamAt(e.target.value)} /></label>
+                <label>{zh ? "日程时区" : "Schedule timezone"}<select value={scheduleTimezone} onChange={(e) => setScheduleTimezone(e.target.value)}>{Array.from(new Set([scheduleTimezone, "UTC", "America/Chicago", "America/New_York", "America/Los_Angeles", "Europe/London", "Asia/Shanghai", "Asia/Tokyo"])).map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}</select></label>
+              </div>
+              <div className="streamer-profile-save-row"><p className="form-help">{zh ? "清空“下一场直播”可移除单次日程。" : "Clear the next-stream field to remove that one-time schedule."}</p><button className="creator-primary-action">{zh ? "保存全部公开信息" : "Save all public details"}</button></div>
+            </div>
+          </form>
         </section>
       ) : null}
 

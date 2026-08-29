@@ -468,7 +468,7 @@
 }
 
 .broadcaster-page:not(.phase-live):not(.phase-connecting):not(.phase-ending) .broadcaster-layout {
-  grid-template-columns: minmax(0, 60rem);
+  grid-template-columns: minmax(0, 90rem);
   justify-content: center;
 }
 
@@ -499,6 +499,90 @@
 
 .broadcaster-stage .quick-live-heading {
   display: none;
+}
+
+@media (min-width: 1024px) {
+  .broadcaster-stage .quick-live-panel.phase-preview,
+  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) {
+    align-items: start;
+    display: grid;
+    gap: var(--space-3) var(--space-4);
+    grid-template-columns: minmax(0, 2.15fr) minmax(20rem, 0.85fr);
+    grid-template-rows: auto auto auto auto 1fr;
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-video-shell,
+  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .quick-live-video-shell {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+  }
+
+  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-permission-step {
+    align-items: stretch;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    grid-column: 2;
+    padding: var(--space-5);
+    text-align: left;
+  }
+
+  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-permission-step p {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading,
+  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-title-field,
+  .broadcaster-stage .quick-live-panel.phase-preview .device-grid,
+  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-audio-check,
+  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls,
+  .broadcaster-stage .quick-live-panel.phase-preview .control-note,
+  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-error {
+    grid-column: 2;
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading {
+    align-items: flex-start;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    margin-bottom: calc(var(--space-3) * -1);
+    padding: var(--space-4) var(--space-4) var(--space-3);
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading small {
+    display: none;
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-title-field,
+  .broadcaster-stage .quick-live-panel.phase-preview .device-grid,
+  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-audio-check,
+  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls:not(.live-controls) {
+    background: var(--color-surface);
+    border-left: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .device-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls:not(.live-controls) {
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding-bottom: var(--space-4);
+  }
+
+  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls .creator-primary-action {
+    grid-column: 1 / -1;
+    min-height: 3.25rem;
+  }
 }
 
 .broadcaster-stage .quick-live-video-shell {
@@ -812,6 +896,109 @@
   text-align: center;
 }
 
+.streamer-profile-page {
+  min-height: 0;
+}
+
+.streamer-profile-editor {
+  align-items: start;
+  display: grid;
+  gap: clamp(1rem, 2vw, 2rem);
+  grid-template-columns: minmax(16rem, 0.72fr) minmax(0, 1.5fr);
+}
+
+.streamer-profile-preview {
+  background: linear-gradient(145deg, rgba(124, 92, 252, 0.2), rgba(21, 27, 46, 0.96));
+  border: 1px solid rgba(124, 92, 252, 0.34);
+  border-radius: var(--radius-xl);
+  display: grid;
+  gap: var(--space-3);
+  min-height: 20rem;
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+}
+
+.streamer-profile-avatar {
+  align-items: center;
+  background: linear-gradient(135deg, var(--color-brand-primary), var(--color-live));
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  font-size: 1.5rem;
+  font-weight: 900;
+  height: 4.5rem;
+  justify-content: center;
+  width: 4.5rem;
+}
+
+.streamer-profile-preview h3,
+.streamer-profile-preview p {
+  margin: 0;
+}
+
+.streamer-profile-preview > p:not(.eyebrow) {
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.streamer-profile-preview-meta {
+  align-self: end;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.streamer-profile-preview-meta span {
+  background: rgba(5, 8, 18, 0.38);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-3);
+}
+
+.streamer-profile-fields {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  display: grid;
+  gap: var(--space-3);
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+}
+
+.streamer-profile-fields label {
+  color: var(--color-text-secondary);
+  display: grid;
+  font-size: var(--text-body);
+  gap: var(--space-2);
+}
+
+.streamer-profile-fields input,
+.streamer-profile-fields select,
+.streamer-profile-fields textarea {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  min-height: var(--control-min);
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  width: 100%;
+}
+
+.streamer-profile-field-row {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.streamer-profile-save-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.streamer-profile-save-row .form-help {
+  margin: 0;
+}
+
 .broadcast-ended-summary h4,
 .broadcast-ended-summary p {
   margin: 0;
@@ -881,6 +1068,20 @@
   .broadcaster-layout {
     display: block;
     min-height: calc(100dvh - 3.5rem);
+  }
+
+  .streamer-profile-editor,
+  .streamer-profile-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .streamer-profile-preview {
+    min-height: 14rem;
+  }
+
+  .streamer-profile-save-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .broadcaster-stage .quick-live-video-shell {

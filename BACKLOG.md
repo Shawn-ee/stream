@@ -2,6 +2,8 @@
 
 ## Active frontend modernization
 
+- One-screen desktop broadcaster setup and compact public-profile editing completed locally: dominant preview plus setup rail, non-duplicated media actions, explicit preview-ready state, viewer preview, timezone selector, and one save action. Remaining acceptance is an owner-assisted physical camera check after deployment.
+
 - Desktop broadcaster presentation cleanup completed locally: full-width video stage, compact controls, transparent creator chat/gift overlays, and preserved mobile fullscreen behavior. Physical desktop broadcast review remains owner-assisted.
 
 - Streamer live-session-safe navigation completed locally: persistent publisher mounting across Profile, same-document Back to Live/browser history, mobile return access, live continuation notice, and true document-exit protection. A physical live navigation acceptance test remains owner-assisted.
