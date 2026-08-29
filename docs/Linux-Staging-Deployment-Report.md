@@ -132,3 +132,15 @@ The primary browser URL is `https://holiwyn.online`. Cloudflare Tunnel forwards 
 - Cloudflare Stream is configured and its lifecycle is verified, but each physical camera/microphone broadcast remains an owner-started action that consumes Stream resources.
 - Public DNS/TLS and Tunnel routing are active. External monitoring/alerts, real identity, payments/cashout, KYC/age enforcement, and legal/compliance readiness remain incomplete.
 - The previous Stream source and application-image IDs are now recorded as a rollback target, but an intentional rollback was not exercised because the upgrade passed. The operator still needs an upgrade-aware guarded action.
+
+## Creator Center wallet and supporter upgrade
+
+On 2026-08-29, owner approval advanced the public preview to application commit `566f5bd95609a4eeaf0d1b8c41f44ad7c03a85e4`.
+
+- Before the fast-forward pull, a mode-`600` PostgreSQL custom-format backup and tracked-source archive were written beneath the checkout's ignored `backups` directory. Their SHA-256 values are `58b4fa534afa5953ee5290b16849ca479590dfad2de489a9d6fada19cdc83a2c` and `73fd0301c6cfac0e91464040033678a71a3525005bfb37048cbaa6f91b8fbfa2`.
+- The migration, API, and web images built successfully and ordered migrations completed. Only the Stream API and web containers were recreated; PostgreSQL, Redis, the Cloudflare Tunnel, and unrelated Odoo services were not targeted.
+- Deployed API image: `sha256:1d76f3198ff14fe5afd00e81ccbfc52a0570bc3b4c6ae34bd5b94ea5e32a2c91`. Deployed web image: `sha256:0ec1660ec6acc9a5216b30908c8506f1e7bbfdccb3443723b75135fb269f1ee0`.
+- API and web reported healthy with zero restarts after replacement. PostgreSQL and Redis retained their existing containers and remained healthy. Local gateway health returned `ok`; API readiness reported database and Redis `ok`.
+- `https://holiwyn.online` returned HTTP 200 through Cloudflare and served `index-BYgClH_h.js` with `index-BZy52MAw.css`.
+- A synthetic streamer session verified the owner-only 30-day wallet summary, detailed transaction history, and room supporter ranking endpoints. The smoke-test session and the earlier failed-verifier session were explicitly revoked; wallet and support data were not mutated.
+- The release adds the persistent Creator Center navigation, responsive earnings wallet, gift/action/private-show breakdown, paginated transaction detail, period-filtered supporter ranking, truthful unavailable states, and the red confirmed End Stream control. Values remain test tokens only; deposits, withdrawals, and real-money claims remain unavailable.
