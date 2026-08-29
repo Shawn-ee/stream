@@ -2,6 +2,10 @@
 
 ## Active frontend modernization
 
+- Creator Center and wallet data truth completed locally: persistent Live/Earnings/Supporters/Actions/Profile/Settings navigation, period summaries, enriched paginated income records, all-support and gift-only rankings, truthful capability failures, and removal of misleading cash-value copy. Database-backed staging remains pending until Docker Desktop is available.
+
+- Earlier creator test wallet and gift ranking pass has been superseded by the Creator Center data-truth milestone above.
+
 - One-screen desktop broadcaster setup and compact public-profile editing completed locally: dominant preview plus setup rail, non-duplicated media actions, explicit preview-ready state, viewer preview, timezone selector, and one save action. Remaining acceptance is an owner-assisted physical camera check after deployment.
 
 - Desktop broadcaster presentation cleanup completed locally: full-width video stage, compact controls, transparent creator chat/gift overlays, and preserved mobile fullscreen behavior. Physical desktop broadcast review remains owner-assisted.

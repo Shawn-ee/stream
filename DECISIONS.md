@@ -1,5 +1,21 @@
 # Architecture Decisions
 
+## 2026-08-29 - Creator Center reads one immutable test ledger
+
+- Live remains the only owner of camera, microphone, WebRTC publication, heartbeat, and realtime room state. Creator Center sections are history-aware presentation views and never mount a second publisher.
+- Available balance is the sum of the existing user ledger. Creator income includes only positive `gift`, `room_action`, and `private_show` references; session, 7-day, 30-day, and lifetime periods are server-derived.
+- Detailed income rows are enriched server-side from their owned reference records. The browser receives display name, support label, quantity, room, time, amount, and a completed test state—not idempotency keys, wallet balances, or raw internal errors.
+- Supporter ranking can include all support or gifts only. It is room-owner-only, capped, privacy-safe, and never exposed as public wallet data.
+- A failed or version-mismatched wallet service is an unavailable state, not a zero balance or “no supporters” claim.
+- Test tokens have no displayed yuan equivalence. Real purchases, deposits, refunds, withdrawals, payouts, KYC/tax handling, and cash claims remain excluded.
+
+## 2026-08-29 - Creator earnings are a test-ledger view, not a financial account (superseded details)
+
+- The creator Earnings page reads the existing balanced wallet ledger, room insights, and session summary. It does not create another balance owner or reinterpret test coins as currency.
+- The first leaderboard ranked gifts only. The current Creator Center offers an explicit all-support ranking and a gift-only filter, both creator-owned and aggregate-only.
+- Earnings and Profile are auxiliary views within the persistent streamer workspace. Opening either hides presentation but never unmounts the browser publisher, local tracks, heartbeat, or realtime room connection.
+- Real deposits, token purchases, refunds, withdrawals, payouts, KYC/tax handling, and cash-value claims remain excluded.
+
 ## 2026-08-29 - Pre-live setup is a companion rail, not a second dashboard
 
 - On desktop, the private camera preview and essential setup controls share one viewport. The preview owns the larger column; title, device selection, microphone confidence, and Go Live use one compact companion rail.

@@ -10,13 +10,21 @@ const packageJson = JSON.parse(packageText);
 
 for (const behavior of [
   /window\.addEventListener\("beforeunload", protectActiveBroadcast\)/,
-  /window\.history\.pushState\([\s\S]*holiwynStreamerSection: "profile"/,
+  /type StreamerSection = "live" \| "earnings" \| "supporters" \| "actions" \| "private" \| "profile" \| "settings"/,
+  /const openAuxiliarySection = useCallback\(\(section: Exclude<StreamerSection, "live">\)/,
+  /const nextUrl = `#streamer-\$\{section\}`/,
+  /window\.history\.pushState\(nextState/,
   /window\.history\.replaceState\([\s\S]*holiwynStreamerSection: "live"/,
   /window\.addEventListener\("popstate", restoreStudioSection\)/,
   /const returnToLive = useCallback/,
   /studio-view-active" : "studio-view-inactive"/,
   /Your live broadcast is still running for viewers/,
-  /onClick=\{activeSection === "profile" \? returnToLive : openProfile\}/,
+  /\["profile", zh \? "主页" : "Profile"\]/,
+  /\["earnings", zh \? "收益" : "Earnings"\]/,
+  /\["supporters", zh \? "支持者" : "Supporters"\]/,
+  /\["actions", zh \? "互动" : "Actions"\]/,
+  /\["settings", zh \? "设置" : "Settings"\]/,
+  /className="creator-center-nav"/,
 ]) assert.match(app, behavior);
 
 assert.doesNotMatch(
@@ -28,6 +36,7 @@ assert.doesNotMatch(
 for (const rule of [
   /\.studio-view-inactive\s*\{\s*display:\s*none/,
   /\.broadcast-continues-banner\s*\{/,
+  /\.creator-center-nav\s*\{/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-profile-button\s*\{[\s\S]*min-height:\s*2\.5rem/,
 ]) assert.match(styles, rule);
 
@@ -37,4 +46,4 @@ assert.equal(
 );
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:streamer-navigation"));
 
-console.log("Persistent publisher mounting, Profile/Back history, mobile return access, and active-session leave protection verified.");
+console.log("Persistent publisher mounting, complete Creator Center history/navigation, Back to Live access, and active-session leave protection verified.");

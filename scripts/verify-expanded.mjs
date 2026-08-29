@@ -98,6 +98,9 @@ await audience(`/api/rooms/${room.slug}/gifts`, {
 const publicSupport = await audience(`/api/rooms/${room.slug}/support-feed`);
 assert.ok(publicSupport.support.some((item) => item.support_type === "gift"));
 await audience(`/api/streamer/rooms/${room.slug}/insights`, { expected: 403 });
+await audience("/api/streamer/wallet/summary?period=lifetime", { expected: 403 });
+await audience("/api/streamer/wallet/transactions?period=lifetime", { expected: 403 });
+await audience(`/api/streamer/rooms/${room.slug}/supporters?period=lifetime`, { expected: 403 });
 
 await streamer("/api/auth/login", {
   method: "POST",
@@ -230,6 +233,9 @@ assert.equal(insights.stats.gift_total, gifts.gifts[0].coin_cost);
 assert.equal(insights.stats.action_total, 33);
 assert.equal(insights.stats.action_count, 1);
 assert.equal(insights.topSupporter.sender, "Demo Audience");
+assert.equal(insights.giftRanking[0].sender, "Demo Audience");
+assert.equal(insights.giftRanking[0].gift_total, gifts.gifts[0].coin_cost);
+assert.equal(insights.giftRanking[0].gift_count, 1);
 assert.ok(insights.recent.some((item) => item.support_type === "action"));
 assert.ok(
   (await audience(`/api/rooms/${room.slug}/support-feed`)).support.some(
@@ -254,6 +260,27 @@ assert.ok(
     (entry) => entry.reference_type === "private_show",
   ),
 );
+const creatorWallet = await streamer("/api/streamer/wallet/summary?period=lifetime");
+assert.equal(creatorWallet.breakdown.gift, gifts.gifts[0].coin_cost);
+assert.equal(creatorWallet.breakdown.action, 33);
+assert.equal(creatorWallet.breakdown.privateShow, 7);
+assert.equal(creatorWallet.periodIncome, gifts.gifts[0].coin_cost + 33 + 7);
+assert.equal(creatorWallet.lifetimeIncome, creatorWallet.periodIncome);
+const firstTransactionPage = await streamer("/api/streamer/wallet/transactions?period=lifetime&type=all&limit=1");
+assert.equal(firstTransactionPage.transactions.length, 1);
+assert.equal(firstTransactionPage.transactions[0].supporter, "Demo Audience");
+assert.ok(firstTransactionPage.transactions[0].label.en);
+assert.equal(firstTransactionPage.transactions[0].status, "completed");
+assert.ok(firstTransactionPage.nextCursor);
+const secondTransactionPage = await streamer(`/api/streamer/wallet/transactions?period=lifetime&type=all&limit=1&cursor=${encodeURIComponent(firstTransactionPage.nextCursor)}`);
+assert.equal(secondTransactionPage.transactions.length, 1);
+assert.notEqual(secondTransactionPage.transactions[0].id, firstTransactionPage.transactions[0].id);
+const supporters = await streamer(`/api/streamer/rooms/${room.slug}/supporters?period=lifetime&kind=all`);
+assert.equal(supporters.supporters[0].displayName, "Demo Audience");
+assert.equal(supporters.supporters[0].giftTotal, gifts.gifts[0].coin_cost);
+assert.equal(supporters.supporters[0].actionTotal, 33);
+assert.equal(supporters.supporters[0].privateShowTotal, 7);
+await streamer("/api/streamer/wallet/transactions?period=lifetime&cursor=invalid", { expected: 400 });
 await audience(`/api/rooms/${room.slug}/reports`, {
   method: "POST",
   body: { reason: "Expanded local verifier report" },

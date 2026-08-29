@@ -2929,6 +2929,156 @@ function CreatorSessionSummary({
   );
 }
 
+function CreatorEarningsWallet({
+  slug,
+  state,
+  t,
+}: {
+  slug: string;
+  state: string;
+  t: typeof copy.en;
+}) {
+  const [period, setPeriod] = useState<"session" | "7d" | "30d" | "lifetime">("session");
+  const [type, setType] = useState<"all" | "gift" | "action" | "private_show">("all");
+  const [summary, setSummary] = useState<any>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const zh = t.title !== "Stream MVP";
+  const refreshWallet = useCallback((cursorToUse: string | null = null, append = false) => {
+    setLoading(true);
+    setError("");
+    const cursor = append && cursorToUse ? `&cursor=${encodeURIComponent(cursorToUse)}` : "";
+    void Promise.all([
+      request(`/api/streamer/wallet/summary?period=${period}`),
+      request(`/api/streamer/wallet/transactions?period=${period}&type=${type}&limit=12${cursor}`),
+    ])
+      .then(([summaryResult, transactionResult]) => {
+        setSummary(summaryResult);
+        setTransactions((current) => append ? [...current, ...(transactionResult.transactions ?? [])] : (transactionResult.transactions ?? []));
+        setNextCursor(transactionResult.nextCursor ?? null);
+      })
+      .catch(() => {
+        if (!append) {
+          setSummary(null);
+          setTransactions([]);
+          setNextCursor(null);
+        }
+        setError(zh ? "暂时无法确认钱包数据，请稍后重试。" : "Wallet data could not be confirmed. Please try again shortly.");
+      })
+      .finally(() => setLoading(false));
+  }, [period, type, zh]);
+  useEffect(() => {
+    refreshWallet();
+    const socket = io({ transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("room:join", slug));
+    socket.on("gift:sent", () => refreshWallet());
+    socket.on("action:purchased", () => refreshWallet());
+    return () => {
+      socket.disconnect();
+    };
+  }, [refreshWallet, slug]);
+  const periods = [
+    ["session", zh ? "本场" : "Session"],
+    ["7d", zh ? "7 天" : "7 days"],
+    ["30d", zh ? "30 天" : "30 days"],
+    ["lifetime", zh ? "全部" : "Lifetime"],
+  ] as const;
+  const types = [
+    ["all", zh ? "全部" : "All"],
+    ["gift", zh ? "礼物" : "Gifts"],
+    ["action", zh ? "互动" : "Actions"],
+    ["private_show", zh ? "私密直播" : "Private"],
+  ] as const;
+  return (
+    <div className="creator-wallet-workspace">
+      <section className="creator-wallet-balance">
+        <div>
+          <p className="eyebrow">{zh ? "测试钱包" : "Test wallet"}</p>
+          <h3>{zh ? "可用测试金币" : "Available test coins"}</h3>
+          <strong>{summary ? Number(summary.availableBalance).toLocaleString() : "—"}</strong>
+          <span>{t.coins}</span>
+        </div>
+        <p>{zh ? "这是平台测试余额，不是人民币、现金或可提现收入。" : "This is a platform test balance—not cash, currency, or withdrawable income."}</p>
+      </section>
+      <section className="creator-earnings-overview">
+        <div className="creator-earnings-heading">
+          <div><p className="eyebrow">{zh ? "收益概览" : "Earnings overview"}</p><h3>{zh ? "直播支持收入" : "Stream support income"}</h3></div>
+          <button type="button" className="secondary" onClick={() => refreshWallet()} disabled={loading}>{loading ? (zh ? "加载中…" : "Loading…") : (zh ? "刷新" : "Refresh")}</button>
+        </div>
+        <div className="creator-period-tabs" aria-label={zh ? "收益周期" : "Earnings period"}>{periods.map(([value, label]) => <button type="button" key={value} className={period === value ? "active" : ""} onClick={() => { setNextCursor(null); setTransactions([]); setPeriod(value); }}>{label}</button>)}</div>
+        <div className="creator-earnings-cards">
+          <article><span>{zh ? "所选周期收入" : "Selected-period income"}</span><strong>{summary ? Number(summary.periodIncome).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
+          <article><span>{zh ? "累计测试收入" : "Lifetime test income"}</span><strong>{summary ? Number(summary.lifetimeIncome).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
+          <article><span>{zh ? "礼物收入" : "Gift income"}</span><strong>{summary ? Number(summary.breakdown.gift).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
+          <article><span>{zh ? "互动收入" : "Action income"}</span><strong>{summary ? Number(summary.breakdown.action).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
+          <article><span>{zh ? "私密直播" : "Private show"}</span><strong>{summary ? Number(summary.breakdown.privateShow).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
+        </div>
+      </section>
+      <section className="creator-wallet-history creator-wallet-transactions">
+        <div className="creator-earnings-heading"><div><p className="eyebrow">{zh ? "详细账本" : "Detailed ledger"}</p><h3>{zh ? "支持收入记录" : "Support transactions"}</h3></div><span>{summary ? `${summary.transactionCount} ${zh ? "笔" : "transactions"}` : ""}</span></div>
+        <div className="creator-period-tabs creator-transaction-filters" aria-label={zh ? "交易类型" : "Transaction type"}>{types.map(([value, label]) => <button type="button" key={value} className={type === value ? "active" : ""} onClick={() => { setNextCursor(null); setTransactions([]); setType(value); }}>{label}</button>)}</div>
+        {transactions.length ? transactions.map((entry) => (
+          <div className="creator-wallet-entry creator-wallet-entry-detailed" key={entry.id}>
+            <span className={`creator-transaction-icon transaction-${entry.type}`}>{entry.type === "gift" ? "✦" : entry.type === "action" ? "⚡" : "◆"}</span>
+            <span><strong>{entry.supporter}</strong><small>{zh ? entry.label.zh : entry.label.en}{entry.quantity > 1 ? ` ×${entry.quantity}` : ""} · {entry.room?.title ?? "Holiwyn"}</small></span>
+            <time>{new Date(entry.createdAt).toLocaleString(zh ? "zh-CN" : "en-US")}</time>
+            <strong>+{Number(entry.amount).toLocaleString()} <small>{t.coins}</small></strong>
+          </div>
+        )) : !loading && !error ? <div className="creator-wallet-empty"><strong>{zh ? "此周期暂无收入" : "No income in this period"}</strong><p>{zh ? "更换周期或收入类型查看其他记录。" : "Try another period or transaction type."}</p></div> : null}
+        {nextCursor ? <button type="button" className="secondary creator-load-more" onClick={() => refreshWallet(nextCursor, true)} disabled={loading}>{zh ? "加载更多" : "Load more"}</button> : null}
+      </section>
+      {error ? <div className="creator-data-unavailable" role="alert"><strong>{zh ? "数据暂时不可用" : "Data temporarily unavailable"}</strong><p>{error}</p><button type="button" className="secondary" onClick={() => refreshWallet()}>{zh ? "重试" : "Try again"}</button></div> : null}
+      <CreatorSessionSummary slug={slug} state={state} t={t} />
+    </div>
+  );
+}
+
+function CreatorSupportersPage({ slug, t }: { slug: string; t: typeof copy.en }) {
+  const zh = t.title !== "Stream MVP";
+  const [period, setPeriod] = useState<"session" | "7d" | "30d" | "lifetime">("session");
+  const [kind, setKind] = useState<"all" | "gift">("all");
+  const [supporters, setSupporters] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setError("");
+    void request(`/api/streamer/rooms/${slug}/supporters?period=${period}&kind=${kind}`)
+      .then((result) => setSupporters(result.supporters ?? []))
+      .catch(() => { setSupporters([]); setError(zh ? "暂时无法确认支持者排行。" : "Supporter ranking could not be confirmed."); })
+      .finally(() => setLoading(false));
+  }, [kind, period, slug, zh]);
+  useEffect(() => {
+    refresh();
+    const socket = io({ transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("room:join", slug));
+    socket.on("gift:sent", refresh);
+    socket.on("action:purchased", refresh);
+    return () => {
+      socket.disconnect();
+    };
+  }, [refresh, slug]);
+  const periods = [["session", zh ? "本场" : "Session"], ["7d", zh ? "7 天" : "7 days"], ["30d", zh ? "30 天" : "30 days"], ["lifetime", zh ? "全部" : "Lifetime"]] as const;
+  return <section className="creator-supporters-workspace">
+    <div className="creator-supporter-toolbar">
+      <div className="creator-period-tabs">{periods.map(([value, label]) => <button type="button" key={value} className={period === value ? "active" : ""} onClick={() => setPeriod(value)}>{label}</button>)}</div>
+      <div className="creator-period-tabs"><button type="button" className={kind === "all" ? "active" : ""} onClick={() => setKind("all")}>{zh ? "全部支持" : "All support"}</button><button type="button" className={kind === "gift" ? "active" : ""} onClick={() => setKind("gift")}>{zh ? "仅礼物" : "Gifts only"}</button></div>
+    </div>
+    {error ? <div className="creator-data-unavailable" role="alert"><strong>{zh ? "排行暂时不可用" : "Ranking temporarily unavailable"}</strong><p>{error}</p><button type="button" className="secondary" onClick={refresh}>{zh ? "重试" : "Try again"}</button></div> : null}
+    {!error && supporters.length ? <ol className="creator-supporter-list">{supporters.map((supporter, index) => <li key={`${supporter.displayName}-${index}`}>
+      <span className={`gifter-rank rank-${index + 1}`}>{index + 1}</span><span className="gifter-avatar">{supporter.displayName?.[0]?.toUpperCase() ?? "?"}</span>
+      <span className="creator-supporter-identity"><strong>{supporter.displayName}</strong><small>{supporter.supportCount} {zh ? "次支持" : "support events"} · {zh ? "最近" : "latest"} {new Date(supporter.lastSupportedAt).toLocaleDateString(zh ? "zh-CN" : "en-US")}</small></span>
+      <span className="creator-supporter-breakdown"><small>{zh ? "礼物" : "Gifts"} {Number(supporter.giftTotal).toLocaleString()} · {zh ? "互动" : "Actions"} {Number(supporter.actionTotal).toLocaleString()} · {zh ? "私密" : "Private"} {Number(supporter.privateShowTotal).toLocaleString()}</small><strong>{Number(supporter.totalSupport).toLocaleString()} {t.coins}</strong></span>
+    </li>)}</ol> : null}
+    {!loading && !error && !supporters.length ? <div className="creator-wallet-empty"><strong>{zh ? "此周期暂无支持者" : "No supporters in this period"}</strong><p>{zh ? "收到礼物、互动购买或私密直播访问后，排行会显示在这里。" : "Gift, action, and private-show support will appear here."}</p></div> : null}
+    {loading ? <p className="muted">{zh ? "正在加载支持者…" : "Loading supporters…"}</p> : null}
+  </section>;
+}
+
+type StreamerSection = "live" | "earnings" | "supporters" | "actions" | "private" | "profile" | "settings";
+
 function StreamerStudio({ t }: { t: typeof copy.en }) {
   const [studio, setStudio] = useState<any>(null);
   const [notice, setNotice] = useState("");
@@ -2945,9 +3095,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
   const [mode, setMode] = useState<"ticket" | "per_minute">("ticket");
   const [ticketCost, setTicketCost] = useState(100);
   const [perMinuteCost, setPerMinuteCost] = useState(10);
-  const [activeSection, setActiveSection] = useState<
-    "live" | "earnings" | "actions" | "private" | "profile" | "settings"
-  >("live");
+  const [activeSection, setActiveSection] = useState<StreamerSection>("live");
   const [viewerCount, setViewerCount] = useState(0);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [runtime, setRuntime] = useState<BroadcasterRuntime>({
@@ -2958,7 +3106,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
   const updateRuntime = useCallback((next: BroadcasterRuntime) => setRuntime(next), []);
   const updateViewerCount = useCallback((count: number) => setViewerCount(count), []);
   const returnToLive = useCallback(() => {
-    if (window.history.state?.holiwynStreamerSection === "profile") {
+    if (window.history.state?.holiwynStreamerSection && window.history.state.holiwynStreamerSection !== "live") {
       window.history.back();
       return;
     }
@@ -2969,14 +3117,13 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
     );
     setActiveSection("live");
   }, []);
-  const openProfile = useCallback(() => {
-    if (activeSection === "profile") return;
-    window.history.pushState(
-      { ...window.history.state, holiwynStreamerSection: "profile" },
-      "",
-      "#streamer-profile",
-    );
-    setActiveSection("profile");
+  const openAuxiliarySection = useCallback((section: Exclude<StreamerSection, "live">) => {
+    if (activeSection === section) return;
+    const nextUrl = `#streamer-${section}`;
+    const nextState = { ...window.history.state, holiwynStreamerSection: section };
+    if (activeSection !== "live") window.history.replaceState(nextState, "", nextUrl);
+    else window.history.pushState(nextState, "", nextUrl);
+    setActiveSection(section);
   }, [activeSection]);
   const refresh = () =>
     void request("/api/streamer/studio").then((d) => {
@@ -3012,10 +3159,13 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       `${window.location.pathname}${window.location.search}`,
     );
     const restoreStudioSection = (event: PopStateEvent) => {
-      const section =
-        event.state?.holiwynStreamerSection === "profile" ||
-        window.location.hash === "#streamer-profile"
-          ? "profile"
+      const requestedSection = event.state?.holiwynStreamerSection;
+      const hashSection = window.location.hash.replace("#streamer-", "");
+      const allowedSections: StreamerSection[] = ["live", "earnings", "supporters", "actions", "private", "profile", "settings"];
+      const section = allowedSections.includes(requestedSection)
+        ? requestedSection
+        : allowedSections.includes(hashSection as StreamerSection)
+          ? hashSection as StreamerSection
           : "live";
       setActiveSection(section);
     };
@@ -3157,14 +3307,21 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
           <time>{runtime.duration}</time>
           <span className="broadcaster-viewers">◉ {viewerCount}</span>
         </div>
-        <button
-          type="button"
-          className={`broadcaster-profile-button ${activeSection === "profile" ? "is-return" : ""}`}
-          onClick={activeSection === "profile" ? returnToLive : openProfile}
-        >
-          {activeSection === "profile" ? (zh ? "返回直播" : "Back to live") : (zh ? "主页" : "Profile")}
-        </button>
+        <div className="broadcaster-header-actions">
+          <button type="button" className={`broadcaster-profile-button ${activeSection !== "live" ? "is-return" : ""}`} onClick={activeSection !== "live" ? returnToLive : () => openAuxiliarySection("earnings")}>{activeSection !== "live" ? (zh ? "返回直播" : "Back to live") : (zh ? "创作者中心" : "Creator Center")}</button>
+        </div>
       </header>
+
+      {activeSection !== "live" ? <nav className="creator-center-nav" aria-label={zh ? "创作者中心" : "Creator Center"}>
+        {([
+          ["live", zh ? "直播" : "Live"],
+          ["earnings", zh ? "收益" : "Earnings"],
+          ["supporters", zh ? "支持者" : "Supporters"],
+          ["actions", zh ? "互动" : "Actions"],
+          ["profile", zh ? "主页" : "Profile"],
+          ["settings", zh ? "设置" : "Settings"],
+        ] as const).map(([section, label]) => <button type="button" key={section} className={(activeSection === section || (activeSection === "private" && section === "actions")) ? "active" : ""} onClick={() => section === "live" ? returnToLive() : openAuxiliarySection(section)}>{label}</button>)}
+      </nav> : null}
 
       <div
         className={`creator-section broadcaster-page phase-${runtime.phase} ${activeSection === "live" ? "studio-view-active" : "studio-view-inactive"}`}
@@ -3213,18 +3370,26 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       </div>
 
       {activeSection === "earnings" ? (
-        <section className="creator-section creator-config-page">
+        <section className="creator-section creator-config-page creator-earnings-page">
+          {liveSessionActive ? <div className="broadcast-continues-banner" role="status"><span><i />{zh ? "您的直播仍在继续；钱包和排行榜会实时更新。" : "Your broadcast is still running; wallet and rankings update in realtime."}</span><button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button></div> : null}
           <div className="creator-page-heading">
             <div>
-              <p className="eyebrow">{zh ? "收益" : "Earnings"}</p>
-              <h3>{zh ? "本场直播支持概览" : "Session support overview"}</h3>
+              <p className="eyebrow">{zh ? "收益与钱包" : "Earnings & wallet"}</p>
+              <h3>{zh ? "查看收入和支持者" : "Understand your income and supporters"}</h3>
               <p className="muted">
-                {zh ? "所有金额均为本地测试金币，不代表真实收入。" : "All amounts are local test coins and do not represent real income."}
+                {zh ? "所有金额均为测试金币，不代表真实收入，也不能充值或提现。" : "All amounts are test coins—not real income and not available for deposits or withdrawals."}
               </p>
             </div>
-            <strong className="test-earnings-total">{room.test_earnings} {t.coins}</strong>
           </div>
-          <CreatorSessionSummary slug={room.slug} state={broadcastState} t={t} />
+          <CreatorEarningsWallet slug={room.slug} state={broadcastState} t={t} />
+        </section>
+      ) : null}
+
+      {activeSection === "supporters" ? (
+        <section className="creator-section creator-config-page creator-supporters-page">
+          {liveSessionActive ? <div className="broadcast-continues-banner" role="status"><span><i />{zh ? "您的直播仍在继续；支持者排行会实时更新。" : "Your broadcast is still running; supporter rankings update in realtime."}</span><button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button></div> : null}
+          <div className="creator-page-heading"><div><p className="eyebrow">{zh ? "支持者" : "Supporters"}</p><h3>{zh ? "了解谁在支持您的直播" : "Recognize the people supporting your stream"}</h3><p className="muted">{zh ? "按真实测试账本汇总礼物、互动和私密直播访问；不会显示观众余额或交易编号。" : "Ranked from the test ledger across gifts, actions, and private-show access. Viewer balances and transaction IDs stay private."}</p></div></div>
+          <CreatorSupportersPage slug={room.slug} t={t} />
         </section>
       ) : null}
 
@@ -3236,6 +3401,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
               <h3>{zh ? "设置观众支持方式" : "Configure viewer support"}</h3>
               <p className="muted">{zh ? "保持选择简单，让观众快速理解如何支持。" : "Keep choices simple so viewers immediately understand how to support."}</p>
             </div>
+            <button type="button" className="secondary" onClick={() => openAuxiliarySection("private")}>{zh ? "私密直播设置" : "Private show settings"}</button>
           </div>
           <div className="creator-tools-grid">
             <form className="control-rail-section quick-goal" onSubmit={(e) => void save(e)}>
@@ -3916,8 +4082,8 @@ function RoomView({
       highValue &&
       !window.confirm(
         t.title === "Stream MVP"
-          ? `Confirm this test gift: ${giftQuantity} × ${gift.name_en} = ${total.toLocaleString()} test tokens (¥${total.toLocaleString()} reference value). No real money is charged.`
-          : `确认测试礼物：${giftQuantity} × ${gift.name_zh} = ${total.toLocaleString()} 测试代币（¥${total.toLocaleString()} 参考价值）。不会产生真实扣款。`,
+          ? `Confirm this test gift: ${giftQuantity} × ${gift.name_en} = ${total.toLocaleString()} test tokens. No real money is charged.`
+          : `确认测试礼物：${giftQuantity} × ${gift.name_zh} = ${total.toLocaleString()} 测试代币。不会产生真实扣款。`,
       )
     )
       return;
@@ -4187,8 +4353,8 @@ function RoomView({
         </div>
         <p className="gift-token-note">
           {t.title === "Stream MVP"
-            ? "1 test token = ¥1 reference value · no purchase, cashout, or real-money redemption"
-            : "1 测试代币 = ¥1 参考价值 · 不支持购买、提现或真实货币兑换"}
+            ? "Test tokens only · no purchase, cashout, or real-money redemption"
+            : "仅限测试代币 · 不支持购买、提现或真实货币兑换"}
         </p>
         <div
           className="gift-catalog"
@@ -4226,7 +4392,7 @@ function RoomView({
               <div>
                 <span>{t.title === "Stream MVP" ? "Total" : "合计"}</span>
                 <strong>{total.toLocaleString()} {t.coins}</strong>
-                <small>¥{total.toLocaleString()} {t.title === "Stream MVP" ? "reference" : "参考价值"}</small>
+                <small>{total.toLocaleString()} {t.title === "Stream MVP" ? "test tokens" : "测试代币"}</small>
               </div>
               <button
                 type="button"

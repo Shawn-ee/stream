@@ -2,7 +2,7 @@
 
 ## Current frontend milestone status
 
-Frontend Modernization Phases 1–9 are complete locally. The responsive product now has the shared design system, desktop/mobile discovery and room layouts, mobile broadcasting workflow, public creator profiles, stable loading/error/empty states, debounced race-safe search, deferred below-fold rendering, and production bundle budgets. The next bounded product milestone is public discovery with low-friction test onboarding; deployment, payment, identity, compliance, and Cloudflare approval boundaries remain unchanged.
+The active bounded milestone is **Creator Center and Wallet Data Truth**. The local implementation now provides persistent Live/Earnings/Supporters/Actions/Profile/Settings navigation, creator-owned period summaries, enriched paginated support transactions, all-support and gift-only rankings, and truthful unavailable states while preserving the active broadcaster. Type checks, focused gates, production build, desktop/mobile Chrome smoke tests, and exact SQL execution against all migrations pass. The complete Compose staging gate remains pending because Docker Desktop crashes on a stale local inference socket. Deployment, payment, identity, compliance, and Cloudflare approval boundaries remain unchanged.
 
 Build a deployable, bilingual English/Chinese livestream-platform **launch candidate** with original design, code, name, and assets. It should provide the essential creator and viewer workflows of a modern streaming product while remaining meaningfully simpler than Stripchat.
 

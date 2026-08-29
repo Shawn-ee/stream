@@ -62,6 +62,12 @@ type DemoUser = {
   ageAcknowledged: boolean;
 };
 type BroadcastTransport = "obs_hls" | "browser_webrtc";
+type CreatorWalletPeriod = "session" | "7d" | "30d" | "lifetime";
+type CreatorWalletType = "all" | "gift" | "action" | "private_show";
+type CreatorPeriodBounds = {
+  from: Date | null;
+  to: Date | null;
+};
 type WebRtcResource = {
   resourceUrl: string | null;
   roomSlug: string;
@@ -73,6 +79,56 @@ const publishResourceTtlMilliseconds = 50_000;
 const playbackResourceTtlMilliseconds = 3 * 60_000;
 const broadcastRecoveryGraceMilliseconds = 45_000;
 const roles: Role[] = ["audience", "streamer", "admin"];
+
+function creatorWalletPeriod(value: unknown): CreatorWalletPeriod | null {
+  return value === "session" || value === "7d" || value === "30d" || value === "lifetime"
+    ? value
+    : null;
+}
+
+function creatorWalletType(value: unknown): CreatorWalletType | null {
+  return value === "all" || value === "gift" || value === "action" || value === "private_show"
+    ? value
+    : null;
+}
+
+async function creatorPeriodBounds(
+  client: ReturnType<typeof database>,
+  roomId: string,
+  period: CreatorWalletPeriod,
+): Promise<CreatorPeriodBounds> {
+  if (period === "lifetime") return { from: null, to: null };
+  if (period === "7d" || period === "30d") {
+    const days = period === "7d" ? 7 : 30;
+    return { from: new Date(Date.now() - days * 86_400_000), to: null };
+  }
+  const session = await client.query<{ started_at: Date | null; ended_at: Date | null }>(
+    "SELECT started.created_at AS started_at,ended.created_at AS ended_at FROM live_rooms r LEFT JOIN LATERAL (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) started ON TRUE LEFT JOIN LATERAL (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.created_at>started.created_at AND e.state<>'live' ORDER BY e.created_at ASC LIMIT 1) ended ON started.created_at IS NOT NULL WHERE r.id=$1",
+    [roomId],
+  );
+  return {
+    from: session.rows[0]?.started_at ?? null,
+    to: session.rows[0]?.ended_at ?? null,
+  };
+}
+
+function encodeCreatorWalletCursor(createdAt: Date, id: string) {
+  return Buffer.from(JSON.stringify([createdAt.toISOString(), id]), "utf8").toString("base64url");
+}
+
+function decodeCreatorWalletCursor(value: unknown): { createdAt: Date; id: string } | null {
+  if (typeof value !== "string" || value.length > 256) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    if (!Array.isArray(decoded) || decoded.length !== 2) return null;
+    const createdAt = new Date(decoded[0]);
+    const id = decoded[1];
+    if (Number.isNaN(createdAt.getTime()) || typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return null;
+    return { createdAt, id };
+  } catch {
+    return null;
+  }
+}
 let realtime: Server | null = null;
 const broadcastRecoveryWindows = new Map<string, number>();
 const runtimeMetrics = {
@@ -1693,6 +1749,176 @@ export function buildApi() {
       await client.end();
     }
   });
+  api.get<{ Querystring: { period?: string } }>(
+    "/api/streamer/wallet/summary",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+      if (!streamer) return;
+      const period = creatorWalletPeriod(request.query.period ?? "session");
+      if (!period) return reply.code(400).send({ error: "invalid_wallet_period" });
+      const client = database();
+      await client.connect();
+      try {
+        const room = await client.query<{ id: string }>(
+          "SELECT id FROM live_rooms WHERE streamer_id=$1",
+          [streamer.id],
+        );
+        if (!room.rows[0]) return reply.code(404).send({ error: "streamer_room_not_found" });
+        const bounds = await creatorPeriodBounds(client, room.rows[0].id, period);
+        const [available, lifetime, selected] = await Promise.all([
+          client.query<{ balance: number }>(
+            "SELECT COALESCE(SUM(amount),0)::int AS balance FROM wallet_ledger WHERE user_id=$1",
+            [streamer.id],
+          ),
+          client.query<{ total: number }>(
+            "SELECT COALESCE(SUM(amount),0)::int AS total FROM wallet_ledger WHERE user_id=$1 AND amount>0 AND reference_type IN ('gift','room_action','private_show')",
+            [streamer.id],
+          ),
+          bounds.from
+            ? client.query<{ gift: number; action: number; private_show: number; transaction_count: number }>(
+                "SELECT COALESCE(SUM(amount) FILTER (WHERE reference_type='gift'),0)::int AS gift,COALESCE(SUM(amount) FILTER (WHERE reference_type='room_action'),0)::int AS action,COALESCE(SUM(amount) FILTER (WHERE reference_type='private_show'),0)::int AS private_show,COUNT(*)::int AS transaction_count FROM wallet_ledger WHERE user_id=$1 AND amount>0 AND reference_type IN ('gift','room_action','private_show') AND created_at>=$2 AND ($3::timestamptz IS NULL OR created_at<$3)",
+                [streamer.id, bounds.from, bounds.to],
+              )
+            : period === "session"
+              ? Promise.resolve({ rows: [{ gift: 0, action: 0, private_show: 0, transaction_count: 0 }] })
+              : client.query<{ gift: number; action: number; private_show: number; transaction_count: number }>(
+                  "SELECT COALESCE(SUM(amount) FILTER (WHERE reference_type='gift'),0)::int AS gift,COALESCE(SUM(amount) FILTER (WHERE reference_type='room_action'),0)::int AS action,COALESCE(SUM(amount) FILTER (WHERE reference_type='private_show'),0)::int AS private_show,COUNT(*)::int AS transaction_count FROM wallet_ledger WHERE user_id=$1 AND amount>0 AND reference_type IN ('gift','room_action','private_show')",
+                  [streamer.id],
+                ),
+        ]);
+        const breakdown = selected.rows[0];
+        return {
+          period,
+          from: bounds.from?.toISOString() ?? null,
+          to: bounds.to?.toISOString() ?? null,
+          generatedAt: new Date().toISOString(),
+          availableBalance: available.rows[0].balance,
+          lifetimeIncome: lifetime.rows[0].total,
+          periodIncome: breakdown.gift + breakdown.action + breakdown.private_show,
+          breakdown: {
+            gift: breakdown.gift,
+            action: breakdown.action,
+            privateShow: breakdown.private_show,
+          },
+          transactionCount: breakdown.transaction_count,
+        };
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.get<{
+    Querystring: { period?: string; type?: string; cursor?: string; limit?: string };
+  }>(
+    "/api/streamer/wallet/transactions",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+      if (!streamer) return;
+      const period = creatorWalletPeriod(request.query.period ?? "session");
+      const transactionType = creatorWalletType(request.query.type ?? "all");
+      const rawLimit = Number(request.query.limit ?? 20);
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 && rawLimit <= 50 ? rawLimit : null;
+      const cursor = request.query.cursor ? decodeCreatorWalletCursor(request.query.cursor) : null;
+      if (!period) return reply.code(400).send({ error: "invalid_wallet_period" });
+      if (!transactionType) return reply.code(400).send({ error: "invalid_wallet_type" });
+      if (!limit) return reply.code(400).send({ error: "invalid_wallet_limit" });
+      if (request.query.cursor && !cursor) return reply.code(400).send({ error: "invalid_wallet_cursor" });
+      const client = database();
+      await client.connect();
+      try {
+        const room = await client.query<{ id: string }>(
+          "SELECT id FROM live_rooms WHERE streamer_id=$1",
+          [streamer.id],
+        );
+        if (!room.rows[0]) return reply.code(404).send({ error: "streamer_room_not_found" });
+        const bounds = await creatorPeriodBounds(client, room.rows[0].id, period);
+        if (period === "session" && !bounds.from) return { period, transactions: [], nextCursor: null };
+        const result = await client.query<{
+          id: string;
+          amount: number;
+          reference_type: string;
+          created_at: Date;
+          supporter: string | null;
+          label_en: string | null;
+          label_zh: string | null;
+          quantity: number | null;
+          room_slug: string | null;
+          room_title: string | null;
+        }>(
+          "SELECT w.id,w.amount,w.reference_type,w.created_at,COALESCE(gs.display_name,asu.display_name,psu.display_name) AS supporter,CASE WHEN w.reference_type='gift' THEN gc.name_en WHEN w.reference_type='room_action' THEN ra.title WHEN w.reference_type='private_show' THEN 'Private show access' END AS label_en,CASE WHEN w.reference_type='gift' THEN gc.name_zh WHEN w.reference_type='room_action' THEN ra.title WHEN w.reference_type='private_show' THEN '私密直播访问' END AS label_zh,CASE WHEN w.reference_type='gift' THEN g.quantity ELSE 1 END AS quantity,COALESCE(gr.slug,ar.slug,pr.slug) AS room_slug,COALESCE(gr.title,ar.title,pr.title) AS room_title FROM wallet_ledger w LEFT JOIN gifts g ON w.reference_type='gift' AND g.id=w.reference_id LEFT JOIN gift_catalog gc ON gc.id=g.gift_id LEFT JOIN users gs ON gs.id=g.sender_id LEFT JOIN live_rooms gr ON gr.id=g.room_id LEFT JOIN room_action_purchases rap ON w.reference_type='room_action' AND rap.id=w.reference_id LEFT JOIN room_actions ra ON ra.id=rap.action_id LEFT JOIN users asu ON asu.id=rap.viewer_id LEFT JOIN live_rooms ar ON ar.id=ra.room_id LEFT JOIN private_show_access psa ON w.reference_type='private_show' AND psa.id=w.reference_id LEFT JOIN private_show_sessions pss ON pss.id=psa.session_id LEFT JOIN users psu ON psu.id=psa.viewer_id LEFT JOIN live_rooms pr ON pr.id=pss.room_id WHERE w.user_id=$1 AND w.amount>0 AND w.reference_type IN ('gift','room_action','private_show') AND ($2::timestamptz IS NULL OR w.created_at>=$2) AND ($3::timestamptz IS NULL OR w.created_at<$3) AND ($4='all' OR ($4='gift' AND w.reference_type='gift') OR ($4='action' AND w.reference_type='room_action') OR ($4='private_show' AND w.reference_type='private_show')) AND ($5::timestamptz IS NULL OR (w.created_at,w.id)<($5::timestamptz,$6::uuid)) ORDER BY w.created_at DESC,w.id DESC LIMIT $7",
+          [streamer.id, bounds.from, bounds.to, transactionType, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1],
+        );
+        const hasMore = result.rows.length > limit;
+        const rows = result.rows.slice(0, limit);
+        return {
+          period,
+          transactions: rows.map((row) => ({
+            id: row.id,
+            amount: row.amount,
+            type: row.reference_type === "room_action" ? "action" : row.reference_type,
+            createdAt: row.created_at.toISOString(),
+            supporter: row.supporter ?? "Viewer",
+            label: { en: row.label_en ?? "Support", zh: row.label_zh ?? "支持" },
+            quantity: row.quantity ?? 1,
+            room: row.room_slug ? { slug: row.room_slug, title: row.room_title } : null,
+            status: "completed",
+          })),
+          nextCursor: hasMore && rows.length
+            ? encodeCreatorWalletCursor(rows[rows.length - 1].created_at, rows[rows.length - 1].id)
+            : null,
+        };
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.get<{
+    Params: { slug: string };
+    Querystring: { period?: string; kind?: string };
+  }>(
+    "/api/streamer/rooms/:slug/supporters",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+      if (!streamer) return;
+      const period = creatorWalletPeriod(request.query.period ?? "session");
+      const kind = request.query.kind ?? "all";
+      if (!period) return reply.code(400).send({ error: "invalid_supporter_period" });
+      if (kind !== "all" && kind !== "gift") return reply.code(400).send({ error: "invalid_supporter_kind" });
+      const client = database();
+      await client.connect();
+      try {
+        const room = await client.query<{ id: string }>(
+          "SELECT id FROM live_rooms WHERE slug=$1 AND streamer_id=$2",
+          [request.params.slug, streamer.id],
+        );
+        if (!room.rows[0]) return reply.code(404).send({ error: "streamer_room_not_found" });
+        const bounds = await creatorPeriodBounds(client, room.rows[0].id, period);
+        if (period === "session" && !bounds.from) return { period, kind, supporters: [] };
+        const result = await client.query(
+          "SELECT supporter_id,display_name,COALESCE(SUM(amount) FILTER (WHERE support_type='gift'),0)::int AS gift_total,COALESCE(SUM(amount) FILTER (WHERE support_type='action'),0)::int AS action_total,COALESCE(SUM(amount) FILTER (WHERE support_type='private_show'),0)::int AS private_show_total,COALESCE(SUM(quantity) FILTER (WHERE support_type='gift'),0)::int AS gift_quantity,SUM(amount)::int AS total_support,COUNT(*)::int AS support_count,MAX(created_at) AS last_supported_at FROM (SELECT g.sender_id AS supporter_id,u.display_name,g.coin_cost AS amount,g.quantity,'gift'::text AS support_type,g.created_at FROM gifts g JOIN users u ON u.id=g.sender_id WHERE g.room_id=$1 AND ($2::timestamptz IS NULL OR g.created_at>=$2) AND ($3::timestamptz IS NULL OR g.created_at<$3) UNION ALL SELECT p.viewer_id,u.display_name,p.coin_cost,1,'action'::text,p.created_at FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id JOIN users u ON u.id=p.viewer_id WHERE a.room_id=$1 AND $4='all' AND ($2::timestamptz IS NULL OR p.created_at>=$2) AND ($3::timestamptz IS NULL OR p.created_at<$3) UNION ALL SELECT pa.viewer_id,u.display_name,CASE WHEN ps.mode='ticket' THEN ps.ticket_cost ELSE ps.per_minute_cost END,1,'private_show'::text,pa.purchased_at FROM private_show_access pa JOIN private_show_sessions ps ON ps.id=pa.session_id JOIN users u ON u.id=pa.viewer_id WHERE ps.room_id=$1 AND $4='all' AND ($2::timestamptz IS NULL OR pa.purchased_at>=$2) AND ($3::timestamptz IS NULL OR pa.purchased_at<$3)) support GROUP BY supporter_id,display_name ORDER BY total_support DESC,support_count DESC,last_supported_at DESC LIMIT 25",
+          [room.rows[0].id, bounds.from, bounds.to, kind],
+        );
+        return {
+          period,
+          kind,
+          from: bounds.from?.toISOString() ?? null,
+          to: bounds.to?.toISOString() ?? null,
+          supporters: result.rows.map((row: any) => ({
+            displayName: row.display_name,
+            giftTotal: row.gift_total,
+            actionTotal: row.action_total,
+            privateShowTotal: row.private_show_total,
+            giftQuantity: row.gift_quantity,
+            totalSupport: row.total_support,
+            supportCount: row.support_count,
+            lastSupportedAt: row.last_supported_at,
+          })),
+        };
+      } finally {
+        await client.end();
+      }
+    },
+  );
   api.get("/api/gifts", async () => {
     const client = database();
     await client.connect();
@@ -2411,11 +2637,16 @@ export function buildApi() {
           "SELECT sender,COALESCE(SUM(coin_cost),0)::int AS total FROM (SELECT u.display_name AS sender,g.coin_cost FROM gifts g JOIN users u ON u.id=g.sender_id WHERE g.room_id=$1 UNION ALL SELECT u.display_name AS sender,p.coin_cost FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id JOIN users u ON u.id=p.viewer_id WHERE a.room_id=$1) support GROUP BY sender ORDER BY total DESC,sender LIMIT 1",
           [room.rows[0].id],
         );
+        const giftRanking = await client.query(
+          "SELECT u.display_name AS sender,COALESCE(SUM(g.coin_cost),0)::int AS gift_total,COALESCE(SUM(g.quantity),0)::int AS gift_count FROM gifts g JOIN users u ON u.id=g.sender_id WHERE g.room_id=$1 GROUP BY u.id,u.display_name ORDER BY gift_total DESC,gift_count DESC,u.display_name LIMIT 10",
+          [room.rows[0].id],
+        );
         return {
           goal: room.rows[0],
           stats: stats.rows[0],
           recent: recent.rows,
           topSupporter: top.rows[0] ?? null,
+          giftRanking: giftRanking.rows,
         };
       } finally {
         await client.end();

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-29 - Creator Center and wallet data truth
+
+- Replaced the two isolated streamer utility buttons with a persistent Creator Center for Live, Earnings, Supporters, Actions, Profile, and Settings while keeping the browser publisher mounted and Back to Live history-safe.
+- Added creator-owned wallet summary APIs for session, 7-day, 30-day, and lifetime periods; totals distinguish gifts, actions, and private-show test support.
+- Added enriched, filterable, cursor-paginated creator income transactions with safe supporter display name, support label, quantity, room, completion state, and timestamp.
+- Added room-owner-only supporter rankings over all support or gifts only, with privacy-safe aggregates and the same period controls.
+- Reworked Earnings and Supporters into bilingual responsive product pages with explicit loading, valid-empty, and unavailable states; an old or unreachable API can no longer appear as a zero balance or an empty ranking.
+- Removed yuan-reference wording from the audience gift flow. Test tokens remain synthetic and cannot be purchased, redeemed, withdrawn, or paid out.
+- Type checks, focused creator wallet/navigation gates, production build, and desktop/mobile Chrome navigation smoke tests passed. A temporary embedded PostgreSQL-compatible verifier applied all migrations and executed the exact summary, enriched transaction, all-support, and gift-only SQL against gifts/actions/private-show fixtures. The complete Compose staging gate remains pending because Docker Desktop crashes on a stale local inference socket; no temporary dependency or verifier remains in the project.
+
+## 2026-08-29 - Creator test wallet and top-gifter ranking
+
+- Made the broadcaster End Stream control unmistakably destructive with a solid red treatment while retaining the existing confirmation step.
+- Added an Earnings entry outside the camera workflow. The dedicated creator view shows available test coins, lifetime support income, gift/action split, recent positive ledger entries, and the current/latest session summary.
+- Added a creator-only top-10 gift ranking calculated from cumulative gift test coins, with total gift quantity as the deterministic tie-breaker. Only display names and aggregate test values reach the browser.
+- Wallet, ranking, and totals refresh from the existing room-scoped gift/action realtime events; opening Earnings keeps the publisher mounted and provides a direct Back to Live route.
+- Preserved the test-money boundary: no deposits, purchases, withdrawals, payouts, cash representation, or commercial provider integration was added.
+
 ## 2026-08-29 - One-screen broadcaster setup and compact public profile
 
 - Reorganized the desktop pre-live experience into a video-first two-column surface: the private preview remains dominant while title, device choices, microphone level, and the primary Go Live action stay visible in one ordinary laptop viewport.

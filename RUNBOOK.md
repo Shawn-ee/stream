@@ -1,5 +1,15 @@
 # Local Runbook
 
+## Creator Center and wallet verification
+
+Run `npm run verify:creator-wallet-ui`, `npm run verify:streamer-navigation`, `npm run check`, and `npm run build`. With Docker Desktop running, also run `npm run verify:expanded` and reset the demo seed afterward.
+
+If Docker Desktop fails before the engine starts, inspect its host log before touching project state. On the 2026-08-29 workstation the failure was an inaccessible stale `dockerInference` runtime reparse point, not a Holiwyn service or migration failure. Do not reset Docker Desktop or delete images/volumes merely to run this milestone; repair Docker separately, then rerun the complete staging gate.
+
+Sign in locally as the synthetic streamer without granting media permission. Open **Creator Center** and verify Live, Earnings, Supporters, Actions, Profile, and Settings. Confirm Back to Live and browser Back return to the still-mounted setup surface. In Earnings, check Session, 7 days, 30 days, and Lifetime plus All, Gifts, Actions, and Private filters; transaction rows must show supporter, support label, quantity where relevant, room, timestamp, and test-coin amount. In Supporters, check all-support and gift-only ranks for each period. A missing or old API must show **Data temporarily unavailable**, never zero or a valid-empty message.
+
+Repeat at 390×844 and confirm no page-level horizontal overflow; reset the viewport afterward. Do not grant camera/microphone, start a Cloudflare stream, send gifts, save profile/settings, push, or deploy during a read-only smoke test.
+
 ## Desktop broadcaster presentation verification
 
 Run `npm run verify:broadcaster-ui`, `npm run verify:streamer-navigation`, `npm run check`, and `npm run build`. At desktop width, confirm the camera fills the available stage column, controls follow immediately below it, and creator-side transient comments/gifts have no opaque card or full-overlay dimming. Confirm premium gifts remain readable through color, motion, symbol glow, and text shadow. Repeat at mobile width to ensure the existing viewport-filling live layout is unchanged.
@@ -183,6 +193,7 @@ The 2026-08-26 signed-WHEP repeat passed creator permission/private preview, WHI
 6. Select End Stream and verify the confirmation appears before any termination. After confirmation, verify local media tracks stop and the simple duration/peak-viewer summary appears.
 7. Run `npm run verify:broadcaster-ui`, `npm run verify:mobile-broadcast`, and `npm run verify:staging`, then reset demo data. This local workflow does not authorize a camera/microphone permission, encoder, Cloudflare usage, Linux deployment, or public release without explicit owner approval.
 8. Open **Profile** without starting media. Confirm the viewer preview and all public fields appear in one compact responsive editor, timezone uses a supported selection, and only one **Save all public details** action is presented. Do not submit during a read-only smoke test.
+9. Open **Earnings** and confirm the broadcast surface remains mounted, Back to Live returns without republishing, test balance equals the existing wallet ledger, gift/action totals are labeled as test coins, recent income excludes outgoing entries, and the gift ranking is ordered by cumulative gift value. Send no gift during a read-only check. The End Stream control must be solid red and must still require confirmation.
 
 ## Activate the approved public Stream input
 
@@ -320,7 +331,7 @@ Creator session insights and the public support feed are covered by `npm run ver
 5. Check the hide/show activity control, English/Chinese labels, reduced-motion behavior, and a 390×844 viewport with no horizontal page overflow.
 6. Run `npm run db:seed` after manual checks. The baseline Demo Audience balance is 20,000 test coins.
 
-Do not interpret the displayed yuan reference as a real exchange promise. This workflow does not authorize payment, deposit, withdrawal, payout, Cloudflare usage, or deployment.
+Test tokens have no cash or yuan equivalence in the product UI. This workflow does not authorize payment, deposit, withdrawal, payout, Cloudflare usage, or deployment.
 
 ## Verify individual audience registration
 
