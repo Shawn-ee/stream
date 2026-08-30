@@ -1970,6 +1970,7 @@ function QuickGoLive({
   viewerCount,
   onRuntimeChange,
   onChatOpen,
+  activeView,
 }: {
   slug: string;
   available: boolean;
@@ -1984,6 +1985,7 @@ function QuickGoLive({
   viewerCount: number;
   onRuntimeChange: (runtime: BroadcasterRuntime) => void;
   onChatOpen: () => void;
+  activeView: boolean;
 }) {
   const zh = t.title !== "Stream MVP";
   const [phase, setPhase] = useState<QuickLivePhase>("idle");
@@ -2184,7 +2186,7 @@ function QuickGoLive({
     };
   }, [phase]);
   useEffect(() => {
-    if (!immersiveBroadcast) return;
+    if (!immersiveBroadcast || !activeView) return;
     const mobileViewport = window.matchMedia("(max-width: 767px)");
     const root = document.documentElement;
     const body = document.body;
@@ -2215,7 +2217,7 @@ function QuickGoLive({
       mobileViewport.removeEventListener("change", syncScrollLock);
       unlockScroll();
     };
-  }, [immersiveBroadcast]);
+  }, [activeView, immersiveBroadcast]);
 
   async function requestWakeLock() {
     if (document.hidden || wakeLockRef.current) return;
@@ -3192,8 +3194,8 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       "",
       `${window.location.pathname}${window.location.search}`,
     );
-    const restoreStudioSection = (event: PopStateEvent) => {
-      const requestedSection = event.state?.holiwynStreamerSection;
+    const restoreStudioSection = () => {
+      const requestedSection = window.history.state?.holiwynStreamerSection;
       const hashSection = window.location.hash.replace("#streamer-", "");
       const allowedSections: StreamerSection[] = ["live", "earnings", "supporters", "actions", "private", "profile", "settings"];
       const section = allowedSections.includes(requestedSection)
@@ -3204,7 +3206,11 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       setActiveSection(section);
     };
     window.addEventListener("popstate", restoreStudioSection);
-    return () => window.removeEventListener("popstate", restoreStudioSection);
+    window.addEventListener("hashchange", restoreStudioSection);
+    return () => {
+      window.removeEventListener("popstate", restoreStudioSection);
+      window.removeEventListener("hashchange", restoreStudioSection);
+    };
   }, []);
   useEffect(() => {
     const slug = studio?.room?.slug;
@@ -3331,7 +3337,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
     Math.round((room.goal_progress / Math.max(1, room.goal_target)) * 100),
   );
   return (
-    <section className={`workspace creator-studio broadcaster-runtime-${runtime.phase}`}>
+    <section className={`workspace creator-studio broadcaster-runtime-${runtime.phase} ${activeSection === "live" ? "creator-live-view" : "creator-center-view"}`}>
       <header className="broadcaster-header">
         <strong className="broadcaster-brand">HOLIWYN</strong>
         <div className="broadcaster-session-state" aria-live="polite">
@@ -3377,12 +3383,12 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
                 method: "PUT",
                 body: JSON.stringify({ title }),
               });
-              setNotice(zh ? "直播标题已保存。" : "Stream title saved.");
             }}
             overlay={<CreatorRealtimeOverlay slug={room.slug} t={t} />}
             viewerCount={viewerCount}
             onRuntimeChange={updateRuntime}
             onChatOpen={() => setMobileChatOpen(true)}
+            activeView={activeSection === "live"}
           />
             <div className="broadcaster-stream-bar">
               <span>{title || (zh ? "未命名直播" : "Untitled stream")}</span>
@@ -3400,7 +3406,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
         {!studio.broadcastControls?.cloudflareConfigured ? (
           <p className="control-note broadcaster-service-note">{zh ? "此环境可测试相机预览，但浏览器直播服务尚未连接。" : "Camera preview is available, but browser broadcasting is not connected in this environment."}</p>
         ) : null}
-        {notice ? <p className="form-notice broadcaster-notice">{notice}</p> : null}
+        {notice && (activeSection !== "live" || !liveSessionActive) ? <p className="form-notice broadcaster-notice">{notice}</p> : null}
       </div>
 
       {activeSection === "earnings" ? (

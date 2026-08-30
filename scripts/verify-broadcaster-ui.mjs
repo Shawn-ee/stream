@@ -52,6 +52,12 @@ assert.doesNotMatch(
   /CreatorSessionSummary|creator-session-metrics|quick-goal|creator-control-rail/,
   "broadcast workflow must not contain analytics, earnings, goals, or dashboard rails",
 );
+assert.doesNotMatch(app, /setNotice\(zh \? "直播标题已保存。" : "Stream title saved\."\)/);
+assert.match(
+  app,
+  /notice && \(activeSection !== "live" \|\| !liveSessionActive\)/,
+  "active live camera must not render workspace notices",
+);
 
 for (const rule of [
   /\.broadcaster-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(19rem, 1fr\)/,

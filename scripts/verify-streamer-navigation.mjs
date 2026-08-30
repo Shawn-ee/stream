@@ -16,7 +16,11 @@ for (const behavior of [
   /window\.history\.pushState\(nextState/,
   /window\.history\.replaceState\([\s\S]*holiwynStreamerSection: "live"/,
   /window\.addEventListener\("popstate", restoreStudioSection\)/,
+  /window\.addEventListener\("hashchange", restoreStudioSection\)/,
   /const returnToLive = useCallback/,
+  /activeView=\{activeSection === "live"\}/,
+  /if \(!immersiveBroadcast \|\| !activeView\) return/,
+  /creator-live-view" : "creator-center-view"/,
   /studio-view-active" : "studio-view-inactive"/,
   /Your live broadcast is still running for viewers/,
   /\["profile", zh \? "主页" : "Profile"\]/,
@@ -38,7 +42,16 @@ for (const rule of [
   /\.broadcast-continues-banner\s*\{/,
   /\.creator-center-nav\s*\{/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-profile-button\s*\{[\s\S]*min-height:\s*2\.5rem/,
+  /\.creator-live-view\.broadcaster-runtime-live \.broadcaster-header\s*\{/,
+  /\.creator-center-view \.broadcaster-header\s*\{[\s\S]*position:\s*relative/,
+  /\.creator-center-nav\s*\{[\s\S]*scroll-snap-type:\s*x proximity/,
 ]) assert.match(styles, rule);
+
+assert.doesNotMatch(
+  styles,
+  /(?<!creator-live-view)\.broadcaster-runtime-live \.broadcaster-header\s*\{/,
+  "Creator Center must not inherit the fixed immersive live header",
+);
 
 assert.equal(
   packageJson.scripts["verify:streamer-navigation"],

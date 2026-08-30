@@ -1471,11 +1471,28 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
 
   .creator-center-nav {
     padding: var(--space-2);
+    scroll-padding-inline: var(--space-2);
+    scroll-snap-type: x proximity;
   }
 
   .creator-center-nav button {
     min-height: 2.75rem;
     padding: 0 var(--space-3);
+    scroll-snap-align: start;
+  }
+
+  .creator-center-view .broadcaster-header {
+    position: relative;
+    z-index: 2;
+  }
+
+  .creator-center-view .broadcaster-brand {
+    font-size: 0.78rem;
+    visibility: visible;
+  }
+
+  .creator-center-view .broadcaster-brand::before {
+    content: none;
   }
 
   .creator-supporter-toolbar {
@@ -1530,7 +1547,7 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     min-height: 21rem;
   }
 
-  .broadcaster-runtime-live .broadcaster-header {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-header {
     background: linear-gradient(180deg, rgba(4, 6, 12, 0.78), transparent);
     border: 0;
     left: 0;
@@ -1540,7 +1557,7 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     z-index: 25;
   }
 
-  .broadcaster-runtime-live .broadcaster-brand {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-brand {
     visibility: hidden;
   }
 
@@ -1549,17 +1566,17 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     flex-direction: column;
   }
 
-  .broadcaster-runtime-live .broadcaster-session-state time,
-  .broadcaster-runtime-live .broadcaster-session-state .broadcaster-viewers {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-session-state time,
+  .creator-live-view.broadcaster-runtime-live .broadcaster-session-state .broadcaster-viewers {
     display: inline;
   }
 
-  .broadcaster-runtime-live .broadcaster-page,
-  .broadcaster-runtime-connecting .broadcaster-page {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-page,
+  .creator-live-view.broadcaster-runtime-connecting .broadcaster-page {
     min-height: 100dvh;
   }
 
-  .broadcaster-runtime-live .broadcaster-stage .quick-live-video-shell {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-stage .quick-live-video-shell {
     height: 100dvh;
     min-height: 100dvh;
   }
@@ -1652,7 +1669,7 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     width: 1px;
   }
 
-  .broadcaster-runtime-live .broadcaster-stream-bar {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-stream-bar {
     display: none;
   }
 
@@ -1693,7 +1710,7 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     padding: 0;
   }
 
-  .broadcaster-runtime-live .video-activity-overlay {
+  .creator-live-view.broadcaster-runtime-live .video-activity-overlay {
     bottom: auto;
     left: auto;
     max-width: none;
@@ -1704,23 +1721,23 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     width: min(44vw, 12rem);
   }
 
-  .broadcaster-runtime-live .creator-activity-overlay .video-overlay-comments {
+  .creator-live-view.broadcaster-runtime-live .creator-activity-overlay .video-overlay-comments {
     gap: var(--space-1);
   }
 
-  .broadcaster-runtime-live .creator-activity-overlay .overlay-comment {
+  .creator-live-view.broadcaster-runtime-live .creator-activity-overlay .overlay-comment {
     font-size: 0.72rem;
     max-width: 100%;
     padding: 0.35rem 0.5rem;
   }
 
-  .broadcaster-runtime-live .creator-activity-overlay .overlay-gift {
+  .creator-live-view.broadcaster-runtime-live .creator-activity-overlay .overlay-gift {
     border-radius: var(--radius-md);
     font-size: 0.75rem;
     padding: 0.45rem 0.55rem;
   }
 
-  .broadcaster-runtime-live .broadcast-background-notice {
+  .creator-live-view.broadcaster-runtime-live .broadcast-background-notice {
     top: max(4.25rem, calc(env(safe-area-inset-top) + 3.5rem));
   }
 
@@ -1731,17 +1748,17 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
 }
 
 @media (max-width: 932px) and (orientation: landscape) and (max-height: 600px) {
-  .broadcaster-runtime-live .broadcaster-header {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-header {
     min-height: 2.75rem;
   }
 
-  .broadcaster-runtime-live .broadcaster-stage .quick-live-video-shell {
+  .creator-live-view.broadcaster-runtime-live .broadcaster-stage .quick-live-video-shell {
     height: 100dvh;
     min-height: 100dvh;
   }
 
-  .broadcaster-runtime-live .video-activity-overlay,
-  .broadcaster-runtime-live .broadcaster-chat {
+  .creator-live-view.broadcaster-runtime-live .video-activity-overlay,
+  .creator-live-view.broadcaster-runtime-live .broadcaster-chat {
     display: none;
   }
 
