@@ -15,7 +15,7 @@ On 2026-08-30, the owner-approved upgrade moved the public checkout from `6e04ce
 - The new named volume `stream-launch-candidate_avatar_production_data` is mounted only at `/app/work/avatars` in the API container and owned by the unprivileged `node` runtime user. No pre-existing avatar media required migration.
 - Deployed image IDs are API `sha256:33c08ca57f57a49cd30319d988c00b69d24f150ed4c913700dde66774e52f2c8` and web `sha256:6ad0452310615714024953445de74d6dd91e1af29f2618cf6571be1eb8731712`.
 - API and web health checks passed; API readiness reported database and Redis healthy. Public HTTPS `/healthz`, `/`, and `/api/rooms` returned 200, room payloads contained the avatar projection, invalid avatar paths returned 404, and the public page served `index-DSV9TZYn.js` plus `index-C0HZ9qJ4.css`.
-- No camera, microphone, broadcast, Cloudflare configuration, DNS, payment, cashout, KYC, or legal/compliance action was used. A signed-in physical Android/avatar-upload acceptance pass remains pending because the local database stack was unavailable and the connected browser-control session could not complete that visual check.
+- A generated-image deployment check proved creator-only upload authorization, 512×512 metadata-free WebP normalization, immutable public delivery, discovery/studio projection, deletion, and zero leftover avatar files. No camera, microphone, broadcast, Cloudflare configuration, DNS, payment, cashout, KYC, or legal/compliance action was used. Physical Android visual acceptance remains pending because the connected device did not expose a controllable mirror and the browser-control session timed out.
 
 ## Realtime gifts and video activity upgrade
 
