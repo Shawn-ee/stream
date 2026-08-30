@@ -16,11 +16,11 @@ for (const behavior of [
   /\/api\/streamer\/wallet\/transactions\?period=/,
   /\/api\/streamer\/rooms\/\$\{slug\}\/supporters\?period=/,
   /Selected-period income/,
-  /Detailed ledger/,
+  /Transactions/,
   /Data temporarily unavailable/,
   /Load more/,
   /Supporters/,
-  /not available for deposits or withdrawals/,
+  /Test coins only · No deposits or withdrawals/,
   /CreatorSessionSummary slug=\{slug\}/,
 ]) assert.match(app, behavior);
 

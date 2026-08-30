@@ -105,7 +105,7 @@
 .broadcast-setup-heading h4,
 .broadcast-permission-step h4 {
   font-size: var(--text-section);
-  margin: var(--space-1) 0 0;
+  margin: 0;
 }
 
 .broadcast-setup-heading small {
@@ -146,6 +146,7 @@
   align-items: center;
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-3) 0 var(--space-2);
   text-align: center;
 }
@@ -1075,6 +1076,12 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   min-height: 0;
 }
 
+.creator-test-note {
+  color: var(--color-text-secondary);
+  font-size: var(--text-meta);
+  margin: var(--space-1) 0 0;
+}
+
 .creator-wallet-workspace {
   display: grid;
   gap: var(--space-4);
@@ -1096,7 +1103,7 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   background: linear-gradient(145deg, rgba(124, 92, 252, 0.3), rgba(21, 27, 46, 0.96));
   border-color: rgba(124, 92, 252, 0.48);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-2);
 }
 
 .creator-wallet-balance h3,

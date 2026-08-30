@@ -2591,8 +2591,8 @@ function QuickGoLive({
           <video ref={videoRef} className={`quick-live-preview ${cameraFacingMode === "user" ? "is-mirrored" : ""}`} autoPlay muted playsInline />
         ) : (
           <div className="quick-live-empty">
-            <strong>{zh ? "您的预览仅在授权后显示" : "Your preview appears only after permission"}</strong>
-            <p>{zh ? "浏览器不会在您点击之前访问设备。" : "The browser will not access devices until you click."}</p>
+            <strong>{zh ? "相机预览" : "Camera preview"}</strong>
+            <p>{zh ? "在下方启用相机和麦克风。" : "Enable camera and microphone below."}</p>
           </div>
         )}
         <div className="broadcast-stage-status" aria-live="polite">
@@ -2619,10 +2619,8 @@ function QuickGoLive({
         <>
           <div className="broadcast-setup-heading">
             <div>
-              <span>{zh ? "第 2 步，共 3 步" : "Step 2 of 3"}</span>
-              <h4>{zh ? "检查画面并设置直播" : "Check your preview and set up the stream"}</h4>
+              <h4>{zh ? "准备开播" : "Ready to go live"}</h4>
             </div>
-            <small>{zh ? "只有您能看到此预览" : "Only you can see this preview"}</small>
           </div>
           <label className="broadcast-title-field">
             {zh ? "直播标题" : "Stream title"}
@@ -2681,9 +2679,7 @@ function QuickGoLive({
         </div>
       ) : (
         <div className="broadcast-permission-step">
-          <span>{zh ? "第 1 步，共 3 步" : "Step 1 of 3"}</span>
-          <h4>{zh ? "准备相机和麦克风" : "Prepare your camera and microphone"}</h4>
-          <p>{zh ? "点击后浏览器会请求权限。开始直播前，画面仅在此设备上显示。" : "Your browser will request permission after you tap. The preview stays on this device until you go live."}</p>
+          <h4>{zh ? "相机和麦克风" : "Camera and microphone"}</h4>
           <button type="button" className="creator-primary-action" onClick={() => void enableDevices()} disabled={phase === "requesting"}>{phase === "requesting" ? (zh ? "正在请求权限…" : "Requesting permission…") : phase === "error" ? (zh ? "重试相机和麦克风" : "Try camera and microphone again") : zh ? "允许相机和麦克风" : "Allow camera and microphone"}</button>
         </div>
       )}
@@ -3031,16 +3027,14 @@ function CreatorEarningsWallet({
     <div className="creator-wallet-workspace">
       <section className="creator-wallet-balance">
         <div>
-          <p className="eyebrow">{zh ? "测试钱包" : "Test wallet"}</p>
-          <h3>{zh ? "可用测试金币" : "Available test coins"}</h3>
+          <h3>{zh ? "测试金币余额" : "Test coin balance"}</h3>
           <strong>{summary ? Number(summary.availableBalance).toLocaleString() : "—"}</strong>
           <span>{t.coins}</span>
         </div>
-        <p>{zh ? "这是平台测试余额，不是人民币、现金或可提现收入。" : "This is a platform test balance—not cash, currency, or withdrawable income."}</p>
       </section>
       <section className="creator-earnings-overview">
         <div className="creator-earnings-heading">
-          <div><p className="eyebrow">{zh ? "收益概览" : "Earnings overview"}</p><h3>{zh ? "直播支持收入" : "Stream support income"}</h3></div>
+          <h3>{zh ? "收入" : "Income"}</h3>
           <button type="button" className="secondary" onClick={() => refreshWallet()} disabled={loading}>{loading ? (zh ? "加载中…" : "Loading…") : (zh ? "刷新" : "Refresh")}</button>
         </div>
         <div className="creator-period-tabs" aria-label={zh ? "收益周期" : "Earnings period"}>{periods.map(([value, label]) => <button type="button" key={value} className={period === value ? "active" : ""} onClick={() => { setNextCursor(null); setTransactions([]); setPeriod(value); }}>{label}</button>)}</div>
@@ -3053,7 +3047,7 @@ function CreatorEarningsWallet({
         </div>
       </section>
       <section className="creator-wallet-history creator-wallet-transactions">
-        <div className="creator-earnings-heading"><div><p className="eyebrow">{zh ? "详细账本" : "Detailed ledger"}</p><h3>{zh ? "支持收入记录" : "Support transactions"}</h3></div><span>{summary ? `${summary.transactionCount} ${zh ? "笔" : "transactions"}` : ""}</span></div>
+        <div className="creator-earnings-heading"><h3>{zh ? "交易记录" : "Transactions"}</h3><span>{summary ? `${summary.transactionCount} ${zh ? "笔" : "transactions"}` : ""}</span></div>
         <div className="creator-period-tabs creator-transaction-filters" aria-label={zh ? "交易类型" : "Transaction type"}>{types.map(([value, label]) => <button type="button" key={value} className={type === value ? "active" : ""} onClick={() => { setNextCursor(null); setTransactions([]); setType(value); }}>{label}</button>)}</div>
         {transactions.length ? transactions.map((entry) => (
           <div className="creator-wallet-entry creator-wallet-entry-detailed" key={entry.id}>
@@ -3414,11 +3408,8 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
           {liveSessionActive ? <div className="broadcast-continues-banner" role="status"><span><i />{zh ? "您的直播仍在继续；钱包和排行榜会实时更新。" : "Your broadcast is still running; wallet and rankings update in realtime."}</span><button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button></div> : null}
           <div className="creator-page-heading">
             <div>
-              <p className="eyebrow">{zh ? "收益与钱包" : "Earnings & wallet"}</p>
-              <h3>{zh ? "查看收入和支持者" : "Understand your income and supporters"}</h3>
-              <p className="muted">
-                {zh ? "所有金额均为测试金币，不代表真实收入，也不能充值或提现。" : "All amounts are test coins—not real income and not available for deposits or withdrawals."}
-              </p>
+              <h3>{zh ? "收益" : "Earnings"}</h3>
+              <p className="creator-test-note">{zh ? "仅限测试金币 · 不支持充值或提现" : "Test coins only · No deposits or withdrawals"}</p>
             </div>
           </div>
           <CreatorEarningsWallet slug={room.slug} state={broadcastState} t={t} />
@@ -3428,7 +3419,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       {activeSection === "supporters" ? (
         <section className="creator-section creator-config-page creator-supporters-page">
           {liveSessionActive ? <div className="broadcast-continues-banner" role="status"><span><i />{zh ? "您的直播仍在继续；支持者排行会实时更新。" : "Your broadcast is still running; supporter rankings update in realtime."}</span><button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button></div> : null}
-          <div className="creator-page-heading"><div><p className="eyebrow">{zh ? "支持者" : "Supporters"}</p><h3>{zh ? "了解谁在支持您的直播" : "Recognize the people supporting your stream"}</h3><p className="muted">{zh ? "按真实测试账本汇总礼物、互动和私密直播访问；不会显示观众余额或交易编号。" : "Ranked from the test ledger across gifts, actions, and private-show access. Viewer balances and transaction IDs stay private."}</p></div></div>
+          <div className="creator-page-heading"><h3>{zh ? "支持者" : "Supporters"}</h3></div>
           <CreatorSupportersPage slug={room.slug} t={t} />
         </section>
       ) : null}
@@ -3437,9 +3428,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
         <section className="creator-section creator-config-page">
           <div className="creator-page-heading">
             <div>
-              <p className="eyebrow">{zh ? "互动与目标" : "Actions and goal"}</p>
-              <h3>{zh ? "设置观众支持方式" : "Configure viewer support"}</h3>
-              <p className="muted">{zh ? "保持选择简单，让观众快速理解如何支持。" : "Keep choices simple so viewers immediately understand how to support."}</p>
+              <h3>{zh ? "互动与目标" : "Actions & goal"}</h3>
             </div>
             <button type="button" className="secondary" onClick={() => openAuxiliarySection("private")}>{zh ? "私密直播设置" : "Private show settings"}</button>
           </div>
@@ -3463,13 +3452,13 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
       {activeSection === "private" ? (
         <section className="creator-section creator-config-page">
           <div className="creator-page-heading">
-            <div><p className="eyebrow">{zh ? "私密直播" : "Private Show"}</p><h3>{zh ? "管理测试访问模式" : "Manage test access mode"}</h3></div>
+            <h3>{zh ? "私密直播" : "Private show"}</h3>
             <span className={`creator-state-chip ${room.private_show_enabled ? "active" : ""}`}>{room.private_show_enabled ? t.active : t.inactive}</span>
           </div>
           <div className="creator-settings-grid creator-private-grid">
             <section>
               <h3>{zh ? "访问与价格" : "Access and pricing"}</h3>
-              <p className="muted">{zh ? "这是测试金币流程；未连接真实付款或提现。" : "This is a test-coin workflow with no real payment or cashout."}</p>
+              <p className="creator-test-note">{zh ? "仅限测试金币" : "Test coins only"}</p>
               <div className="studio-form">
                 <label>{zh ? "访问模式" : "Access mode"}<select value={mode} onChange={(e) => setMode(e.target.value as "ticket" | "per_minute")}><option value="ticket">{t.ticket}</option><option value="per_minute">{t.perMinute}</option></select></label>
                 <label>{t.ticketCost}<input type="number" min="1" value={ticketCost} onChange={(e) => setTicketCost(Number(e.target.value))} /></label>
@@ -3480,7 +3469,6 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
             <section className="creator-guidance-card">
               <p className="eyebrow">{zh ? "当前状态" : "Current state"}</p>
               <h3>{room.private_show_enabled ? (zh ? "私密模式已开启" : "Private mode is active") : (zh ? "公开直播模式" : "Public room mode")}</h3>
-              <p className="muted">{zh ? "启用后，观众必须通过测试金币访问流程。结束后直播间恢复公开状态。" : "When active, viewers use the test-coin access flow. Ending it returns the room to public mode."}</p>
             </section>
           </div>
         </section>
@@ -3494,7 +3482,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
               <button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button>
             </div>
           ) : null}
-          <div className="creator-page-heading"><div><p className="eyebrow">{zh ? "公开主页" : "Public profile"}</p><h3>{zh ? "观众看到的主播信息" : "What viewers see about you"}</h3><p className="muted">{zh ? "在一个页面检查直播间外观、简介和下一场直播。" : "Review your room, bio, and next stream in one place."}</p></div></div>
+          <div className="creator-page-heading"><h3>{zh ? "公开主页" : "Public profile"}</h3></div>
           <form className="streamer-profile-editor" onSubmit={(e) => void savePublicPresence(e)}>
             <aside className="streamer-profile-preview" aria-label={zh ? "公开主页预览" : "Public profile preview"}>
               <span className="streamer-profile-avatar" aria-hidden="true">{(title.trim()[0] || "H").toUpperCase()}</span>
@@ -3525,9 +3513,9 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
 
       {activeSection === "settings" ? (
         <section className="creator-section creator-config-page" id="obs-setup">
-          <div className="creator-page-heading"><div><p className="eyebrow">{zh ? "设置与帮助" : "Settings and help"}</p><h3>{zh ? "设备、OBS 与直播间管理" : "Devices, OBS, and room management"}</h3></div></div>
+          <div className="creator-page-heading"><h3>{zh ? "设置" : "Settings"}</h3></div>
           <div className="creator-settings-grid creator-settings-operations">
-            <section><h3>{zh ? "快速管理" : "Quick moderation"}</h3><p className="muted">{zh ? "当前仅限合成演示观众。" : "Currently limited to the synthetic demo audience."}</p><div className="admin-actions"><button type="button" onClick={() => void moderate("mute")}>{zh ? "禁言观众" : "Mute audience"}</button><button type="button" onClick={() => void moderate("unmute")}>{zh ? "解除观众禁言" : "Unmute audience"}</button></div></section>
+            <section><h3>{zh ? "快速管理" : "Quick moderation"}</h3><div className="admin-actions"><button type="button" onClick={() => void moderate("mute")}>{zh ? "禁言观众" : "Mute audience"}</button><button type="button" onClick={() => void moderate("unmute")}>{zh ? "解除观众禁言" : "Unmute audience"}</button></div></section>
             <section className="broadcast-health"><div><span>{zh ? "上次状态检查" : "Last status check"}</span><strong>{room.broadcast_checked_at ? new Date(room.broadcast_checked_at).toLocaleTimeString() : "—"}</strong></div><button type="button" className="secondary" onClick={() => void refreshBroadcast()} disabled={!studio.broadcastControls?.cloudflareConfigured}>{zh ? "刷新直播状态" : "Refresh broadcast status"}</button></section>
           </div>
           <div className="creator-obs-workspace"><ObsReadiness slug={room.slug} state={broadcastState} t={t} onChanged={refresh} /></div>
