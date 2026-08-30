@@ -40,6 +40,7 @@ for (const essential of [
   /mobile-broadcast-scroll-locked/,
   /window\.matchMedia\("\(max-width: 767px\)"\)/,
   /window\.scrollTo\(0, previousScrollY\)/,
+  /aria-label=\{zh \? "结束直播" : "End stream"\}/,
 ]) assert.match(app, essential);
 
 const previewOverlay = app.match(/<div className="broadcast-stage-controls">[\s\S]*?<\/div>/)?.[0] ?? "";
@@ -67,6 +68,9 @@ for (const rule of [
   /body\.mobile-broadcast-scroll-locked\s*\{[\s\S]*position:\s*fixed;[\s\S]*width:\s*100%/,
   /body\.mobile-broadcast-scroll-locked \.app\.role-streamer\s*\{[\s\S]*height:\s*100dvh;[\s\S]*overflow:\s*hidden/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-runtime-live \.broadcaster-stage \.quick-live-video-shell\s*\{[\s\S]*height:\s*100dvh/,
+  /@media \(max-width: 767px\)[\s\S]*\.quick-live-controls\.live-controls \.danger\s*\{[\s\S]*border-radius:\s*50%;[\s\S]*position:\s*fixed;[\s\S]*top:\s*max\(0\.75rem, env\(safe-area-inset-top\)\);[\s\S]*width:\s*2\.75rem/,
+  /\.quick-live-controls\.live-controls \.danger span\s*\{[\s\S]*clip-path:\s*inset\(50%\)/,
+  /\.broadcaster-runtime-live \.broadcaster-notice,[\s\S]*display:\s*none/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-chat\.is-open\s*\{[\s\S]*display:\s*grid/,
   /@media \(max-width: 932px\) and \(orientation: landscape\)/,
 ]) assert.match(styles, rule);
@@ -74,4 +78,4 @@ for (const rule of [
 assert.equal(packageJson.scripts["verify:broadcaster-ui"], "node scripts/verify-broadcaster-ui.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:broadcaster-ui"));
 
-console.log("Minimal desktop/mobile broadcaster layout, locked immersive mobile viewport, essential controls, chat/gift feed, safe ending, and dashboard exclusions verified.");
+console.log("Minimal desktop/mobile broadcaster layout, locked immersive mobile viewport, compact safe ending control, clean live notices, chat/gift feed, and dashboard exclusions verified.");

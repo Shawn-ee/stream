@@ -2674,7 +2674,7 @@ function QuickGoLive({
             <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
             <button type="button" className="secondary" disabled={cameraSwitching} onClick={() => void switchCamera()}><BroadcastIcon name="flip" /><span>{cameraSwitching ? (zh ? "切换中…" : "Switching…") : zh ? "切换相机" : "Flip"}</span></button>
             <button type="button" className="secondary mobile-chat-trigger" onClick={onChatOpen}><BroadcastIcon name="chat" /><span>{zh ? "聊天" : "Chat"}</span></button>
-            <button type="button" className="danger" onClick={() => setEndConfirmationOpen(true)}><BroadcastIcon name="stop" /><span>{zh ? "结束直播" : "End stream"}</span></button>
+            <button type="button" className="danger" onClick={() => setEndConfirmationOpen(true)} aria-label={zh ? "结束直播" : "End stream"} title={zh ? "结束直播" : "End stream"}><BroadcastIcon name="stop" /><span>{zh ? "结束直播" : "End stream"}</span></button>
           </div>
         </div>
       ) : (

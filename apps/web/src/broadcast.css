@@ -1606,7 +1606,7 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     padding: 4rem max(var(--space-3), env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-right));
     position: fixed;
     right: 0;
-    z-index: 20;
+    z-index: 30;
     transition: opacity 180ms ease, transform 180ms ease;
   }
 
@@ -1631,14 +1631,34 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   .quick-live-controls.live-controls .danger {
     background: rgba(255, 77, 109, 0.16);
     border: 1px solid rgba(255, 77, 109, 0.5);
-    grid-column: 1 / -1;
-    justify-self: center;
-    margin: var(--space-2) 0 0;
-    min-height: 2.65rem;
-    width: min(11rem, 56vw);
+    border-radius: 50%;
+    height: 2.75rem;
+    left: max(0.75rem, env(safe-area-inset-left));
+    margin: 0;
+    min-height: 2.75rem;
+    padding: 0;
+    position: fixed;
+    top: max(0.75rem, env(safe-area-inset-top));
+    width: 2.75rem;
+  }
+
+  .quick-live-controls.live-controls .danger span {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
   }
 
   .broadcaster-runtime-live .broadcaster-stream-bar {
+    display: none;
+  }
+
+  .broadcaster-runtime-connecting .broadcaster-notice,
+  .broadcaster-runtime-live .broadcaster-notice,
+  .broadcaster-runtime-ending .broadcaster-notice {
     display: none;
   }
 
