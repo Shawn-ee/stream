@@ -144,3 +144,13 @@ On 2026-08-29, owner approval advanced the public preview to application commit 
 - `https://holiwyn.online` returned HTTP 200 through Cloudflare and served `index-BYgClH_h.js` with `index-BZy52MAw.css`.
 - A synthetic streamer session verified the owner-only 30-day wallet summary, detailed transaction history, and room supporter ranking endpoints. The smoke-test session and the earlier failed-verifier session were explicitly revoked; wallet and support data were not mutated.
 - The release adds the persistent Creator Center navigation, responsive earnings wallet, gift/action/private-show breakdown, paginated transaction detail, period-filtered supporter ranking, truthful unavailable states, and the red confirmed End Stream control. Values remain test tokens only; deposits, withdrawals, and real-money claims remain unavailable.
+
+## Mobile broadcast viewport hotfix
+
+On 2026-08-29, owner approval deployed frontend commit `00f5eac111d1badddd2ea3253dfd1b373693e32c`.
+
+- A mode-`600` tracked-source rollback archive was created before the fast-forward pull. SHA-256: `f4a14637ab511f6e92b5e4540e4072386a5c021cce45a00a927fd66e16622c4e`.
+- The verified change locks document scrolling and overscroll while a phone broadcaster is connecting, live, reconnecting, or ending; it restores the previous page position afterward while preserving independent chat-sheet scrolling.
+- Only the Stream web image was rebuilt and only the web container was recreated. API, PostgreSQL, Redis, Cloudflare Tunnel, and unrelated Odoo services were not targeted.
+- Deployed web image: `sha256:fb5077512e62138012b8ec071d0b403164fe116d2dbf1578699a200c88465126`. Web and API reported healthy with zero restarts, local gateway health returned `ok`, and the public origin served `index-LZ_bTdZj.js` with `index-VHNDp_kI.css`.
+- Automated broadcaster, mobile-broadcast, resilience, navigation, frontend-polish, TypeScript, production build, and bundle-budget checks passed. The CSS bundle was also confirmed at a 390×844 local viewport without horizontal overflow. No camera, microphone, or Cloudflare broadcast was started for this frontend-only hotfix.
