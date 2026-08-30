@@ -15,7 +15,17 @@ On 2026-08-30, the owner-approved upgrade moved the public checkout from `6e04ce
 - The new named volume `stream-launch-candidate_avatar_production_data` is mounted only at `/app/work/avatars` in the API container and owned by the unprivileged `node` runtime user. No pre-existing avatar media required migration.
 - Deployed image IDs are API `sha256:33c08ca57f57a49cd30319d988c00b69d24f150ed4c913700dde66774e52f2c8` and web `sha256:6ad0452310615714024953445de74d6dd91e1af29f2618cf6571be1eb8731712`.
 - API and web health checks passed; API readiness reported database and Redis healthy. Public HTTPS `/healthz`, `/`, and `/api/rooms` returned 200, room payloads contained the avatar projection, invalid avatar paths returned 404, and the public page served `index-DSV9TZYn.js` plus `index-C0HZ9qJ4.css`.
-- A generated-image deployment check proved creator-only upload authorization, 512×512 metadata-free WebP normalization, immutable public delivery, discovery/studio projection, deletion, and zero leftover avatar files. No camera, microphone, broadcast, Cloudflare configuration, DNS, payment, cashout, KYC, or legal/compliance action was used. Physical Android visual acceptance remains pending because the connected device did not expose a controllable mirror and the browser-control session timed out.
+- A generated-image deployment check proved creator-only upload authorization, 512×512 metadata-free WebP normalization, randomized public delivery, discovery/studio projection, deletion, and zero leftover avatar files. No camera, microphone, broadcast, Cloudflare configuration, DNS, payment, cashout, KYC, or legal/compliance action was used. Physical Android visual acceptance remains pending because the connected device did not expose a controllable mirror and the browser-control session timed out.
+
+### Public avatar upload gateway hotfix
+
+The first physical Android upload exposed HTTP `413` at Nginx for a 281,888-byte multipart body: the API allowed a 5 MiB image, but the gateway still enforced its global 64 KiB request limit. The owner-requested hotfix moved the public checkout through `1208a74c6eed84b10246f041b652e3aeb2863ffd` and then cache-safety commit `1907fa0910a389ae2816af22b5af26487b1e64b2`.
+
+- Before the hotfix pull, mode-`600` source archive `backups/pre-avatar-gateway-20260830T042500Z.tar` was created with SHA-256 `d79b9053ef78dfea5474224694393c6159231cd46777e53ec42dbe32f657a80a`; the immediately preceding verified database/source rollback set remained available.
+- Nginx retains `client_max_body_size 64k` globally and uses a bounded `6m` override only for exact route `/api/streamer/avatar`. The rebuilt web image is `sha256:723e9f38dc3e8682cb527521a43f3c642b2d60518687162f0c97aa75b2f2daac`.
+- Avatar responses now use `Cache-Control: no-store`, avoiding a Cloudflare cache-purge dependency when a creator replaces or removes an avatar. The rebuilt API image is `sha256:b74cb8744454a65ed85e05f57ed28c5e47abd50bf74f3ac59b8e18aa98019635a`.
+- A high-entropy generated PNG larger than 64 KiB passed through public `https://holiwyn.online`, normalized to 512×512 WebP, appeared in studio/discovery projections, and was removed. The post-delete public URL returned 404, while the database and avatar volume both retained zero avatar records/files.
+- Only Stream web and API containers were recreated for their respective changes. PostgreSQL, Redis, Tunnel, VM, Cloudflare configuration, and unrelated workloads were not restarted or changed.
 
 ## Realtime gifts and video activity upgrade
 
