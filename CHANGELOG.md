@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-29 - Unified creator menu and persistent avatars
+
+- Replaced the overflowing Creator Center tab strip and separate account/language controls with one always-visible avatar menu containing Live, Earnings, Top supporters, Actions/private show, Public profile, Settings, language, and safe sign-out.
+- Preserved the single mounted broadcaster runtime: opening any creator utility changes only the presentation view, while Return to live and browser history restore the same camera/publisher session.
+- Added creator-owned JPEG/PNG/WebP avatar upload and removal with a 5 MB input limit, server-side rotation/cropping, metadata removal, bounded 512×512 WebP output, randomized filenames, and role/CSRF enforcement.
+- Propagated avatars through discovery, Following, room identity, public creator profiles, and creator navigation with initials as a resilient fallback.
+- Added a persistent production avatar volume and focused storage/API/navigation verification. Type checks, production builds, image normalization tests, navigation/profile gates, production-environment validation, image locking, and supply-chain policy pass. Database-backed avatar verification remains pending because local PostgreSQL/Docker Desktop is unavailable.
+
 ## 2026-08-29 - Creator Center and wallet data truth
 
 - Replaced the two isolated streamer utility buttons with a persistent Creator Center for Live, Earnings, Supporters, Actions, Profile, and Settings while keeping the browser publisher mounted and Back to Live history-safe.

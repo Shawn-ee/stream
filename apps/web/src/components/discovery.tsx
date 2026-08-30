@@ -1,4 +1,5 @@
 import { LiveStreamCardSkeleton } from "./ui";
+import { CreatorAvatar } from "./avatar";
 
 export type DiscoveryRoom = {
   slug: string;
@@ -6,6 +7,7 @@ export type DiscoveryRoom = {
   status: string;
   streamer_id: string;
   streamer_name: string;
+  avatar_url?: string | null;
   category: string;
   schedule_text?: string;
   next_stream_at?: string | null;
@@ -16,15 +18,6 @@ export type DiscoveryRoom = {
 
 type DiscoveryCopy = Record<string, string>;
 export type MobileDiscoveryView = "for-you" | "following" | "live";
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 function roomState(room: DiscoveryRoom) {
   return room.broadcast_state ?? (room.status === "live" ? "live" : "offline");
@@ -75,15 +68,11 @@ export function LiveStreamCard({
           {state === "live" ? <i aria-hidden="true" /> : null}
           {stateLabel(state, zh)}
         </span>
-        <span className="live-card-preview-avatar" aria-hidden="true">
-          {initials(room.streamer_name)}
-        </span>
+        <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="live-card-preview-avatar" />
         <span className="live-card-category">{room.category}</span>
       </span>
       <span className="live-card-details">
-        <span className={`live-card-avatar state-${state}`} aria-hidden="true">
-          {initials(room.streamer_name)}
-        </span>
+        <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className={`live-card-avatar state-${state}`} />
         <span className="live-card-copy">
           <strong>{room.title}</strong>
           <span className="live-card-creator">{room.streamer_name}</span>
@@ -109,7 +98,7 @@ export function FeaturedLive({
   return (
     <section className={`featured-live state-${state}`} aria-labelledby="featured-live-title">
       <div className="featured-live-art room-card-art-0" aria-hidden="true">
-        <span className="featured-live-avatar">{initials(room.streamer_name)}</span>
+        <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="featured-live-avatar" />
       </div>
       <div className="featured-live-overlay">
         <span className="featured-kicker">
@@ -257,7 +246,7 @@ function CreatorRailRow({
   const state = roomState(room);
   return (
     <button type="button" className="creator-rail-row" onClick={() => onOpen(room)} title={compact ? room.streamer_name : undefined}>
-      <span className={`creator-rail-avatar state-${state}`} aria-hidden="true">{initials(room.streamer_name)}</span>
+      <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className={`creator-rail-avatar state-${state}`} />
       {!compact ? (
         <span className="creator-rail-copy">
           <strong>{room.streamer_name}</strong>

@@ -1,11 +1,4 @@
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { CreatorAvatar, creatorInitials } from "./avatar";
 
 function nextStreamLabel(
   value: string | null | undefined,
@@ -26,6 +19,7 @@ function nextStreamLabel(
 
 export function CreatorProfileSurface({
   displayName,
+  avatarUrl,
   handle,
   bio,
   category,
@@ -42,6 +36,7 @@ export function CreatorProfileSurface({
   onOpenRoom,
 }: {
   displayName: string;
+  avatarUrl?: string | null;
   handle: string;
   bio: string;
   category: string;
@@ -72,10 +67,10 @@ export function CreatorProfileSurface({
       </button>
       <div className="creator-profile-hero">
         <div className="creator-profile-hero-art" aria-hidden="true">
-          <span>{initials(displayName)}</span>
+          <span>{creatorInitials(displayName)}</span>
         </div>
         <div className="creator-profile-identity">
-          <span className={`creator-profile-avatar state-${state}`} aria-hidden="true">{initials(displayName)}</span>
+          <CreatorAvatar name={displayName} url={avatarUrl} className={`creator-profile-avatar state-${state}`} />
           <div className="creator-profile-name">
             <span className={`creator-profile-state state-${state}`}>{stateText}</span>
             <h2 id="public-creator-name">{displayName}</h2>
@@ -110,7 +105,7 @@ export function CreatorProfileSurface({
 
       <article className={`creator-profile-current-room state-${state}`}>
         <div className="creator-profile-room-art" aria-hidden="true">
-          <span>{initials(displayName)}</span>
+          <CreatorAvatar name={displayName} url={avatarUrl} className="creator-profile-room-avatar" />
           <strong>{stateText}</strong>
         </div>
         <div>

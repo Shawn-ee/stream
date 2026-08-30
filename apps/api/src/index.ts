@@ -1,7 +1,10 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import Fastify, { type FastifyReply } from "fastify";
 import { timingSafeEqual } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { createClient } from "redis";
@@ -51,6 +54,13 @@ import {
   userForSessionToken,
 } from "./auth.js";
 import { mutationSchemas } from "./validation.js";
+import {
+  AvatarUploadError,
+  avatarPath,
+  avatarUploadLimitBytes,
+  removeStoredAvatar,
+  saveAvatar,
+} from "./avatar-storage.js";
 
 type Role = "audience" | "streamer" | "admin";
 type DemoUser = {
@@ -368,6 +378,9 @@ export function buildApi() {
     credentials: true,
   });
   void api.register(cookie);
+  void api.register(multipart, {
+    limits: { files: 1, fileSize: avatarUploadLimitBytes, fields: 0 },
+  });
   api.addHook("onRequest", async (request) => {
     runtimeMetrics.httpRequestsTotal += 1;
     requestStartedAt.set(request, performance.now());
@@ -534,6 +547,21 @@ export function buildApi() {
   api.get("/api/auth/session", async (request) => ({
     user: await currentUser(request),
   }));
+  api.get<{ Params: { filename: string } }>(
+    "/api/media/avatars/:filename",
+    async (request, reply) => {
+      const filePath = avatarPath(config.avatarStoragePath, request.params.filename);
+      if (!filePath)
+        return reply.code(404).send({ error: "avatar_not_found" });
+      try {
+        await stat(filePath);
+      } catch {
+        return reply.code(404).send({ error: "avatar_not_found" });
+      }
+      reply.header("cache-control", "public, max-age=31536000, immutable");
+      return reply.type("image/webp").send(createReadStream(filePath));
+    },
+  );
   function setSessionCookies(
     reply: FastifyReply,
     session: Awaited<ReturnType<typeof createSession>>,
@@ -864,7 +892,7 @@ export function buildApi() {
         const query = request.query.q?.trim() ?? "";
         const category = request.query.category?.trim() ?? "";
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.goal_text, u.id AS streamer_id, u.display_name AS streamer_name, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%') AND ($2='' OR p.category=$2) ORDER BY r.status = 'live' DESC, r.title LIMIT 100`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.goal_text, u.id AS streamer_id, u.display_name AS streamer_name, p.avatar_url, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%') AND ($2='' OR p.category=$2) ORDER BY r.status = 'live' DESC, r.title LIMIT 100`,
           [query, category],
         );
         return { rooms: result.rows };
@@ -892,7 +920,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT u.id,u.handle,u.display_name,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state FROM users u JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
+          "SELECT u.id,u.handle,u.display_name,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state FROM users u JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
           [request.params.streamerId],
         );
         if (!result.rows[0])
@@ -959,7 +987,7 @@ export function buildApi() {
       const result = await client.query(
         `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,
                 u.id AS streamer_id,u.display_name AS streamer_name,
-                p.category,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,
+                p.avatar_url,p.category,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,
                 f.created_at AS followed_at
          FROM follows f
          JOIN users u ON u.id=f.streamer_id
@@ -1069,7 +1097,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_transport, r.cloudflare_live_input_id, u.id AS streamer_id,u.display_name AS streamer_name, p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_transport, r.cloudflare_live_input_id, u.id AS streamer_id,u.display_name AS streamer_name, p.avatar_url,p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -1223,6 +1251,107 @@ export function buildApi() {
       }
     },
   );
+  api.post(
+    "/api/streamer/avatar",
+    { bodyLimit: avatarUploadLimitBytes + 64 * 1024 },
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+
+      let upload;
+      try {
+        upload = await request.file({
+          limits: { files: 1, fields: 0, fileSize: avatarUploadLimitBytes },
+        });
+      } catch {
+        return reply.code(413).send({ error: "avatar_too_large" });
+      }
+      if (!upload)
+        return reply.code(400).send({ error: "avatar_file_required" });
+
+      let saved: Awaited<ReturnType<typeof saveAvatar>>;
+      try {
+        const buffer = await upload.toBuffer();
+        if (upload.file.truncated)
+          return reply.code(413).send({ error: "avatar_too_large" });
+        saved = await saveAvatar({
+          storagePath: config.avatarStoragePath,
+          userId: streamer.id,
+          mimeType: upload.mimetype,
+          buffer,
+        });
+      } catch (error) {
+        if (error instanceof AvatarUploadError)
+          return reply.code(400).send({ error: error.code });
+        throw error;
+      }
+
+      const client = database();
+      await client.connect();
+      let previousAvatarUrl: string | null = null;
+      try {
+        await client.query("BEGIN");
+        const current = await client.query<{ avatar_url: string | null }>(
+          "SELECT avatar_url FROM streamer_profiles WHERE user_id=$1 FOR UPDATE",
+          [streamer.id],
+        );
+        if (!current.rows[0]) {
+          await client.query("ROLLBACK");
+          await removeStoredAvatar(config.avatarStoragePath, saved.url);
+          return reply.code(404).send({ error: "streamer_profile_not_found" });
+        }
+        previousAvatarUrl = current.rows[0].avatar_url;
+        await client.query(
+          "UPDATE streamer_profiles SET avatar_url=$1 WHERE user_id=$2",
+          [saved.url, streamer.id],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        await removeStoredAvatar(config.avatarStoragePath, saved.url);
+        throw error;
+      } finally {
+        await client.end();
+      }
+      await removeStoredAvatar(config.avatarStoragePath, previousAvatarUrl);
+      return { avatarUrl: saved.url };
+    },
+  );
+  api.delete("/api/streamer/avatar", async (request, reply) => {
+    const streamer = (await requireRole(request, reply, "streamer")) as
+      | DemoUser
+      | undefined;
+    if (!streamer) return;
+    const client = database();
+    await client.connect();
+    let previousAvatarUrl: string | null = null;
+    try {
+      await client.query("BEGIN");
+      const previous = await client.query<{ avatar_url: string | null }>(
+        "SELECT avatar_url FROM streamer_profiles WHERE user_id=$1 FOR UPDATE",
+        [streamer.id],
+      );
+      previousAvatarUrl = previous.rows[0]?.avatar_url ?? null;
+      if (!previous.rowCount) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "streamer_profile_not_found" });
+      }
+      await client.query(
+        "UPDATE streamer_profiles SET avatar_url=NULL WHERE user_id=$1",
+        [streamer.id],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      await client.end();
+    }
+    await removeStoredAvatar(config.avatarStoragePath, previousAvatarUrl);
+    return reply.code(204).send();
+  });
   api.post<{
     Params: { slug: string };
     Body: { sdp?: string };
@@ -2589,7 +2718,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
+        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
         [user.id],
       );
       return {

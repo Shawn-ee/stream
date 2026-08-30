@@ -1,5 +1,13 @@
 # Architecture Decisions
 
+## 2026-08-29 - Creator identity lives behind one avatar menu
+
+- The broadcaster header exposes one persistent avatar control. Creator utilities, language, and sign-out live in its popover; the old horizontal section strip is removed so mobile and desktop use the same understandable navigation model.
+- Navigation continues to hide/show views around the one mounted broadcast controller. The avatar menu never owns camera, microphone, WebRTC, heartbeat, or room-socket lifecycle.
+- Uploaded avatars are untrusted media. The API accepts only JPEG, PNG, or WebP up to 5 MB, decodes with a pixel limit, applies orientation, crops to 512×512, removes metadata, and stores a new randomized WebP. The browser never chooses the final path.
+- The current single-server deployment stores avatars in an API-owned named volume. Database rows retain only public randomized URLs. This is portable through normal volume backup/restore; object storage/CDN becomes a later scaling step rather than a requirement for the current 100-user target.
+- Avatar URLs are projected only with public creator identity. Upload/removal remains creator-owned and CSRF-protected; audience/admin roles cannot mutate it.
+
 ## 2026-08-29 - Creator Center reads one immutable test ledger
 
 - Live remains the only owner of camera, microphone, WebRTC publication, heartbeat, and realtime room state. Creator Center sections are history-aware presentation views and never mount a second publisher.

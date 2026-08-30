@@ -45,7 +45,7 @@ try {
   await client.query(
     `INSERT INTO streamer_profiles (user_id, bio, category, is_featured)
      VALUES ($1, $2, $3, TRUE)
-     ON CONFLICT (user_id) DO UPDATE SET bio = EXCLUDED.bio, category = EXCLUDED.category, is_featured = EXCLUDED.is_featured`,
+     ON CONFLICT (user_id) DO UPDATE SET bio = EXCLUDED.bio, avatar_url=NULL, category = EXCLUDED.category, is_featured = EXCLUDED.is_featured`,
     [
       accounts[1][0],
       "A test-only streamer profile for local product development.",
@@ -158,7 +158,7 @@ try {
     "INSERT INTO room_actions (id,room_id,title,coin_cost,duration_label,display_order) VALUES ('50000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','Wave hello',25,'Quick action',1),('50000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','Creator choice',75,'5 min',2)",
   );
   await client.query(
-    "INSERT INTO streamer_profiles (user_id,bio,category,schedule_text) VALUES ($1,'A second local creator for discovery testing.','Music','Weekends 10 PM Central - Test schedule') ON CONFLICT (user_id) DO UPDATE SET bio=EXCLUDED.bio,category=EXCLUDED.category,schedule_text=EXCLUDED.schedule_text",
+    "INSERT INTO streamer_profiles (user_id,bio,category,schedule_text) VALUES ($1,'A second local creator for discovery testing.','Music','Weekends 10 PM Central - Test schedule') ON CONFLICT (user_id) DO UPDATE SET bio=EXCLUDED.bio,avatar_url=NULL,category=EXCLUDED.category,schedule_text=EXCLUDED.schedule_text",
     [accounts[3][0]],
   );
   await client.query(

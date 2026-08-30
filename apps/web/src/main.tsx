@@ -34,6 +34,7 @@ import {
 } from "./components/discovery";
 import { LiveChatPanel, MobileRoomOverlay, RoomCreatorBar } from "./components/room";
 import { CreatorProfileSurface } from "./components/profile";
+import { CreatorAvatar } from "./components/avatar";
 import {
   MobileBottomNav,
   MobileHeaderActions,
@@ -56,6 +57,7 @@ type Room = {
   status: string;
   streamer_id: string;
   streamer_name: string;
+  avatar_url?: string | null;
   category: string;
   bio?: string;
   schedule_text?: string;
@@ -72,6 +74,7 @@ type StreamerProfile = {
   id: string;
   handle: string;
   display_name: string;
+  avatar_url?: string | null;
   bio: string;
   category: string;
   schedule_text: string;
@@ -265,10 +268,11 @@ function csrfToken() {
 }
 async function request(path: string, options?: RequestInit) {
   const csrf = csrfToken();
+  const isFormData = options?.body instanceof FormData;
   const response = await fetch(path, {
     credentials: "include",
     headers: {
-      ...(options?.body ? { "content-type": "application/json" } : {}),
+      ...(options?.body && !isFormData ? { "content-type": "application/json" } : {}),
       ...(csrf && options?.method && options.method !== "GET"
         ? { "x-csrf-token": csrf }
         : {}),
@@ -1230,7 +1234,7 @@ function FollowingFeed({
       <div className="following-feed-list">
         {creators.map((item) => (
           <button key={item.slug} onClick={() => onOpen(item)}>
-            <span className={`following-avatar state-${item.broadcast_state}`}>{item.streamer_name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
+            <CreatorAvatar name={item.streamer_name} url={item.avatar_url} className={`following-avatar state-${item.broadcast_state}`} />
             <span><strong>{item.streamer_name}</strong><small>{broadcastLabel(t, item.broadcast_state)}</small><small>{item.next_stream_at ? `${zh ? "下一场" : "Next"}: ${new Date(item.next_stream_at).toLocaleString(zh ? "zh-CN" : "en-US", { timeZone: item.schedule_timezone || undefined })}` : item.schedule_text}</small></span>
           </button>
         ))}
@@ -3144,6 +3148,10 @@ function StreamerStudio({
   const [viewerCount, setViewerCount] = useState(0);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const accountMenuRef = useRef<HTMLDetailsElement | null>(null);
   const [runtime, setRuntime] = useState<BroadcasterRuntime>({
     phase: "idle",
     health: "ready",
@@ -3151,6 +3159,9 @@ function StreamerStudio({
   });
   const updateRuntime = useCallback((next: BroadcasterRuntime) => setRuntime(next), []);
   const updateViewerCount = useCallback((count: number) => setViewerCount(count), []);
+  const closeCreatorMenu = useCallback(() => {
+    if (accountMenuRef.current) accountMenuRef.current.open = false;
+  }, []);
   const returnToLive = useCallback(() => {
     if (window.history.state?.holiwynStreamerSection && window.history.state.holiwynStreamerSection !== "live") {
       window.history.back();
@@ -3171,6 +3182,23 @@ function StreamerStudio({
     else window.history.pushState(nextState, "", nextUrl);
     setActiveSection(section);
   }, [activeSection]);
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) closeCreatorMenu();
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeCreatorMenu();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [closeCreatorMenu]);
+  useEffect(() => () => {
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+  }, [avatarPreviewUrl]);
   const refresh = () =>
     void request("/api/streamer/studio").then((d) => {
       setStudio(d);
@@ -3328,6 +3356,53 @@ function StreamerStudio({
     setNotice(zh ? "公开主页和直播间信息已保存。" : "Public profile and room details saved.");
     refresh();
   }
+  function selectAvatar(file: File | null) {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setNotice(zh ? "请选择 JPEG、PNG 或 WebP 图片。" : "Choose a JPEG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setNotice(zh ? "头像图片不能超过 5 MB。" : "Avatar images must be 5 MB or smaller.");
+      return;
+    }
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    setAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+  }
+  async function uploadAvatar() {
+    if (!avatarFile) return;
+    setAvatarSaving(true);
+    try {
+      const form = new FormData();
+      form.append("avatar", avatarFile);
+      await request("/api/streamer/avatar", { method: "POST", body: form });
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+      setAvatarFile(null);
+      setAvatarPreviewUrl(null);
+      setNotice(zh ? "头像已更新。" : "Avatar updated.");
+      refresh();
+    } catch {
+      setNotice(zh ? "无法保存头像，请检查图片后重试。" : "Avatar could not be saved. Check the image and try again.");
+    } finally {
+      setAvatarSaving(false);
+    }
+  }
+  async function removeAvatar() {
+    setAvatarSaving(true);
+    try {
+      await request("/api/streamer/avatar", { method: "DELETE" });
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+      setAvatarFile(null);
+      setAvatarPreviewUrl(null);
+      setNotice(zh ? "头像已移除。" : "Avatar removed.");
+      refresh();
+    } catch {
+      setNotice(zh ? "暂时无法移除头像。" : "Avatar could not be removed right now.");
+    } finally {
+      setAvatarSaving(false);
+    }
+  }
   if (!studio) return <section className="workspace">{t.preparing}</section>;
   const room = studio.room;
   const zh = t.title !== "Stream MVP";
@@ -3358,38 +3433,64 @@ function StreamerStudio({
           <span className="broadcaster-viewers">◉ {viewerCount}</span>
         </div>
         <div className="broadcaster-header-actions">
-          {activeSection !== "live" ? (
-            <details className="broadcaster-account-menu">
-              <summary aria-label={zh ? "打开账户菜单" : "Open account menu"} title={zh ? "账户" : "Account"}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>
-              </summary>
-              <div className="broadcaster-account-popover">
-                <strong>{zh ? "账户" : "Account"}</strong>
+          <details className="broadcaster-account-menu" ref={accountMenuRef}>
+            <summary aria-label={zh ? "打开创作者菜单" : "Open creator menu"} title={zh ? "创作者菜单" : "Creator menu"}>
+              <CreatorAvatar
+                name={studio.user?.displayName ?? (zh ? "主播" : "Creator")}
+                url={studio.room?.avatar_url}
+                className="broadcaster-menu-avatar"
+              />
+            </summary>
+            <div className="broadcaster-account-popover">
+              <header className="creator-menu-identity">
+                <CreatorAvatar
+                  name={studio.user?.displayName ?? (zh ? "主播" : "Creator")}
+                  url={studio.room?.avatar_url}
+                  className="creator-menu-identity-avatar"
+                />
+                <span><strong>{studio.user?.displayName}</strong><small>@{studio.user?.handle}</small></span>
+              </header>
+              <nav className="creator-menu-sections" aria-label={zh ? "创作者页面" : "Creator pages"}>
+                {([
+                  ["live", zh ? "返回直播" : "Return to live", "●"],
+                  ["earnings", zh ? "收益" : "Earnings", "◈"],
+                  ["supporters", zh ? "支持者排行" : "Top supporters", "♢"],
+                  ["actions", zh ? "互动与私密直播" : "Actions & private show", "✦"],
+                  ["profile", zh ? "公开主页" : "Public profile", "○"],
+                  ["settings", zh ? "设置" : "Settings", "⚙"],
+                ] as const).map(([section, label, icon]) => (
+                  <button
+                    type="button"
+                    key={section}
+                    className={activeSection === section || (section === "actions" && activeSection === "private") ? "active" : ""}
+                    aria-current={activeSection === section ? "page" : undefined}
+                    onClick={() => {
+                      if (section === "live") returnToLive();
+                      else openAuxiliarySection(section);
+                      closeCreatorMenu();
+                    }}
+                  ><span aria-hidden="true">{icon}</span>{label}</button>
+                ))}
+              </nav>
+              <div className="creator-menu-language">
+                <span>{zh ? "语言" : "Language"}</span>
                 <LanguagePicker language={language} onChange={onLanguageChange} />
-                <button
-                  type="button"
-                  className="danger broadcaster-signout-button"
-                  onClick={() => liveSessionActive ? setLogoutConfirmationOpen(true) : onLogout()}
-                >
-                  {zh ? "退出登录" : "Sign out"}
-                </button>
               </div>
-            </details>
-          ) : null}
-          <button type="button" className={`broadcaster-profile-button ${activeSection !== "live" ? "is-return" : ""}`} onClick={activeSection !== "live" ? returnToLive : () => openAuxiliarySection("earnings")}>{activeSection !== "live" ? (zh ? "返回直播" : "Back to live") : (zh ? "创作者中心" : "Creator Center")}</button>
+              <button
+                type="button"
+                className="danger broadcaster-signout-button"
+                onClick={() => {
+                  closeCreatorMenu();
+                  if (liveSessionActive) setLogoutConfirmationOpen(true);
+                  else onLogout();
+                }}
+              >
+                {zh ? "退出登录" : "Sign out"}
+              </button>
+            </div>
+          </details>
         </div>
       </header>
-
-      {activeSection !== "live" ? <nav className="creator-center-nav" aria-label={zh ? "创作者中心" : "Creator Center"}>
-        {([
-          ["live", zh ? "直播" : "Live"],
-          ["earnings", zh ? "收益" : "Earnings"],
-          ["supporters", zh ? "支持者" : "Supporters"],
-          ["actions", zh ? "互动" : "Actions"],
-          ["profile", zh ? "主页" : "Profile"],
-          ["settings", zh ? "设置" : "Settings"],
-        ] as const).map(([section, label]) => <button type="button" key={section} className={(activeSection === section || (activeSection === "private" && section === "actions")) ? "active" : ""} onClick={() => section === "live" ? returnToLive() : openAuxiliarySection(section)}>{label}</button>)}
-      </nav> : null}
 
       <div
         className={`creator-section broadcaster-page phase-${runtime.phase} ${activeSection === "live" ? "studio-view-active" : "studio-view-inactive"}`}
@@ -3519,7 +3620,24 @@ function StreamerStudio({
           <div className="creator-page-heading"><h3>{zh ? "公开主页" : "Public profile"}</h3></div>
           <form className="streamer-profile-editor" onSubmit={(e) => void savePublicPresence(e)}>
             <aside className="streamer-profile-preview" aria-label={zh ? "公开主页预览" : "Public profile preview"}>
-              <span className="streamer-profile-avatar" aria-hidden="true">{(title.trim()[0] || "H").toUpperCase()}</span>
+              <div className="streamer-avatar-editor">
+                <CreatorAvatar
+                  name={studio.user?.displayName ?? title ?? "Creator"}
+                  url={avatarPreviewUrl ?? room.avatar_url}
+                  className="streamer-profile-avatar"
+                />
+                <input
+                  id="streamer-avatar-file"
+                  className="avatar-file-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => selectAvatar(event.target.files?.[0] ?? null)}
+                />
+                <label className="avatar-select-button" htmlFor="streamer-avatar-file">{zh ? "选择头像" : "Choose avatar"}</label>
+                {avatarFile ? <button type="button" className="creator-primary-action" disabled={avatarSaving} onClick={() => void uploadAvatar()}>{avatarSaving ? (zh ? "正在保存…" : "Saving…") : (zh ? "保存头像" : "Save avatar")}</button> : null}
+                {room.avatar_url ? <button type="button" className="avatar-remove-button" disabled={avatarSaving} onClick={() => void removeAvatar()}>{zh ? "移除" : "Remove"}</button> : null}
+                <small>{zh ? "JPEG、PNG 或 WebP，最大 5 MB。保存后会裁剪为正方形。" : "JPEG, PNG, or WebP up to 5 MB. Saved as a square crop."}</small>
+              </div>
               <p className="eyebrow">{zh ? "观众预览" : "Viewer preview"}</p>
               <h3>{title || (zh ? "未命名直播" : "Untitled stream")}</h3>
               <p>{bio || (zh ? "添加一句简介，告诉观众您的直播内容。" : "Add a short bio so viewers know what you stream.")}</p>
@@ -3813,6 +3931,7 @@ function PublicCreatorProfileView({
     <section className="creator-profile-page">
       <CreatorProfileSurface
         displayName={profile.display_name}
+        avatarUrl={profile.avatar_url}
         handle={profile.handle}
         bio={profile.bio}
         category={profile.category}
@@ -4276,6 +4395,7 @@ function RoomView({
         <VideoActivityOverlay messages={messages} gift={activeGift} t={t} />
         <MobileRoomOverlay
           creatorName={room.streamer_name}
+          avatarUrl={room.avatar_url}
           title={room.title}
           state={broadcast.state}
           stateLabel={broadcastLabel(t, broadcast.state)}
@@ -4302,6 +4422,7 @@ function RoomView({
       </div>
       <RoomCreatorBar
         creatorName={room.streamer_name}
+        avatarUrl={room.avatar_url}
         ariaLabel={t.title === "Stream MVP" ? `${room.streamer_name} stream information` : `${room.streamer_name} 的直播信息`}
         title={room.title}
         category={room.category}

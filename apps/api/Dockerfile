@@ -16,5 +16,6 @@ COPY apps/web/package.json apps/web/package.json
 RUN npm ci --omit=dev --workspace=@stream-mvp/api && npm cache clean --force
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY apps/api/src/db/migrations apps/api/dist/db/migrations
+RUN mkdir -p /app/work/avatars && chown -R node:node /app/work
 USER node
 CMD ["node", "apps/api/dist/index.js"]

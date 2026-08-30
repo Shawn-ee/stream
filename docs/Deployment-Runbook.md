@@ -93,13 +93,13 @@ The automated disposable restore drill is:
 npm run verify:backup-restore
 ```
 
-For an approved private host, take a PostgreSQL custom-format backup from the database container, encrypt it using the operator's approved backup system, and store it off-host. Do not place backups or credentials in this repository. A restore must first target a separate database and pass row-count and application-readiness checks before it replaces any active database.
+For an approved private host, take a PostgreSQL custom-format backup from the database container, encrypt it using the operator's approved backup system, and store it off-host. Back up the `avatar_production_data` volume in the same recovery set so profile rows and normalized avatar files stay consistent. Do not place backups, uploaded media, or credentials in this repository. A database restore must first target a separate database and pass row-count and application-readiness checks before it replaces any active database; avatar restoration must use a separate temporary volume and verify referenced files before switching it into service.
 
 The repository verifier creates and destroys only the exact disposable database `stream_mvp_restore_check`; it never overwrites the normal application database.
 
 ## Upgrade and rollback
 
-1. Back up PostgreSQL and verify the backup before an upgrade.
+1. Back up PostgreSQL and the `avatar_production_data` volume, then verify both before an upgrade.
 2. Record the current source revision and image digests.
 3. Build the candidate and run migrations in private staging.
 4. Run readiness, authentication, security, realtime, and smoke checks.

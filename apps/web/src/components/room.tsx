@@ -1,4 +1,5 @@
 import type { FormEvent } from "react";
+import { CreatorAvatar } from "./avatar";
 
 type ChatMessage = {
   id: string;
@@ -6,17 +7,9 @@ type ChatMessage = {
   body: string;
 };
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 export function RoomCreatorBar({
   creatorName,
+  avatarUrl,
   ariaLabel,
   title,
   category,
@@ -39,6 +32,7 @@ export function RoomCreatorBar({
   onBuyPrivateAccess,
 }: {
   creatorName: string;
+  avatarUrl?: string | null;
   ariaLabel: string;
   title: string;
   category: string;
@@ -63,7 +57,7 @@ export function RoomCreatorBar({
   return (
     <section className="room-creator-bar" aria-label={ariaLabel}>
       <button type="button" className="room-creator-profile-link" aria-label={profileLabel} onClick={onProfile}>
-        <span className={`room-creator-avatar state-${state}`} aria-hidden="true">{initials(creatorName)}</span>
+        <CreatorAvatar name={creatorName} url={avatarUrl} className={`room-creator-avatar state-${state}`} />
       </button>
       <div className="room-creator-copy">
         <div className="room-creator-name-row">
@@ -162,6 +156,7 @@ export function LiveChatPanel({
 
 export function MobileRoomOverlay({
   creatorName,
+  avatarUrl,
   title,
   state,
   stateLabel,
@@ -186,6 +181,7 @@ export function MobileRoomOverlay({
   onBuyPrivateAccess,
 }: {
   creatorName: string;
+  avatarUrl?: string | null;
   title: string;
   state: string;
   stateLabel: string;
@@ -217,7 +213,7 @@ export function MobileRoomOverlay({
       </div>
       <div className="mobile-room-identity">
         <button type="button" className="mobile-room-profile-link" aria-label={profileLabel} onClick={onProfile}>
-          <span className={`room-creator-avatar state-${state}`} aria-hidden="true">{initials(creatorName)}</span>
+          <CreatorAvatar name={creatorName} url={avatarUrl} className={`room-creator-avatar state-${state}`} />
         </button>
         <div>
           <strong>{creatorName}</strong>

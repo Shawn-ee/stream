@@ -166,6 +166,14 @@ body {
     radial-gradient(circle at 100% 0, #172b52 0, transparent 30rem), #0b1020;
 }
 
+.creator-avatar-image {
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
 .app-loading {
   align-content: center;
   background:

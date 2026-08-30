@@ -1,5 +1,15 @@
 # Local Runbook
 
+## Unified creator menu and avatar verification
+
+Run `npm run verify:streamer-navigation`, `npm run verify:creator-profile-ui`, `npm run verify:creator-avatar`, `npm run check`, and `npm run build`. The avatar API verifier requires the local API, PostgreSQL, and seeded demo data; it uploads only a generated synthetic image and removes it before exit.
+
+At desktop and 390×844 mobile widths, sign in as the synthetic streamer and confirm the top-right avatar opens one contained menu for Return to live, Earnings, Top supporters, Actions/private show, Public profile, Settings, language, and Sign out. Confirm the former horizontal creator tab strip is absent, the menu fits the viewport, outside tap and Escape close it, and browser Back still returns to the mounted live surface.
+
+In Public profile, use a non-sensitive test image in JPEG, PNG, or WebP format under 5 MB. Confirm the preview changes before upload, Save avatar persists it, and the same identity appears in the creator menu, discovery, Following, room creator identity, and public profile. Confirm Remove restores the initials fallback. Reset demo data after the test.
+
+Production stores normalized avatar files in the Compose volume `avatar_production_data` mounted at `/app/work/avatars`. Include that volume with PostgreSQL in backup/restore and migration plans. Recreating the API container is safe; deleting the named volume is destructive and leaves database avatar URLs unresolved.
+
 ## Creator Center and wallet verification
 
 Run `npm run verify:creator-wallet-ui`, `npm run verify:streamer-navigation`, `npm run check`, and `npm run build`. With Docker Desktop running, also run `npm run verify:expanded` and reset the demo seed afterward.

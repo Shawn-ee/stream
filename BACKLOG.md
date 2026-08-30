@@ -2,6 +2,8 @@
 
 ## Active frontend modernization
 
+- Unified creator menu and persistent avatar identity completed locally: one avatar popover replaces the overflowing creator tabs, language/sign-out are contained, and normalized creator avatars propagate across creator, room, discovery, Following, and public-profile surfaces. Database-backed upload verification and physical Android acceptance remain pending until the local API/PostgreSQL stack is available; no production deployment has been performed.
+
 - Creator Center and wallet data truth completed locally: persistent Live/Earnings/Supporters/Actions/Profile/Settings navigation, period summaries, enriched paginated income records, all-support and gift-only rankings, truthful capability failures, and removal of misleading cash-value copy. Database-backed staging remains pending until Docker Desktop is available.
 
 - Earlier creator test wallet and gift ranking pass has been superseded by the Creator Center data-truth milestone above.

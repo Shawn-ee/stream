@@ -433,15 +433,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   box-shadow: 0 0 0 0.25rem rgba(255, 77, 109, 0.13);
 }
 
-.broadcaster-profile-button {
-  background: transparent;
-  border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-  justify-self: end;
-  min-height: 2.5rem;
-  padding: 0 var(--space-3);
-}
-
 .broadcaster-header-actions {
   align-items: center;
   display: flex;
@@ -458,7 +449,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   background: transparent;
   border: 1px solid var(--color-border);
   border-radius: 50%;
-  color: var(--color-text-primary);
   cursor: pointer;
   display: flex;
   height: 2.5rem;
@@ -476,14 +466,18 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   outline-offset: 2px;
 }
 
-.broadcaster-account-menu > summary svg {
-  fill: none;
-  height: 1.25rem;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-  width: 1.25rem;
+.broadcaster-menu-avatar {
+  align-items: center;
+  background: linear-gradient(145deg, var(--color-brand-primary), #4b3aaf);
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  height: 100%;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
 }
 
 .broadcaster-account-popover {
@@ -492,8 +486,8 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   border-radius: var(--radius-lg);
   box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.4);
   display: grid;
-  gap: var(--space-3);
-  min-width: 13rem;
+  gap: var(--space-2);
+  min-width: 18rem;
   padding: var(--space-3);
   position: absolute;
   right: 0;
@@ -501,9 +495,93 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   z-index: 50;
 }
 
+.creator-menu-identity {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-3);
+}
+
+.creator-menu-identity-avatar {
+  align-items: center;
+  background: linear-gradient(145deg, var(--color-brand-primary), #4b3aaf);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  flex: 0 0 auto;
+  font-weight: 800;
+  height: 3rem;
+  justify-content: center;
+  overflow: hidden;
+  width: 3rem;
+}
+
+.creator-menu-identity > span {
+  display: grid;
+  min-width: 0;
+}
+
+.creator-menu-identity strong,
+.creator-menu-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-menu-identity small {
+  color: var(--color-text-secondary);
+}
+
+.creator-menu-sections {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.creator-menu-sections button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  display: grid;
+  font-weight: 650;
+  gap: var(--space-3);
+  grid-template-columns: 1.25rem 1fr;
+  justify-items: start;
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+  text-align: left;
+  width: 100%;
+}
+
+.creator-menu-sections button:hover,
+.creator-menu-sections button.active {
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+}
+
+.creator-menu-sections button.active {
+  box-shadow: inset 3px 0 0 var(--color-brand-primary);
+}
+
+.creator-menu-language {
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: 1fr auto;
+  padding-top: var(--space-3);
+}
+
 .broadcaster-account-popover .locale {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  inset: auto;
+  padding: 0.2rem;
+  position: static;
+  z-index: auto;
 }
 
 .broadcaster-account-popover .locale button,
@@ -516,46 +594,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   background: #d92d4f;
   border-color: #d92d4f;
   color: #fff;
-}
-
-.broadcaster-profile-button.is-return {
-  border-color: rgba(124, 92, 252, 0.6);
-  color: #d8d0ff;
-}
-
-.creator-center-nav {
-  align-items: center;
-  background: rgba(11, 16, 32, 0.98);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  gap: var(--space-1);
-  overflow-x: auto;
-  padding: var(--space-2) clamp(1rem, 3vw, 3rem);
-  scrollbar-width: none;
-}
-
-.creator-center-nav::-webkit-scrollbar {
-  display: none;
-}
-
-.creator-center-nav button {
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  flex: 0 0 auto;
-  min-height: 2.75rem;
-  padding: 0 var(--space-4);
-}
-
-.creator-center-nav button:hover,
-.creator-center-nav button.active {
-  background: var(--color-surface-secondary);
-  color: var(--color-text-primary);
-}
-
-.creator-center-nav button.active {
-  box-shadow: inset 0 -2px 0 var(--color-brand-primary);
 }
 
 .studio-view-inactive {
@@ -1073,6 +1111,57 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   width: 4.5rem;
 }
 
+.streamer-avatar-editor {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.streamer-avatar-editor .streamer-profile-avatar {
+  flex: 0 0 auto;
+  margin-right: var(--space-2);
+  overflow: hidden;
+}
+
+.streamer-avatar-editor small {
+  color: var(--color-text-secondary);
+  flex-basis: 100%;
+  line-height: 1.4;
+}
+
+.avatar-file-input {
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+}
+
+.avatar-select-button,
+.avatar-remove-button {
+  align-items: center;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+}
+
+.avatar-file-input:focus-visible + .avatar-select-button {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+
+.avatar-remove-button {
+  background: transparent;
+  color: #ff9bad;
+}
+
 .streamer-profile-preview h3,
 .streamer-profile-preview p {
   margin: 0;
@@ -1505,17 +1594,23 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     display: none;
   }
 
-  .broadcaster-profile-button {
-    min-height: 2.5rem;
-    padding: 0 var(--space-2);
-  }
-
   .broadcaster-header-actions {
     gap: var(--space-1);
   }
 
-  .broadcaster-header-actions .broadcaster-profile-button {
-    font-size: 0.75rem;
+  .broadcaster-account-menu > summary {
+    height: 2.75rem;
+    width: 2.75rem;
+  }
+
+  .broadcaster-account-popover {
+    left: var(--space-3);
+    max-height: calc(100dvh - max(5rem, env(safe-area-inset-top) + 4rem));
+    min-width: 0;
+    overflow-y: auto;
+    position: fixed;
+    right: var(--space-3);
+    top: max(4.25rem, env(safe-area-inset-top) + 3.75rem);
   }
 
   .broadcaster-page {
@@ -1544,18 +1639,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   .creator-wallet-workspace,
   .creator-earnings-cards {
     grid-template-columns: 1fr;
-  }
-
-  .creator-center-nav {
-    padding: var(--space-2);
-    scroll-padding-inline: var(--space-2);
-    scroll-snap-type: x proximity;
-  }
-
-  .creator-center-nav button {
-    min-height: 2.75rem;
-    padding: 0 var(--space-3);
-    scroll-snap-align: start;
   }
 
   .creator-center-view .broadcaster-header {

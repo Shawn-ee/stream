@@ -8,6 +8,7 @@ export const config = {
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS ?? 12),
   trustProxy: process.env.TRUST_PROXY === "true",
   requestBodyLimitBytes: Number(process.env.REQUEST_BODY_LIMIT_BYTES ?? 65536),
+  avatarStoragePath: process.env.AVATAR_STORAGE_PATH ?? "work/avatars",
   rateLimitMultiplier: Number(process.env.RATE_LIMIT_MULTIPLIER ?? 1),
   databasePoolMax: Number(process.env.DATABASE_POOL_MAX ?? 20),
   metricsToken:
