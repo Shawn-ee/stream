@@ -351,6 +351,24 @@
   width: 100%;
 }
 
+html.mobile-broadcast-scroll-locked,
+body.mobile-broadcast-scroll-locked {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body.mobile-broadcast-scroll-locked {
+  inset: 0;
+  position: fixed;
+  width: 100%;
+}
+
+body.mobile-broadcast-scroll-locked .app.role-streamer {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .role-streamer .creator-studio {
   background: #070a12;
   border: 0;

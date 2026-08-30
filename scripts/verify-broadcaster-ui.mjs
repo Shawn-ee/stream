@@ -37,6 +37,9 @@ for (const essential of [
   /streamer-profile-editor/,
   /Save all public details/,
   /stream \? "has-media" : "no-media"/,
+  /mobile-broadcast-scroll-locked/,
+  /window\.matchMedia\("\(max-width: 767px\)"\)/,
+  /window\.scrollTo\(0, previousScrollY\)/,
 ]) assert.match(app, essential);
 
 const previewOverlay = app.match(/<div className="broadcast-stage-controls">[\s\S]*?<\/div>/)?.[0] ?? "";
@@ -60,6 +63,9 @@ for (const rule of [
   /@media \(min-width: 1024px\)[\s\S]*\.broadcaster-stage \.quick-live-panel\.phase-preview,[\s\S]*grid-template-columns:\s*minmax\(0, 2\.15fr\) minmax\(20rem, 0\.85fr\)/,
   /\.broadcaster-stage \.quick-live-panel\.no-media:not\(\.phase-ended\) \.broadcast-permission-step\s*\{[\s\S]*grid-column:\s*2/,
   /\.streamer-profile-editor\s*\{[\s\S]*grid-template-columns:\s*minmax\(16rem, 0\.72fr\) minmax\(0, 1\.5fr\)/,
+  /html\.mobile-broadcast-scroll-locked,[\s\S]*body\.mobile-broadcast-scroll-locked\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*overscroll-behavior:\s*none/,
+  /body\.mobile-broadcast-scroll-locked\s*\{[\s\S]*position:\s*fixed;[\s\S]*width:\s*100%/,
+  /body\.mobile-broadcast-scroll-locked \.app\.role-streamer\s*\{[\s\S]*height:\s*100dvh;[\s\S]*overflow:\s*hidden/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-runtime-live \.broadcaster-stage \.quick-live-video-shell\s*\{[\s\S]*height:\s*100dvh/,
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-chat\.is-open\s*\{[\s\S]*display:\s*grid/,
   /@media \(max-width: 932px\) and \(orientation: landscape\)/,
@@ -68,4 +74,4 @@ for (const rule of [
 assert.equal(packageJson.scripts["verify:broadcaster-ui"], "node scripts/verify-broadcaster-ui.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:broadcaster-ui"));
 
-console.log("Minimal desktop/mobile broadcaster layout, essential controls, chat/gift feed, safe ending, and dashboard exclusions verified.");
+console.log("Minimal desktop/mobile broadcaster layout, locked immersive mobile viewport, essential controls, chat/gift feed, safe ending, and dashboard exclusions verified.");

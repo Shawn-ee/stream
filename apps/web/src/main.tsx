@@ -2013,6 +2013,11 @@ function QuickGoLive({
   const pageHidingRef = useRef(false);
   const controlsTimerRef = useRef(0);
   const wakeLockRef = useRef<WakeLockHandle | null>(null);
+  const immersiveBroadcast =
+    phase === "connecting" ||
+    phase === "live" ||
+    phase === "ending" ||
+    (phase === "error" && Boolean(sessionIdRef.current));
 
   useEffect(() => {
     streamRef.current = stream;
@@ -2178,6 +2183,39 @@ function QuickGoLive({
       wakeLockRef.current = null;
     };
   }, [phase]);
+  useEffect(() => {
+    if (!immersiveBroadcast) return;
+    const mobileViewport = window.matchMedia("(max-width: 767px)");
+    const root = document.documentElement;
+    const body = document.body;
+    let locked = false;
+    let previousScrollY = 0;
+    const lockScroll = () => {
+      if (locked) return;
+      previousScrollY = window.scrollY;
+      root.classList.add("mobile-broadcast-scroll-locked");
+      body.classList.add("mobile-broadcast-scroll-locked");
+      window.scrollTo(0, 0);
+      locked = true;
+    };
+    const unlockScroll = () => {
+      if (!locked) return;
+      root.classList.remove("mobile-broadcast-scroll-locked");
+      body.classList.remove("mobile-broadcast-scroll-locked");
+      window.scrollTo(0, previousScrollY);
+      locked = false;
+    };
+    const syncScrollLock = () => {
+      if (mobileViewport.matches) lockScroll();
+      else unlockScroll();
+    };
+    syncScrollLock();
+    mobileViewport.addEventListener("change", syncScrollLock);
+    return () => {
+      mobileViewport.removeEventListener("change", syncScrollLock);
+      unlockScroll();
+    };
+  }, [immersiveBroadcast]);
 
   async function requestWakeLock() {
     if (document.hidden || wakeLockRef.current) return;
@@ -2518,11 +2556,7 @@ function QuickGoLive({
   }
   const cameras = devices.filter((device) => device.kind === "videoinput");
   const microphones = devices.filter((device) => device.kind === "audioinput");
-  const sessionActive =
-    phase === "connecting" ||
-    phase === "live" ||
-    phase === "ending" ||
-    (phase === "error" && Boolean(sessionIdRef.current));
+  const sessionActive = immersiveBroadcast;
   const durationSeconds = liveStartedAt
     ? Math.max(0, Math.floor((clock - liveStartedAt) / 1_000))
     : 0;
