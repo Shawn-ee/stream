@@ -56,7 +56,7 @@ try {
   const imageResponse = await fetch(`${base}${avatarUrl}`);
   assert.equal(imageResponse.status, 200);
   assert.equal(imageResponse.headers.get("content-type"), "image/webp");
-  assert.match(imageResponse.headers.get("cache-control") ?? "", /immutable/);
+  assert.equal(imageResponse.headers.get("cache-control"), "no-store");
   const metadata = await sharp(Buffer.from(await imageResponse.arrayBuffer())).metadata();
   assert.equal(metadata.width, 512);
   assert.equal(metadata.height, 512);
@@ -75,4 +75,4 @@ try {
 }
 
 assert.equal((await fetch(`${base}${avatarUrl}`)).status, 404);
-console.log("Creator-only normalized avatar upload, public projection, immutable delivery, and cleanup verified.");
+console.log("Creator-only normalized avatar upload, public projection, non-cacheable delivery, and cleanup verified.");

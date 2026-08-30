@@ -5,6 +5,7 @@
 - Fixed public avatar uploads being rejected by the web gateway before reaching the API: Nginx kept its global 64 KiB request limit while the exact creator-avatar route received a bounded 6 MiB allowance for the API's 5 MiB file plus multipart overhead.
 - Added a gateway regression check and changed the deployment avatar fixture to an incompressible image larger than 64 KiB, ensuring future end-to-end verification crosses the proxy rather than accidentally testing only tiny images.
 - Added a specific bilingual oversized-image message while preserving the existing generic safe failure copy.
+- Changed public avatar responses from one-year immutable caching to `no-store`, so replacement/removal is truthful without a Cloudflare cache-purge dependency at the current 100-user stage.
 
 ## 2026-08-29 - Unified creator menu and persistent avatars
 

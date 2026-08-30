@@ -558,7 +558,7 @@ export function buildApi() {
       } catch {
         return reply.code(404).send({ error: "avatar_not_found" });
       }
-      reply.header("cache-control", "public, max-age=31536000, immutable");
+      reply.header("cache-control", "no-store");
       return reply.type("image/webp").send(createReadStream(filePath));
     },
   );
