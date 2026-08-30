@@ -154,3 +154,12 @@ On 2026-08-29, owner approval deployed frontend commit `00f5eac111d1badddd2ea325
 - Only the Stream web image was rebuilt and only the web container was recreated. API, PostgreSQL, Redis, Cloudflare Tunnel, and unrelated Odoo services were not targeted.
 - Deployed web image: `sha256:fb5077512e62138012b8ec071d0b403164fe116d2dbf1578699a200c88465126`. Web and API reported healthy with zero restarts, local gateway health returned `ok`, and the public origin served `index-LZ_bTdZj.js` with `index-VHNDp_kI.css`.
 - Automated broadcaster, mobile-broadcast, resilience, navigation, frontend-polish, TypeScript, production build, and bundle-budget checks passed. The CSS bundle was also confirmed at a 390×844 local viewport without horizontal overflow. No camera, microphone, or Cloudflare broadcast was started for this frontend-only hotfix.
+
+## Compact mobile live-control hotfix
+
+On 2026-08-29, owner approval deployed frontend commit `b0b09c436419de7d2250c2a676587630b76d01ce`.
+
+- A mode-`600` tracked-source rollback archive was created before the fast-forward pull. SHA-256: `22de7f9ce0b2385f63f7254aed019ec0534da0371824532d0a4619ffc6e21480`.
+- Mobile End Stream is now a compact, accessible stop icon in the top-left and retains the confirmation dialog. Mute, Camera, Flip, and Chat occupy one bottom row, and nonessential saved-state notices are suppressed during an active broadcast.
+- Only the Stream web image/container was rebuilt and replaced. API, PostgreSQL, Redis, Cloudflare Tunnel, and unrelated Odoo services were not targeted.
+- Deployed web image: `sha256:ac0fa507f0a6e2f6b5973d0e81d4987d8917cd2db33a398167511c064a64b8cb`. Web, API, PostgreSQL, and Redis reported healthy; the web container had zero restarts and the public origin served `index-BRmiXvIA.js` with `index-DpgSdrpb.css`.
