@@ -3382,8 +3382,10 @@ function StreamerStudio({
       setAvatarPreviewUrl(null);
       setNotice(zh ? "头像已更新。" : "Avatar updated.");
       refresh();
-    } catch {
-      setNotice(zh ? "无法保存头像，请检查图片后重试。" : "Avatar could not be saved. Check the image and try again.");
+    } catch (error) {
+      setNotice(error instanceof Error && error.message === "413"
+        ? (zh ? "图片过大，请选择 5 MB 以下的图片。" : "That image is too large. Choose an image under 5 MB.")
+        : (zh ? "无法保存头像，请检查图片后重试。" : "Avatar could not be saved. Check the image and try again."));
     } finally {
       setAvatarSaving(false);
     }

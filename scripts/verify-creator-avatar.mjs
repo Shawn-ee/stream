@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import sharp from "sharp";
 
 const base = process.env.API_BASE_URL ?? "http://127.0.0.1:3001";
@@ -38,9 +39,10 @@ const studioBefore = await fetch(`${base}/api/streamer/studio`, { headers: { coo
 assert.equal(studioBefore.status, 200);
 assert.equal((await studioBefore.json()).room.avatar_url, null, "avatar verifier requires deterministic seed state");
 
-const source = await sharp({
-  create: { width: 700, height: 500, channels: 3, background: "#ff4d6d" },
+const source = await sharp(randomBytes(900 * 700 * 3), {
+  raw: { width: 900, height: 700, channels: 3 },
 }).png().toBuffer();
+assert.ok(source.length > 64 * 1024, "avatar fixture must exercise the gateway upload override");
 
 assert.equal((await upload(audience, source)).status, 403, "audience cannot replace a creator avatar");
 assert.equal((await upload(creator, Buffer.from("not an image"), "image/png")).status, 400);
