@@ -6,6 +6,17 @@ On 2026-08-26, the owner approved and the launch candidate was deployed to an ow
 
 The existing applications on the host were not restarted or modified. Stream remains in its isolated project directory and uses the separate Compose project `stream-launch-candidate`.
 
+## Unified creator menu and avatar deployment
+
+On 2026-08-30, the owner-approved upgrade moved the public checkout from `6e04ce0686836477f5aad777f042f0e7a8529e42` to implementation commit `7b0481a8b8c1a5df65ff53686a3c7986b7262c15` with a reviewed GitHub push and fast-forward-only Linux pull.
+
+- Before the pull, the verified PostgreSQL custom-format dump `backups/pre-creator-avatar-20260830T041612Z.dump` and tracked-source archive `backups/pre-creator-avatar-20260830T041612Z.tar` were written mode `600` inside the ignored project-local backup directory. Their SHA-256 values are `fea41771bf18e19926033a6a636a374a890165c755cb0bf154fb66ee4ea454ab` and `750e8014e11ccdff006b107e9d3a75532f6adad5f0ba2284fb87999bad9b97df`.
+- Only the Stream API and web images were rebuilt and their containers recreated. PostgreSQL and Redis retained their exact container identities and original creation times; the separately managed Cloudflare Tunnel remained running and unrelated host workloads were untouched.
+- The new named volume `stream-launch-candidate_avatar_production_data` is mounted only at `/app/work/avatars` in the API container and owned by the unprivileged `node` runtime user. No pre-existing avatar media required migration.
+- Deployed image IDs are API `sha256:33c08ca57f57a49cd30319d988c00b69d24f150ed4c913700dde66774e52f2c8` and web `sha256:6ad0452310615714024953445de74d6dd91e1af29f2618cf6571be1eb8731712`.
+- API and web health checks passed; API readiness reported database and Redis healthy. Public HTTPS `/healthz`, `/`, and `/api/rooms` returned 200, room payloads contained the avatar projection, invalid avatar paths returned 404, and the public page served `index-DSV9TZYn.js` plus `index-C0HZ9qJ4.css`.
+- No camera, microphone, broadcast, Cloudflare configuration, DNS, payment, cashout, KYC, or legal/compliance action was used. A signed-in physical Android/avatar-upload acceptance pass remains pending because the local database stack was unavailable and the connected browser-control session could not complete that visual check.
+
 ## Realtime gifts and video activity upgrade
 
 On 2026-08-27, the owner-approved upgrade moved the public Stream checkout from `4baa1450b4f9af1db8596271eed83d8ed0ad1687` to implementation commit `730b7a247279374960cbad8d20438e2c28552c04` using a fast-forward-only pull.
