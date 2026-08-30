@@ -970,7 +970,12 @@ function App() {
       ) : user.role === "admin" ? (
         <AdminPanel t={t} />
       ) : (
-        <StreamerStudio t={t} />
+        <StreamerStudio
+          t={t}
+          language={language}
+          onLanguageChange={setLanguage}
+          onLogout={() => void logout()}
+        />
       )}
       {user.role === "audience" && user.ageAcknowledged ? (
         <MobileBottomNav
@@ -3109,7 +3114,17 @@ function CreatorSupportersPage({ slug, t }: { slug: string; t: typeof copy.en })
 
 type StreamerSection = "live" | "earnings" | "supporters" | "actions" | "private" | "profile" | "settings";
 
-function StreamerStudio({ t }: { t: typeof copy.en }) {
+function StreamerStudio({
+  t,
+  language,
+  onLanguageChange,
+  onLogout,
+}: {
+  t: typeof copy.en;
+  language: Language;
+  onLanguageChange: (language: Language) => void;
+  onLogout: () => void;
+}) {
   const [studio, setStudio] = useState<any>(null);
   const [notice, setNotice] = useState("");
   const [title, setTitle] = useState("");
@@ -3128,6 +3143,7 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
   const [activeSection, setActiveSection] = useState<StreamerSection>("live");
   const [viewerCount, setViewerCount] = useState(0);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
   const [runtime, setRuntime] = useState<BroadcasterRuntime>({
     phase: "idle",
     health: "ready",
@@ -3342,6 +3358,24 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
           <span className="broadcaster-viewers">◉ {viewerCount}</span>
         </div>
         <div className="broadcaster-header-actions">
+          {activeSection !== "live" ? (
+            <details className="broadcaster-account-menu">
+              <summary aria-label={zh ? "打开账户菜单" : "Open account menu"} title={zh ? "账户" : "Account"}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>
+              </summary>
+              <div className="broadcaster-account-popover">
+                <strong>{zh ? "账户" : "Account"}</strong>
+                <LanguagePicker language={language} onChange={onLanguageChange} />
+                <button
+                  type="button"
+                  className="danger broadcaster-signout-button"
+                  onClick={() => liveSessionActive ? setLogoutConfirmationOpen(true) : onLogout()}
+                >
+                  {zh ? "退出登录" : "Sign out"}
+                </button>
+              </div>
+            </details>
+          ) : null}
           <button type="button" className={`broadcaster-profile-button ${activeSection !== "live" ? "is-return" : ""}`} onClick={activeSection !== "live" ? returnToLive : () => openAuxiliarySection("earnings")}>{activeSection !== "live" ? (zh ? "返回直播" : "Back to live") : (zh ? "创作者中心" : "Creator Center")}</button>
         </div>
       </header>
@@ -3523,6 +3557,21 @@ function StreamerStudio({ t }: { t: typeof copy.en }) {
         </section>
       ) : null}
       {notice && <p className="creator-toast">{notice}</p>}
+      <Modal
+        open={logoutConfirmationOpen}
+        title={zh ? "退出并结束直播？" : "Sign out and end stream?"}
+        description={zh ? "退出登录将结束当前直播。" : "Signing out will end your current broadcast."}
+        closeLabel={zh ? "关闭退出确认" : "Close sign-out confirmation"}
+        onClose={() => setLogoutConfirmationOpen(false)}
+        footer={
+          <>
+            <button type="button" className="secondary" onClick={() => setLogoutConfirmationOpen(false)}>{zh ? "取消" : "Cancel"}</button>
+            <button type="button" className="danger" onClick={onLogout}>{zh ? "结束直播并退出" : "End stream and sign out"}</button>
+          </>
+        }
+      >
+        <p>{zh ? "退出后，您需要重新登录才能使用创作者工具。" : "You will need to sign in again to use creator tools."}</p>
+      </Modal>
     </section>
   );
 }

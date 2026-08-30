@@ -21,6 +21,10 @@ for (const behavior of [
   /activeView=\{activeSection === "live"\}/,
   /if \(!immersiveBroadcast \|\| !activeView\) return/,
   /creator-live-view" : "creator-center-view"/,
+  /className="broadcaster-account-menu"/,
+  /Open account menu/,
+  /Sign out and end stream\?/,
+  /liveSessionActive \? setLogoutConfirmationOpen\(true\) : onLogout\(\)/,
   /studio-view-active" : "studio-view-inactive"/,
   /Your live broadcast is still running for viewers/,
   /\["profile", zh \? "主页" : "Profile"\]/,
@@ -45,6 +49,8 @@ for (const rule of [
   /\.creator-live-view\.broadcaster-runtime-live \.broadcaster-header\s*\{/,
   /\.creator-center-view \.broadcaster-header\s*\{[\s\S]*position:\s*relative/,
   /\.creator-center-nav\s*\{[\s\S]*scroll-snap-type:\s*x proximity/,
+  /\.broadcaster-account-popover\s*\{[\s\S]*position:\s*absolute/,
+  /\.broadcaster-signout-button\s*\{[\s\S]*background:\s*#d92d4f/,
 ]) assert.match(styles, rule);
 
 assert.doesNotMatch(

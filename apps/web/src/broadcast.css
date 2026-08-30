@@ -443,9 +443,79 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
 }
 
 .broadcaster-header-actions {
+  align-items: center;
   display: flex;
   gap: var(--space-2);
   justify-self: end;
+}
+
+.broadcaster-account-menu {
+  position: relative;
+}
+
+.broadcaster-account-menu > summary {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  display: flex;
+  height: 2.5rem;
+  justify-content: center;
+  list-style: none;
+  width: 2.5rem;
+}
+
+.broadcaster-account-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.broadcaster-account-menu > summary:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+
+.broadcaster-account-menu > summary svg {
+  fill: none;
+  height: 1.25rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 1.25rem;
+}
+
+.broadcaster-account-popover {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.4);
+  display: grid;
+  gap: var(--space-3);
+  min-width: 13rem;
+  padding: var(--space-3);
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  z-index: 50;
+}
+
+.broadcaster-account-popover .locale {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.broadcaster-account-popover .locale button,
+.broadcaster-signout-button {
+  min-height: 2.75rem;
+  width: 100%;
+}
+
+.broadcaster-signout-button {
+  background: #d92d4f;
+  border-color: #d92d4f;
+  color: #fff;
 }
 
 .broadcaster-profile-button.is-return {
