@@ -33,19 +33,21 @@ function connect(cookie) {
     socket.once("connect_error", reject);
   });
 }
-async function rejectClientDeclaredRole() {
+async function verifyAnonymousReadOnlySocket() {
   const socket = io(base, {
     transports: ["websocket"],
     auth: { demoRole: "admin" },
   });
-  const error = await new Promise((resolve, reject) => {
-    socket.once("connect", () =>
-      reject(new Error("client-declared role unexpectedly connected")),
-    );
-    socket.once("connect_error", resolve);
+  await new Promise((resolve, reject) => {
+    socket.once("connect", resolve);
+    socket.once("connect_error", reject);
+  });
+  const room = await joined(socket);
+  assert.equal(room.error, undefined);
+  assert.deepEqual(await sendWithResult(socket, "Anonymous mutation attempt"), {
+    error: "session_required",
   });
   socket.disconnect();
-  assert.equal(error.message, "session_required");
 }
 function joined(socket) {
   return new Promise((resolve) =>
@@ -92,7 +94,9 @@ function sendWithResult(socket, body) {
 }
 
 const audienceAuth = await login("audience");
-await rejectClientDeclaredRole();
+const streamerCookie = await login("streamer");
+await creatorBroadcast(streamerCookie, "live");
+await verifyAnonymousReadOnlySocket();
 const audienceCookie = audienceAuth.cookie;
 const audience = await connect(audienceCookie);
 const adminAuth = await login("admin");
@@ -192,7 +196,6 @@ try {
   );
   assert.equal(actionResponse.status, 200);
   assert.equal((await actionReceived).title, actions.actions[0].title);
-  const streamerCookie = await login("streamer");
   const broadcastReceived = new Promise((resolve) =>
     audience.once("broadcast:state", resolve),
   );
@@ -214,6 +217,7 @@ try {
     "Realtime presence, chat, support activity, and broadcast lifecycle updates verified.",
   );
 } finally {
+  await creatorBroadcast(streamerCookie, "offline");
   audience.disconnect();
   admin.disconnect();
 }

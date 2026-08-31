@@ -36,6 +36,8 @@ export async function saveAvatar(options: {
   userId: string;
   mimeType: string;
   buffer: Buffer;
+  focusX?: number;
+  focusY?: number;
 }) {
   if (!acceptedAvatarMimeTypes.has(options.mimeType))
     throw new AvatarUploadError("avatar_type_not_allowed");
@@ -51,13 +53,19 @@ export async function saveAvatar(options: {
     const metadata = await image.metadata();
     if (!metadata.format || !acceptedAvatarFormats.has(metadata.format) || (metadata.pages ?? 1) > 1)
       throw new AvatarUploadError("avatar_image_invalid");
-    output = await image
-      .rotate()
-      .resize(avatarOutputSize, avatarOutputSize, {
-        fit: "cover",
-        position: "centre",
-        withoutEnlargement: false,
-      })
+    const normalized = await image.rotate().toBuffer();
+    const normalizedMetadata = await sharp(normalized).metadata();
+    const width = normalizedMetadata.width ?? 0;
+    const height = normalizedMetadata.height ?? 0;
+    if (!width || !height) throw new AvatarUploadError("avatar_image_invalid");
+    const cropSize = Math.min(width, height);
+    const focusX = Math.min(1, Math.max(0, options.focusX ?? 0.5));
+    const focusY = Math.min(1, Math.max(0, options.focusY ?? 0.5));
+    const left = Math.round(Math.min(width - cropSize, Math.max(0, focusX * width - cropSize / 2)));
+    const top = Math.round(Math.min(height - cropSize, Math.max(0, focusY * height - cropSize / 2)));
+    output = await sharp(normalized)
+      .extract({ left, top, width: cropSize, height: cropSize })
+      .resize(avatarOutputSize, avatarOutputSize, { withoutEnlargement: false })
       .webp({ quality: 84, effort: 4 })
       .toBuffer();
   } catch (error) {

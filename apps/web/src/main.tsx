@@ -35,6 +35,8 @@ import {
 import { LiveChatPanel, MobileRoomOverlay, RoomCreatorBar } from "./components/room";
 import { CreatorProfileSurface } from "./components/profile";
 import { CreatorAvatar } from "./components/avatar";
+import { audienceRoutePath, parseAudienceRoute, type AudienceRoute } from "./audience-route";
+import { shareAudienceTarget, syncAudienceMetadata, type AudienceShareTarget, type ShareKind, type ShareOutcome } from "./audience-share";
 import {
   MobileBottomNav,
   MobileHeaderActions,
@@ -51,6 +53,44 @@ type User = {
   locale: Language;
   ageAcknowledged: boolean;
 };
+type AuthIntentKind =
+  | "account"
+  | "following"
+  | "wallet"
+  | "broadcast"
+  | "go-live"
+  | "inbox"
+  | "me"
+  | "follow"
+  | "chat"
+  | "gift"
+  | "action"
+  | "private-access"
+  | "report";
+type AuthIntent = { id: number; kind: AuthIntentKind };
+const authIntentPolicy: Record<AuthIntentKind, "navigate" | "execute" | "review"> = {
+  account: "navigate",
+  following: "navigate",
+  wallet: "navigate",
+  broadcast: "navigate",
+  "go-live": "navigate",
+  inbox: "navigate",
+  me: "navigate",
+  follow: "execute",
+  chat: "review",
+  gift: "review",
+  action: "review",
+  "private-access": "review",
+  report: "review",
+};
+const publicGuest = (locale: Language): User => ({
+  id: "public-guest",
+  handle: "public-guest",
+  displayName: locale === "zh" ? "访客" : "Guest",
+  role: "audience",
+  locale,
+  ageAcknowledged: true,
+});
 type Room = {
   slug: string;
   title: string;
@@ -64,11 +104,28 @@ type Room = {
   next_stream_at?: string | null;
   schedule_timezone?: string;
   follower_count?: number;
+  viewer_count?: number;
+  is_following?: boolean;
+  reminder_enabled?: boolean;
   goal_text?: string;
   broadcast_state?: "live" | "connecting" | "offline" | "unavailable";
   broadcast_checked_at?: string | null;
   broadcast_status_message?: string;
+  broadcast_status_source?: "local" | "cloudflare";
   broadcast_transport?: "obs_hls" | "browser_webrtc";
+  stream_language?: "en" | "zh";
+  stream_tags?: string[];
+  stream_thumbnail_url?: string | null;
+  recommendation_reasons?: string[];
+  personalization_applied?: boolean;
+};
+type DiscoveryPreferences = {
+  preferred_languages: Language[];
+  preferred_categories: string[];
+  prioritize_live: boolean;
+  prioritize_following: boolean;
+  personalization_enabled: boolean;
+  updated_at?: string | null;
 };
 type StreamerProfile = {
   id: string;
@@ -84,8 +141,22 @@ type StreamerProfile = {
   room_slug: string | null;
   room_status: string | null;
   broadcast_state?: "live" | "connecting" | "offline" | "unavailable";
+  broadcast_status_source?: "local" | "cloudflare";
 };
+function audienceShareTarget(room: Room, kind: ShareKind): AudienceShareTarget {
+  return {
+    kind,
+    slug: room.slug,
+    creatorName: room.streamer_name,
+    roomTitle: room.title,
+  };
+}
 const audienceId = "10000000-0000-4000-8000-000000000001";
+function shareOutcomeMessage(outcome: ShareOutcome, zh: boolean) {
+  if (outcome === "copied") return zh ? "链接已复制。" : "Link copied.";
+  if (outcome === "failed") return zh ? "请重试。" : "Try again.";
+  return "";
+}
 const copy: Record<Language, Record<string, string>> = {
   en: {
     title: "Stream MVP",
@@ -120,7 +191,7 @@ const copy: Record<Language, Record<string, string>> = {
     following: "Following",
     report: "Report",
     buyAccess: "Buy private access",
-    coins: "Test coins",
+    coins: "R",
     send: "Send",
     liveChat: "Live chat",
     connecting: "Connecting chat...",
@@ -206,7 +277,7 @@ const copy: Record<Language, Record<string, string>> = {
     following: "已关注",
     report: "举报",
     buyAccess: "购买私密访问",
-    coins: "测试金币",
+    coins: "R",
     send: "发送",
     liveChat: "实时聊天",
     connecting: "正在连接聊天...",
@@ -369,6 +440,69 @@ function LanguagePicker({
     </div>
   );
 }
+function DiscoveryPreferencePanel({
+  preferences,
+  categories,
+  zh,
+  saving,
+  message,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  preferences: DiscoveryPreferences;
+  categories: string[];
+  zh: boolean;
+  saving: boolean;
+  message: "" | "saved" | "reset" | "error";
+  onChange: (preferences: DiscoveryPreferences) => void;
+  onSave: () => void;
+  onReset: () => void;
+}) {
+  const toggleLanguage = (item: Language) => onChange({
+    ...preferences,
+    preferred_languages: preferences.preferred_languages.includes(item)
+      ? preferences.preferred_languages.filter((language) => language !== item)
+      : [...preferences.preferred_languages, item],
+  });
+  const toggleCategory = (item: string) => onChange({
+    ...preferences,
+    preferred_categories: preferences.preferred_categories.includes(item)
+      ? preferences.preferred_categories.filter((category) => category !== item)
+      : [...preferences.preferred_categories, item],
+  });
+  return (
+    <details className="discovery-preferences">
+      <summary>{zh ? "为你推荐设置" : "For You preferences"}</summary>
+      <div className="discovery-preference-body account-form">
+        <p>{zh ? "选择偏好只会调整排序；上方筛选仍用于当前浏览。" : "Preferences change ordering only; the filters above still control this browsing session."}</p>
+        <fieldset className="account-shortcuts">
+          <legend>{zh ? "偏好语言" : "Preferred languages"}</legend>
+          <label><input type="checkbox" checked={preferences.preferred_languages.includes("en")} onChange={() => toggleLanguage("en")} /> English</label>
+          <label><input type="checkbox" checked={preferences.preferred_languages.includes("zh")} onChange={() => toggleLanguage("zh")} /> 中文</label>
+        </fieldset>
+        <fieldset className="account-shortcuts">
+          <legend>{zh ? "偏好分类" : "Preferred categories"}</legend>
+          <div className="preference-category-list account-shortcuts">
+            {categories.map((item) => <label key={item}><input type="checkbox" checked={preferences.preferred_categories.includes(item)} onChange={() => toggleCategory(item)} /> {item}</label>)}
+          </div>
+        </fieldset>
+        <label><input type="checkbox" checked={preferences.prioritize_live} onChange={(event) => onChange({ ...preferences, prioritize_live: event.target.checked })} /> {zh ? "优先直播中的房间" : "Prioritize live rooms"}</label>
+        <label><input type="checkbox" checked={preferences.prioritize_following} onChange={(event) => onChange({ ...preferences, prioritize_following: event.target.checked })} /> {zh ? "优先已关注主播" : "Prioritize followed creators"}</label>
+        <label><input type="checkbox" checked={preferences.personalization_enabled} onChange={(event) => onChange({ ...preferences, personalization_enabled: event.target.checked })} /> {zh ? "启用个性化排序" : "Use personalized ordering"}</label>
+        <div className="preference-actions account-shortcuts">
+          <button type="button" disabled={saving} onClick={onSave}>{saving ? (zh ? "保存中…" : "Saving…") : (zh ? "保存偏好" : "Save preferences")}</button>
+          <button type="button" className="secondary" disabled={saving} onClick={onReset}>{zh ? "恢复默认" : "Reset"}</button>
+          {message ? <small role="status">{
+            message === "saved" ? (zh ? "推荐偏好已保存。" : "Discovery preferences saved.")
+              : message === "reset" ? (zh ? "已恢复默认推荐。" : "Default recommendations restored.")
+                : (zh ? "暂时无法保存，请重试。" : "Could not update preferences. Try again.")
+          }</small> : null}
+        </div>
+      </div>
+    </details>
+  );
+}
 function App() {
   const [language, setLanguage] = useState<Language>("en");
   const [user, setUser] = useState<User | null>(null);
@@ -385,25 +519,143 @@ function App() {
   const [query, setQuery] = useState("");
   const [settledQuery, setSettledQuery] = useState("");
   const [category, setCategory] = useState("");
+  const [streamLanguage, setStreamLanguage] = useState<"" | "en" | "zh">("");
   const [categories, setCategories] = useState<string[]>([]);
+  const [discoveryPreferences, setDiscoveryPreferences] = useState<DiscoveryPreferences | null>(null);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesMessage, setPreferencesMessage] = useState<"" | "saved" | "reset" | "error">("");
   const [handle, setHandle] = useState("demo-audience");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authGate, setAuthGate] = useState<AuthIntent | null>(null);
+  const [resumeIntent, setResumeIntent] = useState<AuthIntent | null>(null);
+  const [resumeNotice, setResumeNotice] = useState("");
+  const [routeLoading, setRouteLoading] = useState(() => parseAudienceRoute(window.location.pathname).view !== "discovery");
+  const [routeError, setRouteError] = useState<"not-found" | "unavailable" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("home");
   const [mobileDiscoveryView, setMobileDiscoveryView] = useState<MobileDiscoveryView>("for-you");
   const roomsRequestRef = useRef(0);
+  const routeRequestRef = useRef(0);
+  const authIntentIdRef = useRef(0);
   const t = copy[language];
+  const requireAuth = (kind: AuthIntentKind) => {
+    setAuthMode("login");
+    setLoginError("");
+    setAuthGate({ id: ++authIntentIdRef.current, kind });
+  };
+  const writeAudienceHistory = (route: Exclude<AudienceRoute, { view: "invalid" }>, mode: "push" | "replace" = "push") => {
+    const path = audienceRoutePath(route);
+    if (mode === "push" && window.location.pathname === path) return;
+    window.history[mode === "push" ? "pushState" : "replaceState"](
+      {
+        ...window.history.state,
+        holiwynAudienceRoute: path,
+        holiwynAudienceParent: mode === "push" ? window.location.pathname : null,
+      },
+      "",
+      path,
+    );
+  };
+  const showDiscovery = (mode: "push" | "replace" = "push") => {
+    routeRequestRef.current += 1;
+    setRouteLoading(false);
+    setRouteError(null);
+    setRoom(null);
+    setProfileRoom(null);
+    writeAudienceHistory({ view: "discovery" }, mode);
+    window.scrollTo({ top: 0 });
+  };
+  const returnFromAudienceDetail = () => {
+    if (window.history.state?.holiwynAudienceParent) window.history.back();
+    else showDiscovery("replace");
+  };
+  const showRoom = (item: Room, mode: "push" | "replace" = "push") => {
+    routeRequestRef.current += 1;
+    setRouteLoading(false);
+    setRouteError(null);
+    setProfileRoom(null);
+    setRoom(item);
+    setAccountOpen(false);
+    setMobileSearchOpen(false);
+    writeAudienceHistory({ view: "room", slug: item.slug }, mode);
+    window.scrollTo({ top: 0 });
+  };
+  const showProfile = (item: Room, mode: "push" | "replace" = "push") => {
+    routeRequestRef.current += 1;
+    setRouteLoading(false);
+    setRouteError(null);
+    setRoom(null);
+    setProfileRoom(item);
+    setAccountOpen(false);
+    setMobileSearchOpen(false);
+    writeAudienceHistory({ view: "creator", slug: item.slug }, mode);
+    window.scrollTo({ top: 0 });
+  };
+  const hydrateAudienceRoute = useCallback(async (pathname: string) => {
+    const requestId = ++routeRequestRef.current;
+    const route = parseAudienceRoute(pathname);
+    setAccountOpen(false);
+    setMobileSearchOpen(false);
+    setRouteError(null);
+    if (route.view === "discovery") {
+      setRoom(null);
+      setProfileRoom(null);
+      setRouteLoading(false);
+      return;
+    }
+    if (route.view === "invalid") {
+      setRoom(null);
+      setProfileRoom(null);
+      setRouteError("not-found");
+      setRouteLoading(false);
+      return;
+    }
+    const canonicalPath = audienceRoutePath(route);
+    if (window.location.pathname !== canonicalPath || !window.history.state?.holiwynAudienceRoute) {
+      window.history.replaceState(
+        {
+          ...window.history.state,
+          holiwynAudienceRoute: canonicalPath,
+          holiwynAudienceParent: window.history.state?.holiwynAudienceParent ?? null,
+        },
+        "",
+        canonicalPath,
+      );
+    }
+    setRouteLoading(true);
+    try {
+      const data = await request(`/api/rooms/${encodeURIComponent(route.slug)}`);
+      if (requestId !== routeRequestRef.current) return;
+      if (route.view === "room") {
+        setProfileRoom(null);
+        setRoom(data.room);
+      } else {
+        setRoom(null);
+        setProfileRoom(data.room);
+      }
+    } catch (error) {
+      if (requestId !== routeRequestRef.current) return;
+      setRoom(null);
+      setProfileRoom(null);
+      setRouteError(error instanceof Error && error.message === "404" ? "not-found" : "unavailable");
+    } finally {
+      if (requestId === routeRequestRef.current) {
+        setRouteLoading(false);
+        window.scrollTo({ top: 0 });
+      }
+    }
+  }, []);
   const loadRooms = async () => {
     const requestId = ++roomsRequestRef.current;
     setRoomsLoading(true);
     setRoomsError(false);
     try {
       const data = await request(
-        `/api/rooms?q=${encodeURIComponent(settledQuery)}&category=${encodeURIComponent(category)}`,
+        `/api/rooms?q=${encodeURIComponent(settledQuery)}&category=${encodeURIComponent(category)}&language=${encodeURIComponent(streamLanguage)}`,
       );
       if (requestId === roomsRequestRef.current) setRooms(data.rooms);
     } catch {
@@ -427,27 +679,94 @@ function App() {
       setFollowingLoading(false);
     }
   };
+  const saveDiscoveryPreferences = async () => {
+    if (!discoveryPreferences) return;
+    setPreferencesSaving(true);
+    setPreferencesMessage("");
+    try {
+      const data = await request("/api/me/discovery-preferences", {
+        method: "PUT",
+        body: JSON.stringify({
+          preferredLanguages: discoveryPreferences.preferred_languages,
+          preferredCategories: discoveryPreferences.preferred_categories,
+          prioritizeLive: discoveryPreferences.prioritize_live,
+          prioritizeFollowing: discoveryPreferences.prioritize_following,
+          personalizationEnabled: discoveryPreferences.personalization_enabled,
+        }),
+      });
+      setDiscoveryPreferences(data.preferences);
+      setPreferencesMessage("saved");
+      await loadRooms();
+    } catch {
+      setPreferencesMessage("error");
+    } finally {
+      setPreferencesSaving(false);
+    }
+  };
+  const resetDiscoveryPreferences = async () => {
+    setPreferencesSaving(true);
+    setPreferencesMessage("");
+    try {
+      const data = await request("/api/me/discovery-preferences", { method: "DELETE" });
+      setDiscoveryPreferences(data.preferences);
+      setPreferencesMessage("reset");
+      await loadRooms();
+    } catch {
+      setPreferencesMessage("error");
+    } finally {
+      setPreferencesSaving(false);
+    }
+  };
   useEffect(() => {
     void request("/api/auth/session")
       .then((d) => {
-        setUser(d.user);
+        setUser(d.user ?? publicGuest(language));
         if (d.user?.locale) setLanguage(d.user.locale);
       })
-      .catch(() => setUser(null))
+      .catch(() => setUser(publicGuest(language)))
       .finally(() => setSessionLoading(false));
     void request("/api/discovery/categories").then((d) =>
       setCategories(d.categories),
     ).catch(() => setCategories([]));
   }, []);
   useEffect(() => {
+    if (sessionLoading || user?.role !== "audience" || !user.ageAcknowledged) return;
+    void hydrateAudienceRoute(window.location.pathname);
+  }, [sessionLoading, user?.id, user?.role, user?.ageAcknowledged, hydrateAudienceRoute]);
+  useEffect(() => {
+    if (user?.role !== "audience" || !user.ageAcknowledged) return;
+    const restoreAudienceRoute = () => void hydrateAudienceRoute(window.location.pathname);
+    window.addEventListener("popstate", restoreAudienceRoute);
+    return () => window.removeEventListener("popstate", restoreAudienceRoute);
+  }, [user?.role, user?.ageAcknowledged, hydrateAudienceRoute]);
+  useEffect(() => {
+    if (user?.role !== "audience") return;
+    const item = room ?? profileRoom;
+    syncAudienceMetadata(item ? audienceShareTarget(item, room ? "room" : "creator") : null);
+  }, [user?.role, room, profileRoom]);
+  useEffect(() => {
     const timer = window.setTimeout(() => setSettledQuery(query), 250);
     return () => window.clearTimeout(timer);
   }, [query]);
   useEffect(() => {
     if (user?.role === "audience" && user.ageAcknowledged) loadRooms();
-  }, [user, settledQuery, category]);
+  }, [user, settledQuery, category, streamLanguage]);
   useEffect(() => {
-    if (user?.role === "audience" && user.ageAcknowledged) void loadFollowing();
+    if (user?.role === "audience" && user.ageAcknowledged && user.id !== "public-guest") void loadFollowing();
+    else if (user?.id === "public-guest") {
+      setFollowingRooms([]);
+      setFollowingLoading(false);
+      setFollowingError(false);
+    }
+  }, [user?.id, user?.role, user?.ageAcknowledged]);
+  useEffect(() => {
+    if (user?.role !== "audience" || !user.ageAcknowledged || user.id === "public-guest") {
+      setDiscoveryPreferences(null);
+      return;
+    }
+    void request("/api/me/discovery-preferences")
+      .then((data) => setDiscoveryPreferences(data.preferences))
+      .catch(() => setDiscoveryPreferences(null));
   }, [user?.id, user?.role, user?.ageAcknowledged]);
   useEffect(() => {
     if (user?.role !== "audience" || !user.ageAcknowledged) return;
@@ -460,6 +779,7 @@ function App() {
         state: "live" | "connecting" | "offline" | "unavailable";
         message: string;
         checkedAt: string;
+        source?: "local" | "cloudflare";
         transport?: "obs_hls" | "browser_webrtc";
       }) => {
         setRooms((current) =>
@@ -470,6 +790,7 @@ function App() {
                   status: event.state === "live" ? "live" : "offline",
                   broadcast_state: event.state,
                   broadcast_status_message: event.message,
+                  broadcast_status_source: event.source,
                   broadcast_checked_at: event.checkedAt,
                 }
               : item,
@@ -483,29 +804,68 @@ function App() {
                   status: event.state === "live" ? "live" : "offline",
                   broadcast_state: event.state,
                   broadcast_status_message: event.message,
+                  broadcast_status_source: event.source,
                   broadcast_checked_at: event.checkedAt,
                 }
               : item,
           ),
         );
+        void loadRooms();
       },
+    );
+    socket.on(
+      "follow:changed",
+      (event: { streamerId: string; slug: string; followerCount: number }) => {
+        const updateCount = (item: Room) =>
+          item.streamer_id === event.streamerId || item.slug === event.slug
+            ? { ...item, follower_count: event.followerCount }
+            : item;
+        setRooms((current) => current.map(updateCount));
+        setFollowingRooms((current) => current.map(updateCount));
+      },
+    );
+    socket.on(
+      "follow:state",
+      (event: { streamerId: string; following: boolean; followerCount: number }) => {
+        if (event.streamerId) {
+          void loadFollowing();
+          void loadRooms();
+        }
+      },
+    );
+    socket.on(
+      "schedule:changed",
+      (event: { streamerId: string; slug: string; nextStreamAt: string | null; scheduleTimezone: string }) => {
+        const updateSchedule = (item: Room) =>
+          item.streamer_id === event.streamerId || item.slug === event.slug
+            ? { ...item, next_stream_at: event.nextStreamAt, schedule_timezone: event.scheduleTimezone }
+            : item;
+        setRooms((current) => current.map(updateSchedule));
+        setFollowingRooms((current) => current.map(updateSchedule));
+      },
+    );
+    socket.on(
+      "reminder:preference",
+      (event: { streamerId: string; enabled: boolean }) =>
+        setFollowingRooms((current) => current.map((item) =>
+          item.streamer_id === event.streamerId ? { ...item, reminder_enabled: event.enabled } : item,
+        )),
     );
     return () => {
       socket.disconnect();
     };
-  }, [user?.role, user?.ageAcknowledged]);
+  }, [user?.role, user?.ageAcknowledged, settledQuery, category, streamLanguage]);
   async function login(e: FormEvent) {
     e.preventDefault();
     setLoginError("");
     try {
-      setUser(
-        (
-          await request("/api/auth/login", {
+      const result = await request("/api/auth/login", {
             method: "POST",
             body: JSON.stringify({ handle, password }),
-          })
-        ).user,
-      );
+          });
+      setUser(result.user);
+      setResumeIntent(result.user.role === "audience" ? authGate : null);
+      setAuthGate(null);
       setPassword("");
     } catch {
       setLoginError(
@@ -519,9 +879,7 @@ function App() {
     e.preventDefault();
     setLoginError("");
     try {
-      setUser(
-        (
-          await request("/api/auth/register", {
+      const result = await request("/api/auth/register", {
             method: "POST",
             body: JSON.stringify({
               handle,
@@ -529,9 +887,10 @@ function App() {
               password,
               locale: language,
             }),
-          })
-        ).user,
-      );
+          });
+      setUser(result.user);
+      setResumeIntent(result.user.role === "audience" ? authGate : null);
+      setAuthGate(null);
       setPassword("");
       setDisplayName("");
     } catch (error) {
@@ -559,18 +918,23 @@ function App() {
   }
   async function logout() {
     await request("/api/auth/session", { method: "DELETE" });
+    setAuthGate(null);
+    setResumeIntent(null);
+    setResumeNotice("");
     setHandle("");
     setDisplayName("");
     setPassword("");
     setLoginError("");
-    setUser(null);
-    setRoom(null);
-    setProfileRoom(null);
+    setUser(publicGuest(language));
     setAccountOpen(false);
     setMobileSearchOpen(false);
     setMobileTab("home");
   }
   function navigateMobile(tab: MobileTab) {
+    if (user?.id === "public-guest" && !["home", "discover"].includes(tab)) {
+      requireAuth(tab as AuthIntentKind);
+      return;
+    }
     setMobileTab(tab);
     if (tab === "me") {
       setAccountOpen(true);
@@ -579,8 +943,7 @@ function App() {
       return;
     }
     setAccountOpen(false);
-    setRoom(null);
-    setProfileRoom(null);
+    showDiscovery();
     setMobileSearchOpen(tab === "discover");
     if (tab === "home") {
       window.scrollTo({ top: 0 });
@@ -594,6 +957,39 @@ function App() {
         : "#audience-library";
     document.querySelector(targetSelector)?.scrollIntoView({ block: "start" });
   }
+  useEffect(() => {
+    if (!resumeIntent || !user || user.id === "public-guest" || !user.ageAcknowledged) return;
+    if (user.role !== "audience") {
+      setResumeIntent(null);
+      return;
+    }
+    if (["follow", "chat", "gift", "action", "private-access", "report"].includes(resumeIntent.kind)) return;
+    if (resumeIntent.kind === "following") {
+      showDiscovery();
+      setMobileDiscoveryView("following");
+      window.setTimeout(() => document.querySelector("#following-feed")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    } else if (resumeIntent.kind === "wallet") {
+      setAccountOpen(true);
+      window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    } else if (["broadcast", "go-live"].includes(resumeIntent.kind)) {
+      showDiscovery();
+      window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    } else if (resumeIntent.kind === "inbox") {
+      setMobileTab("inbox");
+      window.setTimeout(() => document.querySelector("#audience-library")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    } else {
+      setMobileTab("me");
+      setAccountOpen(true);
+      window.scrollTo({ top: 0 });
+    }
+    setResumeNotice(language === "en" ? "Signed in — your requested destination is ready." : "登录成功——已返回您请求的位置。");
+    setResumeIntent(null);
+  }, [resumeIntent, user?.id, user?.role, user?.ageAcknowledged, language]);
+  useEffect(() => {
+    if (!resumeNotice) return;
+    const timer = window.setTimeout(() => setResumeNotice(""), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [resumeNotice]);
   if (sessionLoading)
     return (
       <main className="app-loading" aria-busy="true">
@@ -603,125 +999,8 @@ function App() {
         <span className="app-loading-bar" aria-hidden="true" />
       </main>
     );
-  if (!user)
-    return (
-      <main className="landing">
-        <LanguagePicker language={language} onChange={setLanguage} />
-        <p className="eyebrow">{t.local}</p>
-        <h1>{t.title}</h1>
-        <p className="notice">{t.test}</p>
-        <div className="auth-tabs" role="tablist">
-          <button
-            type="button"
-            className={authMode === "login" ? "active" : ""}
-            onClick={() => {
-              setAuthMode("login");
-              setLoginError("");
-            }}
-          >
-            {language === "en" ? "Sign in" : "登录"}
-          </button>
-          <button
-            type="button"
-            className={authMode === "register" ? "active" : ""}
-            onClick={() => {
-              setAuthMode("register");
-              setHandle("");
-              setLoginError("");
-            }}
-          >
-            {language === "en" ? "Create audience account" : "创建观众账户"}
-          </button>
-        </div>
-        <h2>
-          {authMode === "login"
-            ? language === "en"
-              ? "Sign in"
-              : "登录"
-            : language === "en"
-              ? "Join as an audience member"
-              : "注册观众账户"}
-        </h2>
-        {authMode === "login" && (
-          <div className="account-shortcuts">
-            {(["audience", "streamer", "admin"] as Role[]).map((role) => (
-              <button
-                type="button"
-                className="secondary"
-                key={role}
-                onClick={() => setHandle(`demo-${role}`)}
-              >
-                {roleLabel(t, role)}
-              </button>
-            ))}
-          </div>
-        )}
-        <form
-          className="login-form"
-          onSubmit={(e) =>
-            void (authMode === "login" ? login(e) : register(e))
-          }
-        >
-          <label>
-            {language === "en" ? "Account handle" : "账户名"}
-            <input
-              value={handle}
-              onChange={(e) => setHandle(e.target.value.toLowerCase())}
-              autoComplete="username"
-              minLength={3}
-              maxLength={30}
-              pattern={
-                authMode === "register" ? "[a-z0-9_]+" : "[a-z0-9_-]+"
-              }
-              required
-            />
-          </label>
-          {authMode === "register" && (
-            <label>
-              {language === "en" ? "Display name" : "显示名称"}
-              <input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                autoComplete="nickname"
-                minLength={2}
-                maxLength={50}
-                required
-              />
-            </label>
-          )}
-          <label>
-            {language === "en" ? "Password" : "密码"}
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={
-                authMode === "register" ? "new-password" : "current-password"
-              }
-              minLength={authMode === "register" ? 12 : 8}
-              required
-            />
-          </label>
-          {authMode === "register" && (
-            <p className="form-help">
-              {language === "en"
-                ? "Test environment only. Do not use a real password or personal information. New accounts begin with zero test coins."
-                : "仅限测试环境。请勿使用真实密码或个人信息。新账户初始测试金币为零。"}
-            </p>
-          )}
-          <button>
-            {authMode === "login"
-              ? language === "en"
-                ? "Sign in"
-                : "登录"
-              : language === "en"
-                ? "Create account"
-                : "创建账户"}
-          </button>
-        </form>
-        {loginError && <p className="error">{loginError}</p>}
-      </main>
-    );
+  if (!user) return null;
+  const isGuest = user.id === "public-guest";
   return (
     <main className={`app role-${user.role}${room ? " room-open" : profileRoom ? " profile-open" : ""}`}>
       <header className={`product-header ${user.role === "audience" && user.ageAcknowledged ? "audience-product-header" : ""}`}>
@@ -730,8 +1009,8 @@ function App() {
             H
           </span>
           <div>
-          <p className="eyebrow">{t.test}</p>
-          <h1>{user.role === "audience" && user.ageAcknowledged ? "HOLIWYN" : t.title}</h1>
+          <p className="eyebrow">{language === "en" ? "PRIVATE STAGING · Creator preview environment" : "私有预发布环境 · 主播预览环境"}</p>
+          <h1>HOLIWYN</h1>
           <p>
             {user.displayName} · {roleLabel(t, user.role)}
           </p>
@@ -745,6 +1024,10 @@ function App() {
             initials={user.displayName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
             onSearch={() => setMobileSearchOpen((current) => !current)}
             onAccount={() => {
+              if (isGuest) {
+                requireAuth("account");
+                return;
+              }
               setMobileTab("me");
               setAccountOpen(true);
               setMobileSearchOpen(false);
@@ -761,17 +1044,18 @@ function App() {
               <button
                 className={!room && !profileRoom ? "active" : ""}
                 onClick={() => {
-                  setRoom(null);
-                  setProfileRoom(null);
-                  window.scrollTo({ top: 0 });
+                  showDiscovery();
                   void loadRooms();
                 }}
               >
                 {language === "en" ? "Discover" : "发现"}
               </button>
               <button type="button" onClick={() => {
-                setRoom(null);
-                setProfileRoom(null);
+                if (isGuest) {
+                  requireAuth("following");
+                  return;
+                }
+                showDiscovery();
                 window.setTimeout(() => document.querySelector("#following-feed")?.scrollIntoView({ behavior: "smooth" }), 0);
               }}>
                 {language === "en" ? "Following" : "关注"}
@@ -785,21 +1069,22 @@ function App() {
         )}
         <div className="product-account">
           <LanguagePicker language={language} onChange={setLanguage} />
-          {user.role === "audience" && user.ageAcknowledged ? <a className="secondary header-creator-link" href="#creator-program">{language === "en" ? "Go Live" : "开播"}</a> : null}
-          {user.role === "audience" && <span className="header-account-label">{user.displayName}</span>}
+          {user.role === "audience" && user.ageAcknowledged ? <button className="secondary header-creator-link" onClick={() => isGuest ? requireAuth("broadcast") : document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth" })}>{language === "en" ? "Go Live" : "开播"}</button> : null}
+          {user.role === "audience" && user.ageAcknowledged ? <button className="secondary header-wallet-link" onClick={() => { if (isGuest) return requireAuth("wallet"); setAccountOpen(true); window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>{language === "en" ? "Wallet" : "钱包"}</button> : null}
+          {user.role === "audience" && <span className="header-account-label">{isGuest ? (language === "en" ? "Browsing as guest" : "访客浏览") : user.displayName}</span>}
           <button
             className="secondary"
-            onClick={() => setAccountOpen((current) => !current)}
+            onClick={() => isGuest ? requireAuth("account") : setAccountOpen((current) => !current)}
             aria-pressed={accountOpen}
           >
-            {language === "en" ? "Account" : "账户"}
+            {isGuest ? (language === "en" ? "Sign in" : "登录") : (language === "en" ? "Account" : "账户")}
           </button>
-          <button className="secondary" onClick={() => void logout()}>
+          {!isGuest ? <button className="secondary" onClick={() => void logout()}>
             {t.end}
-          </button>
+          </button> : null}
         </div>
       </header>
-      {accountOpen ? (
+      {!isGuest && accountOpen ? (
         <AccountCenter
           user={user}
           language={language}
@@ -810,48 +1095,77 @@ function App() {
           onClose={() => setAccountOpen(false)}
           onLogout={() => void logout()}
         />
-      ) : !user.ageAcknowledged ? (
+      ) : !isGuest && !user.ageAcknowledged ? (
         <section className="age-gate">
           <h2>{t.ageTitle}</h2>
           <p>{t.ageText}</p>
           <button onClick={() => void acknowledge()}>{t.age}</button>
         </section>
       ) : user.role === "audience" ? (
-        profileRoom ? (
+        routeLoading ? (
+          <section className="workspace route-status" aria-busy="true">
+            <LiveStreamCardSkeleton count={1} label={language === "en" ? "Opening this Holiwyn page" : "正在打开 Holiwyn 页面"} />
+          </section>
+        ) : routeError ? (
+          <section className="workspace route-status">
+            <EmptyState
+              icon="!"
+              title={routeError === "not-found"
+                ? language === "en" ? "This Holiwyn page was not found" : "未找到此 Holiwyn 页面"
+                : language === "en" ? "This page is temporarily unavailable" : "此页面暂时不可用"}
+              description={routeError === "not-found"
+                ? language === "en" ? "The room or creator link may be invalid or no longer available." : "直播间或主播链接可能无效，或已不再可用。"
+                : language === "en" ? "Check the local service and try this link again." : "请检查本地服务后重试此链接。"}
+              action={routeError === "not-found"
+                ? <button type="button" onClick={() => showDiscovery("replace")}>{language === "en" ? "Explore live creators" : "发现直播主播"}</button>
+                : <button type="button" onClick={() => void hydrateAudienceRoute(window.location.pathname)}>{language === "en" ? "Try again" : "重试"}</button>}
+            />
+          </section>
+        ) : profileRoom ? (
           <PublicCreatorProfileView
             room={profileRoom}
             recommendations={rooms.filter((item) => item.streamer_id !== profileRoom.streamer_id)}
             t={t}
             back={() => {
-              setProfileRoom(null);
-              window.scrollTo({ top: 0 });
+              returnFromAudienceDetail();
             }}
             onOpenRoom={(item) => {
-              setProfileRoom(null);
-              setRoom(item);
-              window.scrollTo({ top: 0 });
+              showRoom(item);
             }}
-            onFollowingChanged={() => void loadFollowing()}
+            onFollowingChanged={() => {
+              void loadFollowing();
+              void loadRooms();
+            }}
+            authenticated={!isGuest}
+            resumeIntent={resumeIntent}
+            onRequireAuth={requireAuth}
+            onIntentHandled={(message) => {
+              setResumeIntent(null);
+              if (message) setResumeNotice(message);
+            }}
           />
         ) : room ? (
           <RoomView
             room={room}
             recommendations={rooms.filter((item) => item.slug !== room.slug)}
             back={() => {
-              setRoom(null);
-              window.scrollTo({ top: 0 });
+              returnFromAudienceDetail();
               loadRooms();
             }}
             onOpenRoom={(item) => {
-              setRoom(item);
-              window.scrollTo({ top: 0 });
+              showRoom(item);
             }}
             onOpenProfile={() => {
-              setProfileRoom(room);
-              setRoom(null);
-              window.scrollTo({ top: 0 });
+              showProfile(room);
             }}
             t={t}
+            authenticated={!isGuest}
+            resumeIntent={resumeIntent}
+            onRequireAuth={requireAuth}
+            onIntentHandled={(message) => {
+              setResumeIntent(null);
+              if (message) setResumeNotice(message);
+            }}
           />
         ) : (
           <section className="workspace audience-discovery" id="discover">
@@ -863,25 +1177,31 @@ function App() {
                 zh={language === "zh"}
                 onToggle={() => setDiscoveryRailCollapsed((current) => !current)}
                 onOpen={(item: DiscoveryRoom) => {
-                  setRoom(item as Room);
-                  setMobileSearchOpen(false);
-                  window.scrollTo({ top: 0 });
+                  showRoom(item as Room);
                 }}
               />
               <div className="discovery-content">
-                {!roomsLoading && rooms.length ? (
+                {!isGuest && discoveryPreferences ? (
+                  <DiscoveryPreferencePanel
+                    preferences={discoveryPreferences}
+                    categories={categories}
+                    zh={language === "zh"}
+                    saving={preferencesSaving}
+                    message={preferencesMessage}
+                    onChange={(preferences) => { setDiscoveryPreferences(preferences); setPreferencesMessage(""); }}
+                    onSave={() => void saveDiscoveryPreferences()}
+                    onReset={() => void resetDiscoveryPreferences()}
+                  />
+                ) : null}
+                {!roomsLoading && rooms.some((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local") ? (
                   <FeaturedLive
-                    room={rooms.find((item) => (item.broadcast_state ?? item.status) === "live") ?? rooms[0]}
+                    room={rooms.find((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local")!}
                     zh={language === "zh"}
                     onOpen={(item: DiscoveryRoom) => {
-                      setRoom(item as Room);
-                      setMobileSearchOpen(false);
-                      window.scrollTo({ top: 0 });
+                      showRoom(item as Room);
                     }}
                     onProfile={(item: DiscoveryRoom) => {
-                      setProfileRoom(item as Room);
-                      setMobileSearchOpen(false);
-                      window.scrollTo({ top: 0 });
+                      showProfile(item as Room);
                     }}
                   />
                 ) : null}
@@ -891,6 +1211,7 @@ function App() {
                     following={followingRooms}
                     view={mobileDiscoveryView}
                     category={category}
+                    language={streamLanguage}
                     categories={categories}
                     roomsLoading={roomsLoading}
                     followingLoading={followingLoading}
@@ -898,13 +1219,15 @@ function App() {
                     followingError={followingError}
                     t={t}
                     zh={language === "zh"}
-                    onViewChange={setMobileDiscoveryView}
+                    onViewChange={(view) => {
+                      if (isGuest && view === "following") return requireAuth("following");
+                      setMobileDiscoveryView(view);
+                    }}
                     onCategoryChange={setCategory}
+                    onLanguageChange={setStreamLanguage}
                     onRetry={() => mobileDiscoveryView === "following" ? void loadFollowing() : void loadRooms()}
                     onOpen={(selected: DiscoveryRoom) => {
-                      setRoom(selected as Room);
-                      setMobileSearchOpen(false);
-                      window.scrollTo({ top: 0 });
+                      showRoom(selected as Room);
                     }}
                   />
                   <div className="desktop-discovery-feed">
@@ -914,10 +1237,17 @@ function App() {
                         <h2>{t.live}</h2>
                         <p>{language === "en" ? "Creators broadcasting now and rooms worth discovering." : "正在直播以及值得发现的主播。"}</p>
                       </div>
-                      <select className="discovery-category-filter" value={category} onChange={(event) => setCategory(event.target.value)} aria-label={t.allCategories}>
-                        <option value="">{t.allCategories}</option>
-                        {categories.map((item) => <option key={item}>{item}</option>)}
-                      </select>
+                      <div className="discovery-filter-row">
+                        <select className="discovery-category-filter" value={category} onChange={(event) => setCategory(event.target.value)} aria-label={t.allCategories}>
+                          <option value="">{t.allCategories}</option>
+                          {categories.map((item) => <option key={item}>{item}</option>)}
+                        </select>
+                        <select className="discovery-language-filter" value={streamLanguage} onChange={(event) => setStreamLanguage(event.target.value as "" | "en" | "zh")} aria-label={language === "zh" ? "直播语言" : "Stream language"}>
+                          <option value="">{language === "zh" ? "所有语言" : "All languages"}</option>
+                          <option value="en">English</option>
+                          <option value="zh">中文</option>
+                        </select>
+                      </div>
                     </div>
                     <div className="live-stream-grid">
                       {roomsLoading ? (
@@ -929,7 +1259,7 @@ function App() {
                           description={language === "en" ? "We could not load creators. Check the local service and try again." : "暂时无法加载主播，请检查本地服务后重试。"}
                           action={<button type="button" onClick={() => void loadRooms()}>{language === "en" ? "Try again" : "重试"}</button>}
                         />
-                      ) : rooms.length ? rooms.map((item, index) => (
+                      ) : rooms.some((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local") ? rooms.filter((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local").map((item, index) => (
                         <LiveStreamCard
                           key={item.slug}
                           room={item}
@@ -937,36 +1267,57 @@ function App() {
                           t={t}
                           zh={language === "zh"}
                           onOpen={(selected: DiscoveryRoom) => {
-                            setRoom(selected as Room);
-                            setMobileSearchOpen(false);
-                            window.scrollTo({ top: 0 });
+                            showRoom(selected as Room);
                           }}
                         />
                       )) : (
                         <EmptyState
                           icon="⌕"
-                          title={language === "en" ? "No creators found" : "没有找到主播"}
-                          description={language === "en" ? "Try another search or clear the category filter." : "请尝试其他搜索或清除分类筛选。"}
+                          title={language === "en" ? "Nobody is live right now" : "暂时没有主播开播"}
+                          description={language === "en" ? "Explore recommended creators below while live status updates automatically." : "您可以先浏览下方推荐主播，直播状态会自动更新。"}
                           action={<button type="button" onClick={() => { setQuery(""); setCategory(""); }}>{language === "en" ? "Explore all creators" : "浏览全部主播"}</button>}
                         />
                       )}
                     </div>
+                    {!roomsLoading && rooms.some((item) => (item.broadcast_state ?? item.status) !== "live" || item.broadcast_status_source === "local") ? (
+                      <section className="recommended-creators" aria-labelledby="recommended-creators-title">
+                        <div className="discovery-section-heading">
+                          <div><p className="eyebrow">{language === "en" ? "Recommended" : "推荐"}</p><h2 id="recommended-creators-title">{language === "en" ? "Creators to follow" : "值得关注的主播"}</h2></div>
+                        </div>
+                        <div className="live-stream-grid">
+                          {rooms.filter((item) => (item.broadcast_state ?? item.status) !== "live" || item.broadcast_status_source === "local").map((item, index) => (
+                            <LiveStreamCard key={item.slug} room={item} index={index} t={t} zh={language === "zh"} onOpen={(selected: DiscoveryRoom) => showProfile(selected as Room)} />
+                          ))}
+                        </div>
+                      </section>
+                    ) : null}
                   </div>
                 </div>
-                <FollowingFeed
+                {!isGuest ? <FollowingFeed
                   t={t}
                   creators={followingRooms}
                   loading={followingLoading}
                   error={followingError}
                   onRetry={() => void loadFollowing()}
                   onOpen={(item) => {
-                    setRoom(item);
-                    setMobileSearchOpen(false);
-                    window.scrollTo({ top: 0 });
+                    showRoom(item);
                   }}
-                />
-                <AudienceShelf t={t} />
-                <div id="creator-program"><CreatorApplication t={t} /></div>
+                  onReminderChange={async (streamerId, enabled) => {
+                    await request(`/api/streamers/${streamerId}/reminder`, {
+                      method: "PATCH",
+                      body: JSON.stringify({ enabled }),
+                    });
+                    setFollowingRooms((current) => current.map((item) =>
+                      item.streamer_id === streamerId ? { ...item, reminder_enabled: enabled } : item,
+                    ));
+                  }}
+                /> : null}
+                {!isGuest ? <AudienceShelf
+                  t={t}
+                  creators={followingRooms}
+                  onOpenRoom={(slug) => void request(`/api/rooms/${encodeURIComponent(slug)}`).then((data) => showRoom(data.room))}
+                /> : null}
+                {!isGuest ? <div id="creator-program"><CreatorApplication t={t} /></div> : null}
               </div>
             </div>
           </section>
@@ -989,6 +1340,38 @@ function App() {
           onNavigate={navigateMobile}
         />
       ) : null}
+      <Modal
+        open={isGuest && Boolean(authGate)}
+        title={authMode === "login" ? (language === "en" ? "Sign in to Holiwyn" : "登录 Holiwyn") : (language === "en" ? "Create an audience account" : "创建观众账户")}
+        description={language === "en"
+          ? authGate?.kind === "follow" && authIntentPolicy.follow === "execute"
+            ? "Watching is public. Sign in to complete the follow you requested."
+            : "Watching and discovery are public. Sign in to continue this action. Nothing will be sent or purchased automatically."
+          : authGate?.kind === "follow" && authIntentPolicy.follow === "execute"
+            ? "浏览无需登录。登录后将完成您请求的关注。"
+            : "浏览和观看无需登录。登录后可继续此操作；系统不会自动发送内容或购买任何项目。"}
+        closeLabel={language === "en" ? "Continue browsing" : "继续浏览"}
+        onClose={() => setAuthGate(null)}
+      >
+        <div className="auth-tabs" role="tablist">
+          <button type="button" className={authMode === "login" ? "active" : ""} onClick={() => { setAuthMode("login"); setLoginError(""); }}>{language === "en" ? "Sign in" : "登录"}</button>
+          <button type="button" className={authMode === "register" ? "active" : ""} onClick={() => { setAuthMode("register"); setHandle(""); setLoginError(""); }}>{language === "en" ? "Create account" : "创建账户"}</button>
+        </div>
+        {authMode === "login" ? (
+          <div className="account-shortcuts">
+            {(["audience", "streamer", "admin"] as Role[]).map((role) => <button type="button" className="secondary" key={role} onClick={() => setHandle(`demo-${role}`)}>{roleLabel(t, role)}</button>)}
+          </div>
+        ) : null}
+        <form className="login-form" onSubmit={(event) => void (authMode === "login" ? login(event) : register(event))}>
+          <label>{language === "en" ? "Account handle" : "账户名"}<input value={handle} onChange={(event) => setHandle(event.target.value.toLowerCase())} autoComplete="username" minLength={3} maxLength={30} pattern={authMode === "register" ? "[a-z0-9_]+" : "[a-z0-9_-]+"} required /></label>
+          {authMode === "register" ? <label>{language === "en" ? "Display name" : "显示名称"}<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} autoComplete="nickname" minLength={2} maxLength={50} required /></label> : null}
+          <label>{language === "en" ? "Password" : "密码"}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={authMode === "register" ? "new-password" : "current-password"} minLength={authMode === "register" ? 12 : 8} required /></label>
+          {authMode === "register" ? <p className="form-help">{language === "en" ? "Private staging only. Do not use personal information or a real password. New accounts begin with zero R." : "仅限私有预发布环境。请勿使用个人信息或真实密码。新账户初始 R 为零。"}</p> : null}
+          <button>{authMode === "login" ? (language === "en" ? "Sign in" : "登录") : (language === "en" ? "Create account" : "创建账户")}</button>
+        </form>
+        {loginError ? <p className="error" role="alert">{loginError}</p> : null}
+      </Modal>
+      {resumeNotice ? <p className="notice auth-resume-notice" role="status">{resumeNotice}</p> : null}
     </main>
   );
 }
@@ -1128,6 +1511,7 @@ function AccountCenter({
             </article>
           ))}
         </section>
+        {user.role === "audience" ? <AudienceRWallet zh={zh} /> : null}
         <section className="account-recovery">
           <h3>{zh ? "账户恢复" : "Account recovery"}</h3>
           <p>{zh ? "恢复功能尚未启用。当前版本不会收集电子邮箱、发送恢复邮件或使用外部身份服务。" : "Recovery is not enabled yet. This version does not collect email, send reset links, or use an external identity provider."}</p>
@@ -1137,10 +1521,76 @@ function AccountCenter({
     </section>
   );
 }
-function AudienceShelf({ t }: { t: typeof copy.en }) {
+function AudienceRWallet({ zh }: { zh: boolean }) {
+  const [balance, setBalance] = useState<number | null>(null);
+  const [packages, setPackages] = useState<number[]>([]);
+  const [orders, setOrders] = useState<{ id: string; amount: number; created_at: string }[]>([]);
+  const [history, setHistory] = useState<{ entry_type: string; amount: number; reference_type: string; created_at: string }[]>([]);
+  const [selected, setSelected] = useState(100);
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState("");
+  const refresh = useCallback(async () => {
+    const [walletResult, orderResult, historyResult] = await Promise.all([
+      request("/api/wallet"),
+      request("/api/wallet/orders"),
+      request("/api/wallet/history"),
+    ]);
+    setBalance(walletResult.balance);
+    setPackages(orderResult.packages);
+    setOrders(orderResult.orders);
+    setHistory(historyResult.entries);
+    setSelected((current) => orderResult.packages.includes(current) ? current : orderResult.packages[0] ?? 100);
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+  async function placeOrder() {
+    setPending(true);
+    setNotice("");
+    try {
+      await request("/api/wallet/orders", {
+        method: "POST",
+        body: JSON.stringify({ amount: selected, idempotencyKey: crypto.randomUUID() }),
+      });
+      await refresh();
+      setNotice(zh ? `${selected.toLocaleString()} R 已加入此测试账户。` : `${selected.toLocaleString()} R was added to this test account.`);
+    } catch {
+      setNotice(zh ? "暂时无法完成 R 测试订单。" : "The R test order could not be completed.");
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <section className="account-r-wallet" id="audience-wallet">
+      <div className="account-wallet-heading">
+        <div><p className="eyebrow">{zh ? "钱包" : "WALLET"}</p><h3>{zh ? "R 余额" : "R balance"}</h3></div>
+        <strong>{balance?.toLocaleString() ?? "…"} R</strong>
+      </div>
+      <p className="form-help">{zh ? "R 仅用于此测试环境，没有现金价值，也不能兑换或提现。" : "R is for this test environment only. It has no cash value and cannot be redeemed or withdrawn."}</p>
+      <div className="r-package-grid" aria-label={zh ? "R 测试订单选项" : "R test order options"}>
+        {packages.map((amount) => <button type="button" className={selected === amount ? "active" : "secondary"} aria-pressed={selected === amount} key={amount} onClick={() => setSelected(amount)}>{amount.toLocaleString()} R</button>)}
+      </div>
+      <button type="button" onClick={() => void placeOrder()} disabled={pending}>{pending ? (zh ? "处理中…" : "Processing…") : (zh ? `下测试订单 · ${selected.toLocaleString()} R` : `Place test order · ${selected.toLocaleString()} R`)}</button>
+      {notice ? <p className="account-notice" role="status">{notice}</p> : null}
+      <div className="r-wallet-history">
+        <h4>{zh ? "最近记录" : "Recent activity"}</h4>
+        {[...history].slice(0, 5).map((entry, index) => <p key={`${entry.created_at}-${index}`}><span>{entry.reference_type === "test_order" ? (zh ? "R 测试订单" : "R test order") : entry.reference_type}</span><strong>{entry.amount > 0 ? "+" : ""}{entry.amount.toLocaleString()} R</strong></p>)}
+        {!history.length && !orders.length ? <p className="muted">{zh ? "暂无记录。" : "No activity yet."}</p> : null}
+      </div>
+    </section>
+  );
+}
+function AudienceShelf({
+  t,
+  creators,
+  onOpenRoom,
+}: {
+  t: typeof copy.en;
+  creators: Room[];
+  onOpenRoom: (slug: string) => void;
+}) {
+  const zh = t.title !== "Stream MVP";
   const [history, setHistory] = useState<Room[]>([]);
   const [notes, setNotes] = useState<
-    { id: string; title: string; body: string; read_at: string | null }[]
+    { id: string; kind: string; title: string; body: string; read_at: string | null; room_slug?: string | null }[]
   >([]);
   const loadNotes = () =>
     void request("/api/me/notifications").then((d) =>
@@ -1149,6 +1599,13 @@ function AudienceShelf({ t }: { t: typeof copy.en }) {
   useEffect(() => {
     void request("/api/me/history").then((d) => setHistory(d.rooms));
     loadNotes();
+    const timer = window.setInterval(loadNotes, 60_000);
+    const socket = io({ transports: ["websocket"] });
+    socket.on("notification:new", loadNotes);
+    return () => {
+      window.clearInterval(timer);
+      socket.disconnect();
+    };
   }, []);
   async function markRead(id: string) {
     await request(`/api/me/notifications/${id}/read`, { method: "PATCH", body: "{}" });
@@ -1159,6 +1616,10 @@ function AudienceShelf({ t }: { t: typeof copy.en }) {
     loadNotes();
   }
   const unread = notes.filter((item) => !item.read_at).length;
+  const upcoming = creators
+    .filter((item) => item.next_stream_at && new Date(item.next_stream_at).getTime() > Date.now())
+    .sort((a, b) => new Date(a.next_stream_at!).getTime() - new Date(b.next_stream_at!).getTime())
+    .slice(0, 4);
   return (
     <div className="shelves" id="audience-library">
       <div>
@@ -1178,15 +1639,27 @@ function AudienceShelf({ t }: { t: typeof copy.en }) {
         {notes.length ? (
           notes.slice(0, 4).map((item) => (
             <div key={item.id} className={`notification-item ${item.read_at ? "read" : "unread"}`}>
-            <p>
-              <strong>{item.title}</strong> · {item.body}
-            </p>
-            {!item.read_at ? <button className="secondary" onClick={() => void markRead(item.id)}>{t.title === "Stream MVP" ? "Mark read" : "标为已读"}</button> : null}
+              <p><strong>{item.title}</strong> · {item.body}</p>
+              <div className="notification-actions">
+                {item.room_slug ? <button type="button" className="secondary" onClick={() => { if (!item.read_at) void markRead(item.id); onOpenRoom(item.room_slug!); }}>{zh ? "查看直播间" : "View room"}</button> : null}
+                {!item.read_at ? <button className="secondary" onClick={() => void markRead(item.id)}>{zh ? "标为已读" : "Mark read"}</button> : null}
+              </div>
             </div>
           ))
         ) : (
           <p className="muted">{t.noNotes}</p>
         )}
+      </div>
+      <div className="upcoming-reminders">
+        <div className="notification-heading"><h3>{zh ? "即将开播" : "Upcoming"}</h3><span>{upcoming.length}</span></div>
+        {upcoming.length ? <div className="following-feed-list">{upcoming.map((item) => (
+          <article className="following-feed-item" key={item.slug}>
+            <button type="button" className="secondary following-feed-open" onClick={() => onOpenRoom(item.slug)}>
+              <CreatorAvatar name={item.streamer_name} url={item.avatar_url} className="following-avatar" />
+              <span><strong>{item.streamer_name}</strong><time dateTime={item.next_stream_at!}>{new Date(item.next_stream_at!).toLocaleString(zh ? "zh-CN" : "en-US", { timeZone: item.schedule_timezone || undefined })}</time><small>{item.reminder_enabled === false ? (zh ? "提醒已关闭" : "Reminder off") : (zh ? "提醒已开启" : "Reminder on")}</small></span>
+            </button>
+          </article>
+        ))}</div> : <p className="muted">{zh ? "关注的主播还没有发布下一场直播时间。" : "Followed creators have not published an upcoming stream yet."}</p>}
       </div>
     </div>
   );
@@ -1198,6 +1671,7 @@ function FollowingFeed({
   error,
   onRetry,
   onOpen,
+  onReminderChange,
 }: {
   t: typeof copy.en;
   creators: Room[];
@@ -1205,6 +1679,7 @@ function FollowingFeed({
   error: boolean;
   onRetry: () => void;
   onOpen: (room: Room) => void;
+  onReminderChange: (streamerId: string, enabled: boolean) => Promise<void>;
 }) {
   const zh = t.title !== "Stream MVP";
   if (loading)
@@ -1233,10 +1708,15 @@ function FollowingFeed({
       <div className="following-feed-heading"><div><p className="eyebrow">{zh ? "我的关注" : "Following"}</p><h3>{zh ? "关注主播动态" : "Your creator feed"}</h3></div><span>{creators.filter((item) => item.broadcast_state === "live").length} {zh ? "正在直播" : "live"}</span></div>
       <div className="following-feed-list">
         {creators.map((item) => (
-          <button key={item.slug} onClick={() => onOpen(item)}>
-            <CreatorAvatar name={item.streamer_name} url={item.avatar_url} className={`following-avatar state-${item.broadcast_state}`} />
-            <span><strong>{item.streamer_name}</strong><small>{broadcastLabel(t, item.broadcast_state)}</small><small>{item.next_stream_at ? `${zh ? "下一场" : "Next"}: ${new Date(item.next_stream_at).toLocaleString(zh ? "zh-CN" : "en-US", { timeZone: item.schedule_timezone || undefined })}` : item.schedule_text}</small></span>
-          </button>
+          <article key={item.slug} className="following-feed-item">
+            <button type="button" className="secondary following-feed-open" onClick={() => onOpen(item)}>
+              <CreatorAvatar name={item.streamer_name} url={item.avatar_url} className={`following-avatar state-${item.broadcast_state}`} />
+              <span><strong>{item.streamer_name}</strong><small>{broadcastLabel(t, item.broadcast_state)}</small><small>{item.next_stream_at ? `${zh ? "下一场" : "Next"}: ${new Date(item.next_stream_at).toLocaleString(zh ? "zh-CN" : "en-US", { timeZone: item.schedule_timezone || undefined })}` : item.schedule_text}</small></span>
+            </button>
+            <button type="button" className="secondary reminder-toggle" aria-pressed={item.reminder_enabled !== false} onClick={() => void onReminderChange(item.streamer_id, item.reminder_enabled === false)}>
+              {item.reminder_enabled === false ? (zh ? "开启提醒" : "Remind me") : (zh ? "提醒已开启" : "Reminder on")}
+            </button>
+          </article>
         ))}
       </div>
     </section>
@@ -1352,18 +1832,25 @@ function CreatorLiveMonitor({
   mobileOpen,
   onMobileClose,
   onViewerCountChange,
+  initialSlowModeSeconds,
+  initialBlockedTerms,
 }: {
   slug: string;
   t: typeof copy.en;
   mobileOpen: boolean;
   onMobileClose: () => void;
   onViewerCountChange: (count: number) => void;
+  initialSlowModeSeconds: number;
+  initialBlockedTerms: string[];
 }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [participants, setParticipants] = useState<any[]>([]);
   const [gifts, setGifts] = useState<any[]>([]);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [slowModeSeconds, setSlowModeSeconds] = useState(initialSlowModeSeconds);
+  const [blockedTerms, setBlockedTerms] = useState(initialBlockedTerms.join(", "));
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const zh = t.title !== "Stream MVP";
   useEffect(() => {
@@ -1381,6 +1868,9 @@ function CreatorLiveMonitor({
     });
     socket.on("chat:message", (d) =>
       setMessages((current) => [...current.slice(-39), d]),
+    );
+    socket.on("chat:deleted", (d: { messageId: string }) =>
+      setMessages((current) => current.filter((message) => message.id !== d.messageId)),
     );
     socket.on("gift:sent", (d) =>
       setGifts((current) =>
@@ -1408,6 +1898,8 @@ function CreatorLiveMonitor({
       socket.disconnect();
     };
   }, [slug, zh]);
+  useEffect(() => setSlowModeSeconds(initialSlowModeSeconds), [initialSlowModeSeconds]);
+  useEffect(() => setBlockedTerms(initialBlockedTerms.join(", ")), [initialBlockedTerms]);
   useEffect(() => onViewerCountChange(participants.length), [onViewerCountChange, participants.length]);
   function send(e: FormEvent) {
     e.preventDefault();
@@ -1420,6 +1912,37 @@ function CreatorLiveMonitor({
     );
     setDraft("");
   }
+  async function moderate(message: any, action: "mute" | "timeout" | "ban" | "delete") {
+    try {
+      await request(`/api/streamer/rooms/${slug}/moderation`, {
+        method: "POST",
+        body: JSON.stringify({
+          action,
+          targetId: message.sender?.id,
+          messageId: message.id,
+          durationSeconds: action === "timeout" ? 600 : undefined,
+        }),
+      });
+      setStatus(action === "delete" ? (zh ? "消息已删除。" : "Message deleted.") : action === "ban" ? (zh ? "观众已被禁止发言。" : "Viewer banned from chat.") : action === "timeout" ? (zh ? "观众已被暂停发言 10 分钟。" : "Viewer timed out for 10 minutes.") : (zh ? "观众已被禁言。" : "Viewer muted."));
+    } catch {
+      setStatus(zh ? "暂时无法执行管理操作。" : "Moderation action is temporarily unavailable.");
+    }
+  }
+  async function saveChatSettings() {
+    try {
+      await request(`/api/streamer/rooms/${slug}/chat-settings`, {
+        method: "PUT",
+        body: JSON.stringify({
+          slowModeSeconds,
+          blockedTerms: blockedTerms.split(",").map((term) => term.trim()).filter(Boolean),
+        }),
+      });
+      setSettingsOpen(false);
+      setStatus(zh ? "聊天管理设置已保存。" : "Chat moderation settings saved.");
+    } catch {
+      setStatus(zh ? "无法保存聊天设置。" : "Chat settings could not be saved.");
+    }
+  }
   return (
     <aside className={`broadcaster-chat ${mobileOpen ? "is-open" : ""}`} aria-label={zh ? "直播聊天" : "Live chat"}>
       <header className="broadcaster-chat-header">
@@ -1427,8 +1950,14 @@ function CreatorLiveMonitor({
         <span className="presence-pill">
           {participants.length} {zh ? "位观众" : "viewers"}
         </span>
-        <button type="button" className="broadcaster-chat-close" onClick={onMobileClose} aria-label={zh ? "关闭聊天" : "Close chat"}>×</button>
+        <button type="button" className="broadcaster-chat-settings-button" onClick={() => setSettingsOpen((current) => !current)} aria-label={zh ? "聊天管理设置" : "Chat moderation settings"}><BroadcastIcon name="settings" /></button>
+        <button type="button" className="broadcaster-chat-close" onClick={onMobileClose} aria-label={zh ? "关闭聊天" : "Close chat"}><BroadcastIcon name="close" /></button>
       </header>
+      {settingsOpen ? <div className="broadcaster-chat-settings">
+        <label>{zh ? "慢速模式" : "Slow mode"}<select value={slowModeSeconds} onChange={(event) => setSlowModeSeconds(Number(event.target.value))}><option value={0}>{zh ? "关闭" : "Off"}</option><option value={5}>5s</option><option value={15}>15s</option><option value={30}>30s</option><option value={60}>60s</option></select></label>
+        <label>{zh ? "屏蔽词（逗号分隔）" : "Blocked terms (comma separated)"}<input value={blockedTerms} maxLength={500} onChange={(event) => setBlockedTerms(event.target.value)} /></label>
+        <button type="button" onClick={() => void saveChatSettings()}>{zh ? "保存" : "Save"}</button>
+      </div> : null}
       <div className="broadcaster-chat-feed" aria-live="polite">
         {!messages.length && !gifts.length ? (
           <div className="creator-empty-state">
@@ -1437,9 +1966,15 @@ function CreatorLiveMonitor({
           </div>
         ) : null}
         {messages.map((message) => (
-          <p className={`broadcaster-chat-message ${message.sender?.role === "streamer" ? "creator" : ""}`} key={message.id}>
-            <strong>{message.sender.displayName}</strong><span>{message.body}</span>
-          </p>
+          <div className={`broadcaster-chat-message ${message.sender?.role === "streamer" ? "creator" : ""}`} key={message.id}>
+            <p><strong>{message.sender.displayName}</strong><span>{message.body}</span></p>
+            {message.sender?.role === "audience" ? <details className="chat-message-actions"><summary aria-label={zh ? `管理 ${message.sender.displayName}` : `Moderate ${message.sender.displayName}`}><BroadcastIcon name="more" /></summary><div>
+              <button type="button" onClick={() => void moderate(message, "delete")}><BroadcastIcon name="trash" />{zh ? "删除" : "Delete"}</button>
+              <button type="button" onClick={() => void moderate(message, "mute")}><BroadcastIcon name="mute" />{zh ? "禁言" : "Mute"}</button>
+              <button type="button" onClick={() => void moderate(message, "timeout")}><BroadcastIcon name="timeout" />{zh ? "暂停 10 分钟" : "Timeout 10m"}</button>
+              <button type="button" className="danger" onClick={() => void moderate(message, "ban")}><BroadcastIcon name="ban" />{zh ? "禁止" : "Ban"}</button>
+            </div></details> : null}
+          </div>
         ))}
         {gifts.map((gift) => (
           <p className="broadcaster-gift-event" key={gift.eventId ?? gift.id}>
@@ -1456,6 +1991,18 @@ function CreatorLiveMonitor({
       {status ? <p className="error broadcaster-chat-error">{status}</p> : null}
     </aside>
   );
+}
+function CreatorModerationRestrictions({ slug, t }: { slug: string; t: typeof copy.en }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [status, setStatus] = useState("");
+  const zh = t.title !== "Stream MVP";
+  const refresh = () => void request(`/api/streamer/rooms/${slug}/moderation`).then((result) => setItems(result.restrictions)).catch(() => setStatus(zh ? "暂时无法加载管理列表。" : "Moderation list is temporarily unavailable."));
+  useEffect(refresh, [slug]);
+  async function clear(item: any, action: "unmute" | "unban") {
+    await request(`/api/streamer/rooms/${slug}/moderation`, { method: "POST", body: JSON.stringify({ targetId: item.user_id, action }) });
+    refresh();
+  }
+  return <section className="creator-moderation-list"><div><h3>{zh ? "聊天管理" : "Chat moderation"}</h3><p>{zh ? "在直播聊天中点击消息旁的菜单可删除、暂停或禁止用户。" : "Use the menu beside a live-chat message to delete, timeout, mute, or ban a viewer."}</p></div>{items.length ? <ul>{items.map((item) => <li key={item.user_id}><span><strong>{item.display_name}</strong><small>{item.is_banned ? (zh ? "已禁止" : "Banned") : item.muted_until ? (zh ? `暂停至 ${new Date(item.muted_until).toLocaleTimeString()}` : `Timed out until ${new Date(item.muted_until).toLocaleTimeString()}`) : (zh ? "已禁言" : "Muted")}</small></span><button type="button" className="secondary" onClick={() => void clear(item, item.is_banned ? "unban" : "unmute")}>{zh ? "解除" : "Remove"}</button></li>)}</ul> : <p className="muted">{zh ? "当前没有受限用户。" : "No viewers are currently restricted."}</p>}{status ? <p className="error">{status}</p> : null}</section>;
 }
 function CreatorSessionInsights({
   slug,
@@ -1725,28 +2272,39 @@ function ActionMenuManager({ slug, t }: { slug: string; t: typeof copy.en }) {
 function ObsReadiness({
   slug,
   state,
+  source,
   t,
   onChanged,
 }: {
   slug: string;
   state?: string;
+  source?: "local" | "cloudflare";
   t: typeof copy.en;
   onChanged: () => void;
 }) {
   const zh = t.title !== "Stream MVP";
+  const simulated = source === "local";
   const stateGuide: Record<string, string> = zh
     ? {
         offline: "OBS \u5c1a\u672a\u5f00\u59cb\u63a8\u6d41\u3002",
         connecting:
-          "Cloudflare \u6b63\u5728\u51c6\u5907\u89c2\u4f17\u64ad\u653e\u3002",
-        live: "\u89c2\u4f17\u73b0\u5728\u5e94\u53ef\u4ee5\u89c2\u770b\u76f4\u64ad\u3002",
+          simulated
+            ? "\u6b63\u5728\u6a21\u62df\u8fde\u63a5\u72b6\u6001\uff0c\u672a\u53d1\u5e03\u5a92\u4f53\u3002"
+            : "Cloudflare \u6b63\u5728\u51c6\u5907\u89c2\u4f17\u64ad\u653e\u3002",
+        live: simulated
+          ? "\u8fd9\u662f\u6a21\u62df\u76f4\u64ad\u72b6\u6001\uff0c\u89c2\u4f17\u65e0\u6cd5\u64ad\u653e\u89c6\u9891\u3002"
+          : "\u89c2\u4f17\u73b0\u5728\u5e94\u53ef\u4ee5\u89c2\u770b\u76f4\u64ad\u3002",
         unavailable:
           "\u6682\u65f6\u65e0\u6cd5\u786e\u8ba4\u76f4\u64ad\u72b6\u6001\u3002",
       }
     : {
         offline: "OBS is not streaming yet.",
-        connecting: "Cloudflare is preparing audience playback.",
-        live: "Audience playback should now be available.",
+        connecting: simulated
+          ? "Simulated connecting state; no media is being published."
+          : "Cloudflare is preparing audience playback.",
+        live: simulated
+          ? "This is a simulated live state; viewers cannot play video."
+          : "Audience playback should now be available.",
         unavailable: "The broadcast status could not be confirmed.",
       };
   return (
@@ -1858,13 +2416,29 @@ type WakeLockHandle = {
   release: () => Promise<void>;
 };
 
-function BroadcastIcon({ name }: { name: "microphone" | "camera" | "flip" | "chat" | "stop" }) {
+type CreatorIconName = "microphone" | "camera" | "flip" | "chat" | "stop" | "live" | "earnings" | "supporters" | "followers" | "actions" | "profile" | "settings" | "trash" | "mute" | "timeout" | "ban" | "upload" | "viewers" | "more" | "close";
+function BroadcastIcon({ name }: { name: CreatorIconName }) {
   const paths = {
     microphone: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" /></>,
     camera: <><rect x="3" y="6" width="18" height="13" rx="3" /><path d="m8 6 1.5-3h5L16 6M9 12.5l2 2 4-4" /></>,
     flip: <><path d="M4 8a8 8 0 0 1 13-3l2 2M20 16a8 8 0 0 1-13 3l-2-2" /><path d="M19 3v4h-4M5 21v-4h4" /></>,
     chat: <path d="M4 4h16v12H9l-5 4V4Z" />,
     stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+    live: <><circle cx="12" cy="12" r="3" /><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10" /></>,
+    earnings: <><circle cx="12" cy="12" r="9" /><path d="M15 8.5c-.7-.7-1.7-1-3-1-1.7 0-3 .8-3 2s1 1.8 3 2.2 3 1 3 2.3-1.3 2.3-3 2.3c-1.2 0-2.4-.4-3.2-1.2M12 5.5v13" /></>,
+    supporters: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" />,
+    followers: <><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2" /><path d="M3 20a6 6 0 0 1 12 0M14 15a5 5 0 0 1 7 4.5" /></>,
+    actions: <><path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z" /></>,
+    profile: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 15 6l-.3-2.6h-4L10.5 6A8 8 0 0 0 9 7L6.6 6 4.7 9.5 6.8 11a7 7 0 0 0 0 2l-2.1 1.5 2 3.4 2.3-1A8 8 0 0 0 10.5 18l.3 2.6h4L15 18a8 8 0 0 0 1.5-1l2.4 1 2-3.4-2-1.5a7 7 0 0 0 .1-1Z" /></>,
+    trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></>,
+    mute: <><path d="M11 5 6 9H3v6h3l5 4V5ZM16 9l5 6M21 9l-5 6" /></>,
+    timeout: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    ban: <><circle cx="12" cy="12" r="9" /><path d="m6 6 12 12" /></>,
+    upload: <><path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" /></>,
+    viewers: <><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z" /><circle cx="12" cy="12" r="2.5" /></>,
+    more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></>,
+    close: <path d="m6 6 12 12M18 6 6 18" />,
   };
   return <svg className="broadcast-control-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
@@ -1952,6 +2526,9 @@ function CreatorRealtimeOverlay({ slug, t }: { slug: string; t: typeof copy.en }
     socket.on("chat:message", (message) =>
       setMessages((current) => [...current.slice(-4), message]),
     );
+    socket.on("chat:deleted", ({ messageId }: { messageId: string }) =>
+      setMessages((current) => current.filter((message) => message.id !== messageId)),
+    );
     socket.on("gift:sent", (event) => {
       window.clearTimeout(giftTimer);
       setGift(event);
@@ -1969,12 +2546,21 @@ function QuickGoLive({
   slug,
   available,
   broadcastState,
+  broadcastSource,
   transport,
   title,
+  category,
+  streamLanguage,
+  streamTags,
+  thumbnailUrl,
   t,
   onChanged,
   onTitleChange,
-  onSaveTitle,
+  onCategoryChange,
+  onStreamLanguageChange,
+  onStreamTagsChange,
+  onSaveMetadata,
+  onThumbnailSelected,
   overlay,
   viewerCount,
   onRuntimeChange,
@@ -1984,12 +2570,21 @@ function QuickGoLive({
   slug: string;
   available: boolean;
   broadcastState: string;
+  broadcastSource?: "local" | "cloudflare";
   transport?: "obs_hls" | "browser_webrtc";
   title: string;
+  category: string;
+  streamLanguage: "en" | "zh";
+  streamTags: string;
+  thumbnailUrl?: string | null;
   t: typeof copy.en;
   onChanged: () => void;
   onTitleChange: (title: string) => void;
-  onSaveTitle: () => Promise<void>;
+  onCategoryChange: (category: string) => void;
+  onStreamLanguageChange: (language: "en" | "zh") => void;
+  onStreamTagsChange: (tags: string) => void;
+  onSaveMetadata: () => Promise<void>;
+  onThumbnailSelected: (file: File | null) => void;
   overlay?: ReactNode;
   viewerCount: number;
   onRuntimeChange: (runtime: BroadcasterRuntime) => void;
@@ -2016,6 +2611,7 @@ function QuickGoLive({
   const [liveStartedAt, setLiveStartedAt] = useState<number | null>(null);
   const [lastDuration, setLastDuration] = useState("00:00");
   const [peakViewers, setPeakViewers] = useState(0);
+  const [sessionSummary, setSessionSummary] = useState<any | null>(null);
   const [clock, setClock] = useState(Date.now());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controllerRef = useRef<WebRtcController | null>(null);
@@ -2454,7 +3050,7 @@ function QuickGoLive({
       );
   }
   async function goLive() {
-    if (!stream || !available || !title.trim()) return;
+    if (!stream || !available || !title.trim() || !category.trim()) return;
     enterMobileFullscreen();
     pageHidingRef.current = false;
     setBackgroundNotice("");
@@ -2462,7 +3058,7 @@ function QuickGoLive({
     setConnectionHealth("connecting");
     setError("");
     try {
-      await onSaveTitle();
+      await onSaveMetadata();
       const controller = await createWhipPublisher(
         stream,
         async (sdp) => {
@@ -2551,6 +3147,8 @@ function QuickGoLive({
     setEndConfirmationOpen(false);
     if (document.fullscreenElement)
       await document.exitFullscreen?.().catch(() => undefined);
+    const summaryResult = await request(`/api/streamer/rooms/${slug}/session-summary`).catch(() => null);
+    setSessionSummary(summaryResult?.summary ?? null);
     onChanged();
   }
   function toggleCamera() {
@@ -2586,6 +3184,33 @@ function QuickGoLive({
     if (phase === "live") setPeakViewers((current) => Math.max(current, viewerCount));
     onRuntimeChange({ phase, health: connectionHealth, duration });
   }, [connectionHealth, duration, onRuntimeChange, phase, viewerCount]);
+  const metadataEditor = (
+    <>
+      <div className="broadcast-setup-heading">
+        <div><h4>{zh ? "准备开播" : "Ready to go live"}</h4></div>
+      </div>
+      <div className="broadcast-metadata-layout">
+        <div className="broadcast-metadata-fields">
+          <label className="broadcast-title-field">
+            {zh ? "直播标题" : "Stream title"}
+            <input value={title} maxLength={120} onChange={(event) => onTitleChange(event.target.value)} placeholder={zh ? "告诉观众您正在直播什么" : "Tell viewers what you are streaming"} />
+          </label>
+          <div className="broadcast-metadata-row">
+            <label>{zh ? "分类" : "Category"}<input value={category} maxLength={60} onChange={(event) => onCategoryChange(event.target.value)} placeholder={zh ? "聊天、音乐、游戏…" : "Chat, music, gaming…"} /></label>
+            <label>{zh ? "直播语言" : "Stream language"}<select value={streamLanguage} onChange={(event) => onStreamLanguageChange(event.target.value as "en" | "zh")}><option value="en">English</option><option value="zh">中文</option></select></label>
+          </div>
+          <label>{zh ? "标签（最多 5 个）" : "Tags (up to 5)"}<input value={streamTags} maxLength={140} onChange={(event) => onStreamTagsChange(event.target.value)} placeholder={zh ? "聊天, 新人" : "chat, new creator"} /></label>
+          <label className="stream-thumbnail-picker"><BroadcastIcon name="upload" />{zh ? "选择直播封面" : "Choose stream thumbnail"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onThumbnailSelected(event.target.files?.[0] ?? null)} /></label>
+          <button type="button" className="secondary broadcast-metadata-save" disabled={!title.trim() || !category.trim()} onClick={() => void onSaveMetadata()}>{zh ? "保存直播信息" : "Save details"}</button>
+        </div>
+        <aside className="broadcast-audience-preview" aria-label={zh ? "观众卡片预览" : "Audience card preview"}>
+          <div className="broadcast-audience-preview-media">{thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <span>HOLIWYN</span>}<b>{zh ? "预览" : "PREVIEW"}</b></div>
+          <strong>{title || (zh ? "未命名直播" : "Untitled stream")}</strong>
+          <small>{category || (zh ? "未选择分类" : "No category")} · {streamLanguage === "zh" ? "中文" : "English"}</small>
+        </aside>
+      </div>
+    </>
+  );
   return (
     <section className={`quick-live-panel phase-${phase} ${stream ? "has-media" : "no-media"} camera-facing-${cameraFacingMode} controls-${controlsVisible ? "visible" : "hidden"}`} id="quick-go-live">
       <div className="quick-live-heading">
@@ -2607,7 +3232,7 @@ function QuickGoLive({
         <div className="broadcast-stage-status" aria-live="polite">
           <span className={`broadcast-health-dot health-${connectionHealth}`} />
           <strong>{healthLabel[connectionHealth]}</strong>
-          {phase === "live" ? <><time>{duration}</time><span className="stage-viewers" aria-label={zh ? `${viewerCount} 位观众` : `${viewerCount} viewers`}>◉ {viewerCount}</span></> : null}
+          {phase === "live" ? <><time>{duration}</time><span className="stage-viewers" aria-label={zh ? `${viewerCount} 位观众` : `${viewerCount} viewers`}><BroadcastIcon name="viewers" /> {viewerCount}</span></> : null}
         </div>
         {stream && phase !== "live" ? (
           <div className="broadcast-stage-controls">
@@ -2617,29 +3242,28 @@ function QuickGoLive({
         {phase === "live" ? overlay : null}
         {backgroundNotice && sessionActive ? <p className="broadcast-background-notice" role="status">{backgroundNotice}</p> : null}
       </div>
+      <div className="broadcast-health-layers" aria-label={zh ? "直播传输状态" : "Broadcast delivery health"}>
+        <span className={stream ? "ready" : "waiting"}><i /> <b>{zh ? "设备" : "Device"}</b><small>{stream ? (zh ? "相机和麦克风已就绪" : "Camera and microphone ready") : (zh ? "等待权限" : "Waiting for permission")}</small></span>
+        <span className={broadcastSource === "local" ? "waiting" : broadcastState === "live" ? "ready" : broadcastState === "connecting" ? "pending" : broadcastState === "unavailable" ? "error" : "waiting"}><i /> <b>{broadcastSource === "local" ? (zh ? "模拟状态" : "Simulation status") : (zh ? "Cloudflare 接收" : "Cloudflare ingest")}</b><small>{broadcastSource === "local" ? (zh ? "未发布媒体" : "No media published") : broadcastState === "live" ? (zh ? "正在接收直播" : "Receiving broadcast") : broadcastState === "connecting" ? (zh ? "正在建立连接" : "Connecting") : broadcastState === "unavailable" ? (zh ? "暂时无法确认" : "Temporarily unconfirmed") : (zh ? "尚未开播" : "Not live yet")}</small></span>
+        <span className={broadcastSource === "local" ? "waiting" : broadcastState === "live" ? "ready" : broadcastState === "connecting" ? "pending" : "waiting"}><i /> <b>{zh ? "观众播放" : "Audience playback"}</b><small>{broadcastSource === "local" ? (zh ? "没有观众视频" : "No audience media") : broadcastState === "live" ? (zh ? "播放授权已可用" : "Playback authorization available") : broadcastState === "connecting" ? (zh ? "正在准备播放" : "Preparing playback") : (zh ? "等待直播" : "Waiting for broadcast")}</small></span>
+      </div>
       {phase === "ended" ? (
         <div className="broadcast-ended-summary">
           <span className="broadcast-ended-icon" aria-hidden="true">✓</span>
           <h4>{zh ? "直播已结束" : "Stream ended"}</h4>
           <p>{zh ? `时长 ${lastDuration} · 峰值观众 ${peakViewers}` : `Duration ${lastDuration} · Peak viewers ${peakViewers}`}</p>
-          <button type="button" className="creator-primary-action" onClick={() => { setPeakViewers(0); setPhase("idle"); }}>{zh ? "完成" : "Done"}</button>
+          {sessionSummary ? <div className="broadcast-ended-metrics">
+            <span><small>{zh ? "测试收益" : "Test support"}</small><strong>{Number(sessionSummary.totalSupport ?? 0).toLocaleString()}</strong></span>
+            <span><small>{zh ? "支持者" : "Supporters"}</small><strong>{sessionSummary.supporterCount ?? 0}</strong></span>
+            <span><small>{zh ? "聊天消息" : "Chat messages"}</small><strong>{sessionSummary.chatMessages ?? 0}</strong></span>
+            <span><small>{zh ? "新关注" : "New followers"}</small><strong>{sessionSummary.newFollowers ?? 0}</strong></span>
+            <span><small>{zh ? "最佳支持者" : "Top supporter"}</small><strong>{sessionSummary.topSupporter?.sender ?? "—"}</strong></span>
+          </div> : null}
+          <button type="button" className="creator-primary-action" onClick={() => { setPeakViewers(0); setSessionSummary(null); setPhase("idle"); }}>{zh ? "完成" : "Done"}</button>
         </div>
       ) : stream && !sessionActive ? (
         <>
-          <div className="broadcast-setup-heading">
-            <div>
-              <h4>{zh ? "准备开播" : "Ready to go live"}</h4>
-            </div>
-          </div>
-          <label className="broadcast-title-field">
-            {zh ? "直播标题" : "Stream title"}
-            <input
-              value={title}
-              maxLength={120}
-              onChange={(event) => onTitleChange(event.target.value)}
-              placeholder={zh ? "告诉观众您正在直播什么" : "Tell viewers what you are streaming"}
-            />
-          </label>
+          {metadataEditor}
           <div className="device-grid">
             <label>
               {zh ? "相机" : "Camera"}
@@ -2663,7 +3287,7 @@ function QuickGoLive({
           <div className="quick-live-controls">
             <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
             <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
-            <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim()}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
+            <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim() || !category.trim()}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
           </div>
         </>
       ) : stream && sessionActive ? (
@@ -2687,10 +3311,13 @@ function QuickGoLive({
           </div>
         </div>
       ) : (
-        <div className="broadcast-permission-step">
-          <h4>{zh ? "相机和麦克风" : "Camera and microphone"}</h4>
-          <button type="button" className="creator-primary-action" onClick={() => void enableDevices()} disabled={phase === "requesting"}>{phase === "requesting" ? (zh ? "正在请求权限…" : "Requesting permission…") : phase === "error" ? (zh ? "重试相机和麦克风" : "Try camera and microphone again") : zh ? "允许相机和麦克风" : "Allow camera and microphone"}</button>
-        </div>
+        <>
+          {metadataEditor}
+          <div className="broadcast-permission-step">
+            <h4>{zh ? "相机和麦克风" : "Camera and microphone"}</h4>
+            <button type="button" className="creator-primary-action" onClick={() => void enableDevices()} disabled={phase === "requesting"}>{phase === "requesting" ? (zh ? "正在请求权限…" : "Requesting permission…") : phase === "error" ? (zh ? "重试相机和麦克风" : "Try camera and microphone again") : zh ? "允许相机和麦克风" : "Allow camera and microphone"}</button>
+          </div>
+        </>
       )}
       {!available ? <p className="control-note">{zh ? "此本地环境可测试预览，但未连接浏览器直播服务。" : "This local environment can test preview, but browser broadcasting is not connected."}</p> : null}
       {error ? <p className="quick-live-error" role="alert">{error}</p> : null}
@@ -3036,7 +3663,7 @@ function CreatorEarningsWallet({
     <div className="creator-wallet-workspace">
       <section className="creator-wallet-balance">
         <div>
-          <h3>{zh ? "测试金币余额" : "Test coin balance"}</h3>
+          <h3>{zh ? "R 余额" : "R balance"}</h3>
           <strong>{summary ? Number(summary.availableBalance).toLocaleString() : "—"}</strong>
           <span>{t.coins}</span>
         </div>
@@ -3116,7 +3743,73 @@ function CreatorSupportersPage({ slug, t }: { slug: string; t: typeof copy.en })
   </section>;
 }
 
-type StreamerSection = "live" | "earnings" | "supporters" | "actions" | "private" | "profile" | "settings";
+type CreatorFollower = {
+  id: string;
+  handle: string;
+  displayName: string;
+  followedAt: string;
+  status: "following";
+};
+
+function CreatorFollowersPage({ slug, t }: { slug: string; t: typeof copy.en }) {
+  const zh = t.title !== "Stream MVP";
+  const [followers, setFollowers] = useState<CreatorFollower[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const refresh = useCallback((cursor?: string, append = false) => {
+    setLoading(true);
+    setError("");
+    const query = new URLSearchParams({ limit: "20" });
+    if (cursor) query.set("cursor", cursor);
+    void request(`/api/streamer/rooms/${slug}/followers?${query}`)
+      .then((result) => {
+        setFollowers((current) => append ? [...current, ...(result.followers ?? [])] : (result.followers ?? []));
+        setTotalCount(Number(result.totalCount ?? 0));
+        setNextCursor(result.nextCursor ?? null);
+      })
+      .catch(() => {
+        if (!append) setFollowers([]);
+        setError(zh ? "暂时无法加载关注者。" : "Followers could not be loaded right now.");
+      })
+      .finally(() => setLoading(false));
+  }, [slug, zh]);
+  useEffect(() => {
+    refresh();
+    const socket = io({ transports: ["websocket"] });
+    socket.on("connect", () => socket.emit("discovery:join"));
+    socket.on("follow:changed", (event: { slug?: string }) => {
+      if (event.slug === slug) refresh();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [refresh, slug]);
+  return (
+    <section className="creator-followers-workspace" aria-busy={loading}>
+      <header className="creator-followers-heading">
+        <div><p className="eyebrow">{zh ? "观众留存" : "Audience retention"}</p><h3>{zh ? "关注者" : "Followers"}</h3></div>
+        <strong>{totalCount.toLocaleString()} <small>{zh ? "位关注者" : totalCount === 1 ? "follower" : "followers"}</small></strong>
+      </header>
+      <p className="creator-followers-privacy">{zh ? "仅显示公开名称、账户名和关注时间。" : "Only public display names, handles, and follow dates are shown."}</p>
+      {error ? <div className="creator-data-unavailable" role="alert"><strong>{zh ? "关注者暂时不可用" : "Followers temporarily unavailable"}</strong><p>{error}</p><button type="button" className="secondary" onClick={() => refresh()}>{zh ? "重试" : "Try again"}</button></div> : null}
+      {!error && followers.length ? <ul className="creator-follower-list">{followers.map((follower) => (
+        <li key={follower.id}>
+          <CreatorAvatar name={follower.displayName} className="creator-follower-avatar" />
+          <span className="creator-follower-identity"><strong>{follower.displayName}</strong><small>@{follower.handle}</small></span>
+          <span className="creator-follower-date"><small>{zh ? "关注时间" : "Followed"}</small><time dateTime={follower.followedAt}>{new Date(follower.followedAt).toLocaleDateString(zh ? "zh-CN" : "en-US")}</time></span>
+          <span className="creator-follower-status"><i />{zh ? "正在关注" : "Following"}</span>
+        </li>
+      ))}</ul> : null}
+      {!loading && !error && !followers.length ? <div className="creator-wallet-empty"><strong>{zh ? "还没有关注者" : "No followers yet"}</strong><p>{zh ? "观众关注您后会安全地显示在这里。" : "Audience members who follow you will appear here."}</p></div> : null}
+      {loading ? <p className="muted creator-followers-loading">{zh ? "正在加载关注者…" : "Loading followers…"}</p> : null}
+      {nextCursor ? <button type="button" className="secondary creator-load-more" onClick={() => refresh(nextCursor, true)} disabled={loading}>{zh ? "加载更多" : "Load more"}</button> : null}
+    </section>
+  );
+}
+
+type StreamerSection = "live" | "earnings" | "supporters" | "followers" | "actions" | "private" | "profile" | "settings";
 
 function StreamerStudio({
   t,
@@ -3132,6 +3825,8 @@ function StreamerStudio({
   const [studio, setStudio] = useState<any>(null);
   const [notice, setNotice] = useState("");
   const [title, setTitle] = useState("");
+  const [streamLanguage, setStreamLanguage] = useState<"en" | "zh">("en");
+  const [streamTags, setStreamTags] = useState("");
   const [goal, setGoal] = useState("");
   const [goalTarget, setGoalTarget] = useState(500);
   const [bio, setBio] = useState("");
@@ -3148,9 +3843,15 @@ function StreamerStudio({
   const [viewerCount, setViewerCount] = useState(0);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
+  const [endingForLogout, setEndingForLogout] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarFocusX, setAvatarFocusX] = useState(50);
+  const [avatarFocusY, setAvatarFocusY] = useState(50);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
+  const [, setThumbnailSaving] = useState(false);
   const accountMenuRef = useRef<HTMLDetailsElement | null>(null);
   const [runtime, setRuntime] = useState<BroadcasterRuntime>({
     phase: "idle",
@@ -3199,10 +3900,15 @@ function StreamerStudio({
   useEffect(() => () => {
     if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
   }, [avatarPreviewUrl]);
+  useEffect(() => () => {
+    if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
+  }, [thumbnailPreviewUrl]);
   const refresh = () =>
     void request("/api/streamer/studio").then((d) => {
       setStudio(d);
       setTitle(d.room?.title ?? "");
+      setStreamLanguage(d.room?.stream_language ?? "en");
+      setStreamTags(Array.isArray(d.room?.stream_tags) ? d.room.stream_tags.join(", ") : "");
       setGoal(d.room?.goal_text ?? "");
       setGoalTarget(d.room?.goal_target ?? 500);
       setBio(d.room?.bio ?? "");
@@ -3262,6 +3968,7 @@ function StreamerStudio({
         state: "live" | "connecting" | "offline" | "unavailable";
         message: string;
         checkedAt: string;
+        source?: "local" | "cloudflare";
         transport?: "obs_hls" | "browser_webrtc";
       }) => {
         if (event.slug !== slug) return;
@@ -3272,6 +3979,7 @@ function StreamerStudio({
             status: event.state === "live" ? "live" : "offline",
             broadcast_state: event.state,
             broadcast_status_message: event.message,
+            broadcast_status_source: event.source,
             broadcast_checked_at: event.checkedAt,
             broadcast_transport:
               event.transport ?? current.room.broadcast_transport,
@@ -3294,22 +4002,6 @@ function StreamerStudio({
     setNotice(result.active ? t.privateOn : t.privateOff);
     refresh();
   }
-  async function moderate(action: "mute" | "unmute") {
-    await request(`/api/streamer/rooms/${studio.room.slug}/moderation`, {
-      method: "POST",
-      body: JSON.stringify({ targetId: audienceId, action }),
-    });
-    const zh = t.title !== "Stream MVP";
-    setNotice(
-      action === "mute"
-        ? zh
-          ? "此直播间已禁言演示观众。"
-          : "Demo Audience muted in this room."
-        : zh
-          ? "此直播间已解除演示观众禁言。"
-          : "Demo Audience unmuted in this room.",
-    );
-  }
   async function refreshBroadcast() {
     const result = await request(
       `/api/streamer/rooms/${studio.room.slug}/broadcast/refresh`,
@@ -3327,6 +4019,32 @@ function StreamerStudio({
     );
     setNotice(result.broadcast.message);
     refresh();
+  }
+  async function endBroadcastAndLogout() {
+    if (!studio?.room?.slug || endingForLogout) return;
+    setEndingForLogout(true);
+    setNotice("");
+    try {
+      await request(`/api/streamer/rooms/${studio.room.slug}/broadcast/end`, {
+        method: "POST",
+        body: "{}",
+      });
+      setLogoutConfirmationOpen(false);
+      onLogout();
+    } catch (error) {
+      setLogoutConfirmationOpen(false);
+      setNotice(
+        error instanceof Error && error.message === "409"
+          ? zh
+            ? "OBS 仍在推流。请先在 OBS 中停止直播，然后刷新状态再退出。"
+            : "OBS is still publishing. Stop streaming in OBS, refresh status, then sign out."
+          : zh
+            ? "无法确认直播已结束，因此没有退出。请重试。"
+            : "The broadcast could not be confirmed ended, so you were not signed out. Try again.",
+      );
+    } finally {
+      setEndingForLogout(false);
+    }
   }
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -3369,6 +4087,8 @@ function StreamerStudio({
     if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
     setAvatarFile(file);
     setAvatarPreviewUrl(URL.createObjectURL(file));
+    setAvatarFocusX(50);
+    setAvatarFocusY(50);
   }
   async function uploadAvatar() {
     if (!avatarFile) return;
@@ -3376,7 +4096,7 @@ function StreamerStudio({
     try {
       const form = new FormData();
       form.append("avatar", avatarFile);
-      await request("/api/streamer/avatar", { method: "POST", body: form });
+      await request(`/api/streamer/avatar?focusX=${avatarFocusX / 100}&focusY=${avatarFocusY / 100}`, { method: "POST", body: form });
       if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
       setAvatarFile(null);
       setAvatarPreviewUrl(null);
@@ -3389,6 +4109,38 @@ function StreamerStudio({
     } finally {
       setAvatarSaving(false);
     }
+  }
+  function selectThumbnail(file: File | null) {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 6 * 1024 * 1024) {
+      setNotice(zh ? "请选择 6 MB 以下的 JPEG、PNG 或 WebP 封面。" : "Choose a JPEG, PNG, or WebP thumbnail under 6 MB.");
+      return;
+    }
+    if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
+    setThumbnailFile(file);
+    setThumbnailPreviewUrl(URL.createObjectURL(file));
+  }
+  async function saveBroadcastMetadata() {
+    const tags = streamTags.split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 5);
+    await request(`/api/streamer/rooms/${studio.room.slug}`, {
+      method: "PUT",
+      body: JSON.stringify({ title, category, streamLanguage, streamTags: tags }),
+    });
+    if (thumbnailFile) {
+      setThumbnailSaving(true);
+      try {
+        const form = new FormData();
+        form.append("thumbnail", thumbnailFile);
+        await request("/api/streamer/stream-thumbnail", { method: "POST", body: form });
+        if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
+        setThumbnailFile(null);
+        setThumbnailPreviewUrl(null);
+      } finally {
+        setThumbnailSaving(false);
+      }
+    }
+    setNotice(zh ? "直播信息已保存。" : "Stream details saved.");
+    refresh();
   }
   async function removeAvatar() {
     setAvatarSaving(true);
@@ -3416,23 +4168,30 @@ function StreamerStudio({
       </section>
     );
   const broadcastState = room.broadcast_state ?? "offline";
+  const simulatedBroadcast = room.broadcast_status_source === "local";
+  const effectiveSessionPhase =
+    ["connecting", "live", "error", "ending"].includes(runtime.phase)
+      ? runtime.phase
+      : broadcastState === "live" || broadcastState === "connecting"
+        ? broadcastState
+        : runtime.phase;
   const liveSessionActive = ["connecting", "live", "error", "ending"].includes(
-    runtime.phase,
+    effectiveSessionPhase,
   );
   const goalPercent = Math.min(
     100,
     Math.round((room.goal_progress / Math.max(1, room.goal_target)) * 100),
   );
   return (
-    <section className={`workspace creator-studio broadcaster-runtime-${runtime.phase} ${activeSection === "live" ? "creator-live-view" : "creator-center-view"}`}>
+    <section className={`workspace creator-studio broadcaster-runtime-${effectiveSessionPhase} ${activeSection === "live" ? "creator-live-view" : "creator-center-view"}`}>
       <header className="broadcaster-header">
         <strong className="broadcaster-brand">HOLIWYN</strong>
         <div className="broadcaster-session-state" aria-live="polite">
-          <span className={runtime.phase === "live" ? "is-live" : ""}>
-            <i /> {runtime.phase === "live" ? (zh ? "直播中" : "LIVE") : runtime.phase === "connecting" ? (zh ? "正在开播" : "STARTING") : runtime.phase === "ending" ? (zh ? "正在结束" : "ENDING") : runtime.phase === "preview" ? (zh ? "预览就绪" : "PREVIEW READY") : (zh ? "准备开播" : "SET UP")}
+          <span className={effectiveSessionPhase === "live" ? "is-live" : ""}>
+            <i /> {simulatedBroadcast && effectiveSessionPhase === "live" ? (zh ? "模拟直播" : "SIMULATED LIVE") : effectiveSessionPhase === "live" ? (zh ? "直播中" : "LIVE") : simulatedBroadcast && effectiveSessionPhase === "connecting" ? (zh ? "模拟连接" : "SIMULATED STARTING") : effectiveSessionPhase === "connecting" ? (zh ? "正在开播" : "STARTING") : effectiveSessionPhase === "ending" ? (zh ? "正在结束" : "ENDING") : effectiveSessionPhase === "preview" ? (zh ? "预览就绪" : "PREVIEW READY") : (zh ? "准备开播" : "SET UP")}
           </span>
           <time>{runtime.duration}</time>
-          <span className="broadcaster-viewers">◉ {viewerCount}</span>
+          <span className="broadcaster-viewers"><BroadcastIcon name="viewers" /> {viewerCount}</span>
         </div>
         <div className="broadcaster-header-actions">
           <details className="broadcaster-account-menu" ref={accountMenuRef}>
@@ -3454,12 +4213,13 @@ function StreamerStudio({
               </header>
               <nav className="creator-menu-sections" aria-label={zh ? "创作者页面" : "Creator pages"}>
                 {([
-                  ["live", zh ? "返回直播" : "Return to live", "●"],
-                  ["earnings", zh ? "收益" : "Earnings", "◈"],
-                  ["supporters", zh ? "支持者排行" : "Top supporters", "♢"],
-                  ["actions", zh ? "互动与私密直播" : "Actions & private show", "✦"],
-                  ["profile", zh ? "公开主页" : "Public profile", "○"],
-                  ["settings", zh ? "设置" : "Settings", "⚙"],
+                  ["live", zh ? "返回直播" : "Return to live", "live"],
+                  ["earnings", zh ? "收益" : "Earnings", "earnings"],
+                  ["supporters", zh ? "支持者排行" : "Top supporters", "supporters"],
+                  ["followers", zh ? "关注者" : "Followers", "followers"],
+                  ["actions", zh ? "互动与私密直播" : "Actions & private show", "actions"],
+                  ["profile", zh ? "公开主页" : "Public profile", "profile"],
+                  ["settings", zh ? "设置" : "Settings", "settings"],
                 ] as const).map(([section, label, icon]) => (
                   <button
                     type="button"
@@ -3471,7 +4231,7 @@ function StreamerStudio({
                       else openAuxiliarySection(section);
                       closeCreatorMenu();
                     }}
-                  ><span aria-hidden="true">{icon}</span>{label}</button>
+                  ><BroadcastIcon name={icon as CreatorIconName} />{label}</button>
                 ))}
               </nav>
               <div className="creator-menu-language">
@@ -3495,7 +4255,7 @@ function StreamerStudio({
       </header>
 
       <div
-        className={`creator-section broadcaster-page phase-${runtime.phase} ${activeSection === "live" ? "studio-view-active" : "studio-view-inactive"}`}
+        className={`creator-section broadcaster-page phase-${effectiveSessionPhase} ${activeSection === "live" ? "studio-view-active" : "studio-view-inactive"}`}
         aria-hidden={activeSection !== "live"}
       >
         <div className="broadcaster-layout">
@@ -3504,17 +4264,21 @@ function StreamerStudio({
             slug={room.slug}
             available={Boolean(studio.broadcastControls?.browserQuickLiveAvailable)}
             broadcastState={broadcastState}
+            broadcastSource={room.broadcast_status_source}
             transport={room.broadcast_transport}
             title={title}
+            category={category}
+            streamLanguage={streamLanguage}
+            streamTags={streamTags}
+            thumbnailUrl={thumbnailPreviewUrl ?? room.stream_thumbnail_url}
             t={t}
             onChanged={refresh}
             onTitleChange={setTitle}
-            onSaveTitle={async () => {
-              await request(`/api/streamer/rooms/${room.slug}`, {
-                method: "PUT",
-                body: JSON.stringify({ title }),
-              });
-            }}
+            onCategoryChange={setCategory}
+            onStreamLanguageChange={setStreamLanguage}
+            onStreamTagsChange={setStreamTags}
+            onSaveMetadata={saveBroadcastMetadata}
+            onThumbnailSelected={selectThumbnail}
             overlay={<CreatorRealtimeOverlay slug={room.slug} t={t} />}
             viewerCount={viewerCount}
             onRuntimeChange={updateRuntime}
@@ -3532,6 +4296,8 @@ function StreamerStudio({
             mobileOpen={mobileChatOpen}
             onMobileClose={() => setMobileChatOpen(false)}
             onViewerCountChange={updateViewerCount}
+            initialSlowModeSeconds={Number(room.chat_slow_mode_seconds ?? 0)}
+            initialBlockedTerms={Array.isArray(room.blocked_terms) ? room.blocked_terms : []}
           />
         </div>
         {!studio.broadcastControls?.cloudflareConfigured ? (
@@ -3546,7 +4312,7 @@ function StreamerStudio({
           <div className="creator-page-heading">
             <div>
               <h3>{zh ? "收益" : "Earnings"}</h3>
-              <p className="creator-test-note">{zh ? "仅限测试金币 · 不支持充值或提现" : "Test coins only · No deposits or withdrawals"}</p>
+              <p className="creator-test-note">{zh ? "R 没有现金价值 · 不支持充值或提现" : "R has no cash value · No deposits or withdrawals"}</p>
             </div>
           </div>
           <CreatorEarningsWallet slug={room.slug} state={broadcastState} t={t} />
@@ -3558,6 +4324,14 @@ function StreamerStudio({
           {liveSessionActive ? <div className="broadcast-continues-banner" role="status"><span><i />{zh ? "您的直播仍在继续；支持者排行会实时更新。" : "Your broadcast is still running; supporter rankings update in realtime."}</span><button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button></div> : null}
           <div className="creator-page-heading"><h3>{zh ? "支持者" : "Supporters"}</h3></div>
           <CreatorSupportersPage slug={room.slug} t={t} />
+        </section>
+      ) : null}
+
+      {activeSection === "followers" ? (
+        <section className="creator-section creator-config-page creator-followers-page">
+          {liveSessionActive ? <div className="broadcast-continues-banner" role="status"><span><i />{zh ? "您的直播仍在继续；关注者会实时更新。" : "Your broadcast is still running; followers update in realtime."}</span><button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button></div> : null}
+          <div className="creator-page-heading"><h3>{zh ? "关注者" : "Followers"}</h3></div>
+          <CreatorFollowersPage slug={room.slug} t={t} />
         </section>
       ) : null}
 
@@ -3578,7 +4352,7 @@ function StreamerStudio({
               <div className="progress-track"><span style={{ width: `${goalPercent}%` }} /></div>
               <small>{room.goal_progress} / {room.goal_target} {t.coins}</small>
               <label>{zh ? "目标标题" : "Goal title"}<input value={goal} onChange={(e) => setGoal(e.target.value)} maxLength={160} /></label>
-              <label>{zh ? "目标测试金币" : "Target test coins"}<input type="number" min="1" value={goalTarget} onChange={(e) => setGoalTarget(Number(e.target.value))} /></label>
+              <label>{zh ? "目标 R" : "Target R"}<input type="number" min="1" value={goalTarget} onChange={(e) => setGoalTarget(Number(e.target.value))} /></label>
               <button>{zh ? "更新直播目标" : "Update live goal"}</button>
             </form>
             <div className="creator-action-workspace"><ActionMenuManager slug={room.slug} t={t} /></div>
@@ -3595,7 +4369,7 @@ function StreamerStudio({
           <div className="creator-settings-grid creator-private-grid">
             <section>
               <h3>{zh ? "访问与价格" : "Access and pricing"}</h3>
-              <p className="creator-test-note">{zh ? "仅限测试金币" : "Test coins only"}</p>
+              <p className="creator-test-note">{zh ? "R 没有现金价值" : "R has no cash value"}</p>
               <div className="studio-form">
                 <label>{zh ? "访问模式" : "Access mode"}<select value={mode} onChange={(e) => setMode(e.target.value as "ticket" | "per_minute")}><option value="ticket">{t.ticket}</option><option value="per_minute">{t.perMinute}</option></select></label>
                 <label>{t.ticketCost}<input type="number" min="1" value={ticketCost} onChange={(e) => setTicketCost(Number(e.target.value))} /></label>
@@ -3627,6 +4401,7 @@ function StreamerStudio({
                   name={studio.user?.displayName ?? title ?? "Creator"}
                   url={avatarPreviewUrl ?? room.avatar_url}
                   className="streamer-profile-avatar"
+                  objectPosition={avatarPreviewUrl ? `${avatarFocusX}% ${avatarFocusY}%` : undefined}
                 />
                 <input
                   id="streamer-avatar-file"
@@ -3639,6 +4414,7 @@ function StreamerStudio({
                 {avatarFile ? <button type="button" className="creator-primary-action" disabled={avatarSaving} onClick={() => void uploadAvatar()}>{avatarSaving ? (zh ? "正在保存…" : "Saving…") : (zh ? "保存头像" : "Save avatar")}</button> : null}
                 {room.avatar_url ? <button type="button" className="avatar-remove-button" disabled={avatarSaving} onClick={() => void removeAvatar()}>{zh ? "移除" : "Remove"}</button> : null}
                 <small>{zh ? "JPEG、PNG 或 WebP，最大 5 MB。保存后会裁剪为正方形。" : "JPEG, PNG, or WebP up to 5 MB. Saved as a square crop."}</small>
+                {avatarFile ? <div className="avatar-focus-controls"><label>{zh ? "左右位置" : "Horizontal position"}<input type="range" min="0" max="100" value={avatarFocusX} onChange={(event) => setAvatarFocusX(Number(event.target.value))} /></label><label>{zh ? "上下位置" : "Vertical position"}<input type="range" min="0" max="100" value={avatarFocusY} onChange={(event) => setAvatarFocusY(Number(event.target.value))} /></label></div> : null}
               </div>
               <p className="eyebrow">{zh ? "观众预览" : "Viewer preview"}</p>
               <h3>{title || (zh ? "未命名直播" : "Untitled stream")}</h3>
@@ -3669,11 +4445,11 @@ function StreamerStudio({
         <section className="creator-section creator-config-page" id="obs-setup">
           <div className="creator-page-heading"><h3>{zh ? "设置" : "Settings"}</h3></div>
           <div className="creator-settings-grid creator-settings-operations">
-            <section><h3>{zh ? "快速管理" : "Quick moderation"}</h3><div className="admin-actions"><button type="button" onClick={() => void moderate("mute")}>{zh ? "禁言观众" : "Mute audience"}</button><button type="button" onClick={() => void moderate("unmute")}>{zh ? "解除观众禁言" : "Unmute audience"}</button></div></section>
+            <CreatorModerationRestrictions slug={room.slug} t={t} />
             <section className="broadcast-health"><div><span>{zh ? "上次状态检查" : "Last status check"}</span><strong>{room.broadcast_checked_at ? new Date(room.broadcast_checked_at).toLocaleTimeString() : "—"}</strong></div><button type="button" className="secondary" onClick={() => void refreshBroadcast()} disabled={!studio.broadcastControls?.cloudflareConfigured}>{zh ? "刷新直播状态" : "Refresh broadcast status"}</button></section>
           </div>
-          <div className="creator-obs-workspace"><ObsReadiness slug={room.slug} state={broadcastState} t={t} onChanged={refresh} /></div>
-          {studio.broadcastControls?.localFallbackEnabled ? <div className="local-state-tool"><label>{t.localBroadcast}</label><select value={broadcastState} onChange={(e) => void setLocalBroadcast(e.target.value as "live" | "connecting" | "offline" | "unavailable")}><option value="live">live</option><option value="connecting">connecting</option><option value="offline">offline</option><option value="unavailable">unavailable</option></select></div> : null}
+          <div className="creator-obs-workspace"><ObsReadiness slug={room.slug} state={broadcastState} source={room.broadcast_status_source} t={t} onChanged={refresh} /></div>
+          {studio.broadcastControls?.localFallbackEnabled ? <div className="local-state-tool"><label>{zh ? "仅模拟状态" : "Simulation status only"}</label><p className="control-note">{zh ? "此控件只测试界面状态，不会发布或停止任何视频。" : "This control tests UI states. It does not publish or stop video."}</p><select value={broadcastState} onChange={(e) => void setLocalBroadcast(e.target.value as "live" | "connecting" | "offline" | "unavailable")}><option value="live">simulated live</option><option value="connecting">simulated connecting</option><option value="offline">simulated offline</option><option value="unavailable">simulated unavailable</option></select></div> : null}
         </section>
       ) : null}
       {notice && <p className="creator-toast">{notice}</p>}
@@ -3686,7 +4462,7 @@ function StreamerStudio({
         footer={
           <>
             <button type="button" className="secondary" onClick={() => setLogoutConfirmationOpen(false)}>{zh ? "取消" : "Cancel"}</button>
-            <button type="button" className="danger" onClick={onLogout}>{zh ? "结束直播并退出" : "End stream and sign out"}</button>
+            <button type="button" className="danger" disabled={endingForLogout} onClick={() => void endBroadcastAndLogout()}>{endingForLogout ? (zh ? "正在结束…" : "Ending…") : (zh ? "结束直播并退出" : "End stream and sign out")}</button>
           </>
         }
       >
@@ -3696,6 +4472,7 @@ function StreamerStudio({
   );
 }
 function AdminPanel({ t }: { t: typeof copy.en }) {
+  const zh = t.title !== "Stream MVP";
   const [events, setEvents] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -3704,6 +4481,10 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
   const [applications, setApplications] = useState<any[]>([]);
   const [applicationReasons, setApplicationReasons] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
+  const [moderationTargetId, setModerationTargetId] = useState("");
+  const [moderationReason, setModerationReason] = useState("");
+  const [pendingModeration, setPendingModeration] = useState<"mute" | "unmute" | "ban" | "unban" | null>(null);
+  const [moderationSaving, setModerationSaving] = useState(false);
   const refresh = () => {
     void request("/api/admin/rooms/demo-streamer/moderation").then((d) =>
       setEvents(d.events),
@@ -3721,17 +4502,28 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
     );
   };
   useEffect(refresh, []);
-  async function action(value: "mute" | "unmute" | "ban" | "unban") {
-    await request("/api/admin/rooms/demo-streamer/moderation", {
-      method: "POST",
-      body: JSON.stringify({
-        targetId: audienceId,
-        action: value,
-        reason: "local admin test",
-      }),
-    });
-    setNotice(`${value}: Demo Audience`);
-    refresh();
+  async function confirmModeration() {
+    if (!pendingModeration || !moderationTargetId || moderationReason.trim().length < 2) return;
+    const target = users.find((user) => user.id === moderationTargetId);
+    setModerationSaving(true);
+    try {
+      await request("/api/admin/rooms/demo-streamer/moderation", {
+        method: "POST",
+        body: JSON.stringify({
+          targetId: moderationTargetId,
+          action: pendingModeration,
+          reason: moderationReason.trim(),
+        }),
+      });
+      setNotice(`${pendingModeration}: ${target?.display_name ?? moderationTargetId}`);
+      setPendingModeration(null);
+      setModerationReason("");
+      refresh();
+    } catch {
+      setNotice(zh ? "管理操作未能应用，请重试。" : "The moderation action could not be applied. Try again.");
+    } finally {
+      setModerationSaving(false);
+    }
   }
   async function review(id: string, status: "reviewed" | "dismissed") {
     await request(`/api/admin/reports/${id}`, {
@@ -3775,25 +4567,29 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
           {!applications.some((item) => item.status === "pending") ? <p className="muted">{t.title === "Stream MVP" ? "No creator applications are waiting." : "暂无待审核主播申请。"}</p> : null}
         </div>
       </section>
-      <div className="admin-actions">
-        {(["mute", "unmute", "ban", "unban"] as const).map((v) => (
-          <button key={v} onClick={() => void action(v)}>
-            {v}
-          </button>
-        ))}
-      </div>
-      {notice && <p>{notice}</p>}
       <h3>
         {t.title === "Stream MVP" ? "Local account review" : "本地账号审核"}
       </h3>
-      <div className="transaction-list">
-        {users.map((user) => (
-          <p key={user.id}>
-            <strong>{user.display_name}</strong> · {user.role} ·{" "}
-            {user.is_banned ? "banned" : user.is_muted ? "muted" : "active"}
-          </p>
+      <section className="admin-account-moderation">
+        <p className="muted">{zh ? "先选择具体账户，再选择操作并填写审核原因。" : "Select a specific account, choose an action, and provide an audit reason."}</p>
+        <div className="transaction-list admin-user-list">
+        {users.filter((user) => user.role !== "admin").map((user) => (
+          <label key={user.id} className={moderationTargetId === user.id ? "selected" : ""}>
+            <input type="radio" name="moderation-target" value={user.id} checked={moderationTargetId === user.id} onChange={() => setModerationTargetId(user.id)} />
+            <span><strong>{user.display_name}</strong><small>@{user.handle} · {user.role} · {user.is_banned ? (zh ? "已封禁" : "banned") : user.is_muted ? (zh ? "已禁言" : "muted") : (zh ? "正常" : "active")}</small></span>
+          </label>
         ))}
-      </div>
+        </div>
+        <label>{zh ? "审核原因" : "Moderation reason"}<textarea value={moderationReason} onChange={(event) => setModerationReason(event.target.value)} minLength={2} maxLength={500} placeholder={zh ? "必填，2–500 个字符" : "Required, 2–500 characters"} /></label>
+        <div className="admin-actions">
+          {(["mute", "unmute", "ban", "unban"] as const).map((value) => (
+            <button key={value} type="button" className={value === "ban" ? "danger" : "secondary"} disabled={!moderationTargetId || moderationReason.trim().length < 2} onClick={() => setPendingModeration(value)}>
+              {zh ? ({ mute: "禁言", unmute: "解除禁言", ban: "封禁", unban: "解除封禁" } as const)[value] : value}
+            </button>
+          ))}
+        </div>
+      </section>
+      {notice && <p role="status">{notice}</p>}
       <h3>
         {t.title === "Stream MVP"
           ? "Broadcast health"
@@ -3846,6 +4642,17 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
           {e.action} · {e.target_name} · {e.reason ?? "-"}
         </p>
       ))}
+      <Modal
+        open={Boolean(pendingModeration)}
+        title={zh ? "确认管理操作" : "Confirm moderation action"}
+        description={zh ? "此操作会立即影响所选账户，并写入审核记录。" : "This action immediately affects the selected account and is written to the audit log."}
+        closeLabel={zh ? "关闭确认" : "Close confirmation"}
+        onClose={() => setPendingModeration(null)}
+        footer={<><button type="button" className="secondary" onClick={() => setPendingModeration(null)}>{zh ? "取消" : "Cancel"}</button><button type="button" className={pendingModeration === "ban" ? "danger" : ""} disabled={moderationSaving} onClick={() => void confirmModeration()}>{moderationSaving ? (zh ? "正在应用…" : "Applying…") : (zh ? "确认操作" : "Confirm action")}</button></>}
+      >
+        <p><strong>{users.find((user) => user.id === moderationTargetId)?.display_name ?? "—"}</strong> · {pendingModeration ?? "—"}</p>
+        <p>{moderationReason}</p>
+      </Modal>
     </section>
   );
 }
@@ -3856,6 +4663,10 @@ function PublicCreatorProfileView({
   back,
   onOpenRoom,
   onFollowingChanged,
+  authenticated,
+  resumeIntent,
+  onRequireAuth,
+  onIntentHandled,
 }: {
   room: Room;
   recommendations: Room[];
@@ -3863,12 +4674,24 @@ function PublicCreatorProfileView({
   back: () => void;
   onOpenRoom: (room: Room) => void;
   onFollowingChanged: () => void;
+  authenticated: boolean;
+  resumeIntent: AuthIntent | null;
+  onRequireAuth: (reason: AuthIntentKind) => void;
+  onIntentHandled: (message?: string) => void;
 }) {
   const [profile, setProfile] = useState<StreamerProfile | null>(null);
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [shareNotice, setShareNotice] = useState("");
+  const handledAuthIntentRef = useRef(0);
   const zh = t.title !== "Stream MVP";
+
+  useEffect(() => {
+    if (!shareNotice) return;
+    const timer = window.setTimeout(() => setShareNotice(""), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [shareNotice]);
 
   useEffect(() => {
     let active = true;
@@ -3876,7 +4699,7 @@ function PublicCreatorProfileView({
     setError(false);
     void Promise.all([
       request(`/api/streamers/${room.streamer_id}`),
-      request(`/api/streamers/${room.streamer_id}/follow-status`),
+      authenticated ? request(`/api/streamers/${room.streamer_id}/follow-status`) : Promise.resolve({ following: false }),
     ])
       .then(([profileResult, followResult]) => {
         if (!active) return;
@@ -3892,22 +4715,32 @@ function PublicCreatorProfileView({
     return () => {
       active = false;
     };
-  }, [room.streamer_id]);
+  }, [room.streamer_id, authenticated]);
 
-  async function toggleFollow() {
+  async function toggleFollow(forceFollowing?: boolean) {
+    if (!authenticated) return onRequireAuth("follow");
     if (!profile) return;
-    const nextFollowing = !following;
-    await request(`/api/streamers/${profile.id}/follow`, {
+    const nextFollowing = forceFollowing ?? !following;
+    const result = await request(`/api/streamers/${profile.id}/follow`, {
       method: nextFollowing ? "POST" : "DELETE",
       ...(nextFollowing ? { body: "{}" } : {}),
     });
     setFollowing(nextFollowing);
     setProfile((current) => current ? {
       ...current,
-      follower_count: Math.max(0, current.follower_count + (nextFollowing ? 1 : -1)),
+      follower_count: typeof result?.followerCount === "number"
+        ? result.followerCount
+        : Math.max(0, current.follower_count + (nextFollowing ? 1 : -1)),
     } : current);
     onFollowingChanged();
   }
+  useEffect(() => {
+    if (!authenticated || resumeIntent?.kind !== "follow" || !profile || handledAuthIntentRef.current === resumeIntent.id) return;
+    handledAuthIntentRef.current = resumeIntent.id;
+    void toggleFollow(true)
+      .then(() => onIntentHandled(zh ? "登录成功——已关注该主播。" : "Signed in — you are now following this creator."))
+      .catch(() => onIntentHandled(zh ? "登录成功，但关注失败，请重试。" : "Signed in, but follow failed. Please try again."));
+  }, [authenticated, resumeIntent?.id, profile?.id]);
 
   if (loading) {
     return (
@@ -3928,7 +4761,13 @@ function PublicCreatorProfileView({
       </section>
     );
   }
-  const state = profile.broadcast_state ?? room.broadcast_state ?? (room.status === "live" ? "live" : "offline");
+  const state = profile.broadcast_status_source === "local" || room.broadcast_status_source === "local"
+    ? "offline"
+    : profile.broadcast_state ?? room.broadcast_state ?? (room.status === "live" ? "live" : "offline");
+  async function shareProfile(copyOnly = false) {
+    const outcome = await shareAudienceTarget(audienceShareTarget(room, "creator"), copyOnly);
+    setShareNotice(shareOutcomeMessage(outcome, zh));
+  }
   return (
     <section className="creator-profile-page">
       <CreatorProfileSurface
@@ -3948,7 +4787,10 @@ function PublicCreatorProfileView({
         onBack={back}
         onFollow={() => void toggleFollow()}
         onOpenRoom={() => onOpenRoom(room)}
+        onShare={() => void shareProfile()}
+        onCopy={() => void shareProfile(true)}
       />
+      {shareNotice ? <p className="notice auth-resume-notice share-notice" role="status">{shareNotice}</p> : null}
       {recommendations.length ? (
         <section className="creator-profile-recommendations" aria-labelledby="profile-recommendations-title">
           <div>
@@ -3988,7 +4830,7 @@ function RoomCreatorProfileCard({
     void request(`/api/streamers/${streamerId}`)
       .then((d) => setProfile(d.streamer))
       .catch(() => setProfile(null));
-  }, [streamerId]);
+  }, [streamerId, following]);
   if (!profile) return null;
   return (
     <aside className="creator-profile" aria-label={`${fallbackName} profile`}>
@@ -4077,6 +4919,10 @@ function RoomView({
   onOpenRoom,
   onOpenProfile,
   t,
+  authenticated,
+  resumeIntent,
+  onRequireAuth,
+  onIntentHandled,
 }: {
   room: Room;
   recommendations: Room[];
@@ -4084,6 +4930,10 @@ function RoomView({
   onOpenRoom: (room: Room) => void;
   onOpenProfile: () => void;
   t: Record<string, string>;
+  authenticated: boolean;
+  resumeIntent: AuthIntent | null;
+  onRequireAuth: (reason: AuthIntentKind) => void;
+  onIntentHandled: (message?: string) => void;
 }) {
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [playerMessage, setPlayerMessage] = useState(t.preparing);
@@ -4103,20 +4953,29 @@ function RoomView({
   const [supportFeed, setSupportFeed] = useState<any[]>([]);
   const [giftNotice, setGiftNotice] = useState("");
   const [giftSoundEnabled, setGiftSoundEnabled] = useState(false);
+  const [shareNotice, setShareNotice] = useState("");
   const [following, setFollowing] = useState(false);
   const [mobileSheet, setMobileSheet] = useState<"chat" | "gifts" | null>(null);
   const [show, setShow] = useState<any>(null);
   const [broadcast, setBroadcast] = useState<any>({
     state: room.broadcast_state ?? "offline",
     message: room.broadcast_status_message ?? t.offline,
+    source: room.broadcast_status_source ?? "cloudflare",
     checkedAt: room.broadcast_checked_at ?? null,
     transport: room.broadcast_transport ?? "obs_hls",
   });
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const giftTimerRef = useRef(0);
+  const handledAuthIntentRef = useRef(0);
+  useEffect(() => {
+    if (!shareNotice) return;
+    const timer = window.setTimeout(() => setShareNotice(""), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [shareNotice]);
   const refreshShow = () =>
     void request(`/api/rooms/${room.slug}/private-show`).then(setShow);
   const refreshWallet = () => {
+    if (!authenticated) return;
     void request("/api/wallet").then((d) => setWallet(d.balance));
     void request("/api/wallet/history").then((d) =>
       setWalletHistory(d.entries),
@@ -4136,7 +4995,7 @@ function RoomView({
       setSupportFeed(d.support),
     );
   const refreshPlayback = () =>
-    broadcast.state !== "live"
+    broadcast.state !== "live" || broadcast.source === "local"
       ? setIframeUrl(null)
       : broadcast.transport === "browser_webrtc"
         ? setIframeUrl(null)
@@ -4151,7 +5010,7 @@ function RoomView({
   }, [t]);
   useEffect(() => {
     setMobileSheet(null);
-    void request(`/api/rooms/${room.slug}/visit`, {
+    if (authenticated) void request(`/api/rooms/${room.slug}/visit`, {
       method: "POST",
       body: "{}",
     });
@@ -4162,16 +5021,16 @@ function RoomView({
     void request(`/api/rooms/${room.slug}/chat-history`).then((d) =>
       setMessages(d.messages),
     );
-    void request("/api/gifts").then((d) => {
+    if (authenticated) void request("/api/gifts").then((d) => {
       setGifts(d.gifts);
       setSelectedGiftId((current) => current || d.gifts[0]?.id || "");
     });
     refreshActions();
     refreshSupportFeed();
-    void request(`/api/streamers/${room.streamer_id}/follow-status`).then((data) =>
+    if (authenticated) void request(`/api/streamers/${room.streamer_id}/follow-status`).then((data) =>
       setFollowing(data.following),
     );
-  }, [room.slug]);
+  }, [room.slug, authenticated]);
   useEffect(() => {
     refreshPlayback();
   }, [broadcast.state, room.slug]);
@@ -4202,6 +5061,9 @@ function RoomView({
     socket.on("connect_error", () => setChatStatus(t.unavailable));
     socket.on("room:presence", (d: { count: number }) => setPresence(d.count));
     socket.on("chat:message", (d) => setMessages((items) => [...items, d]));
+    socket.on("chat:deleted", ({ messageId }: { messageId: string }) =>
+      setMessages((items) => items.filter((message) => message.id !== messageId)),
+    );
     socket.on(
       "moderation:action",
       (d: { action?: string; targetId?: string }) => {
@@ -4242,11 +5104,13 @@ function RoomView({
       (d: {
         state: "live" | "connecting" | "offline" | "unavailable";
         message: string;
+        source?: "local" | "cloudflare";
         transport?: "obs_hls" | "browser_webrtc";
       }) => {
         setBroadcast({
           state: d.state,
           message: d.message,
+          source: d.source ?? broadcast.source,
           checkedAt: new Date().toISOString(),
           transport: d.transport ?? broadcast.transport,
         });
@@ -4259,6 +5123,10 @@ function RoomView({
     };
   }, [room.slug, t, giftSoundEnabled]);
   function send() {
+    if (!authenticated) {
+      onRequireAuth("chat");
+      return;
+    }
     if (draft.trim() && socketRef.current?.connected) {
       socketRef.current.emit(
         "chat:send",
@@ -4273,15 +5141,20 @@ function RoomView({
       setDraft("");
     }
   }
+  async function shareRoom(copyOnly = false) {
+    const outcome = await shareAudienceTarget(audienceShareTarget(room, "room"), copyOnly);
+    setShareNotice(shareOutcomeMessage(outcome, t.title !== "Stream MVP"));
+  }
   async function sendGift(gift: any) {
+    if (!authenticated) return onRequireAuth("gift");
     const total = gift.coin_cost * giftQuantity;
     const highValue = total >= 1_000;
     if (
       highValue &&
       !window.confirm(
         t.title === "Stream MVP"
-          ? `Confirm this test gift: ${giftQuantity} × ${gift.name_en} = ${total.toLocaleString()} test tokens. No real money is charged.`
-          : `确认测试礼物：${giftQuantity} × ${gift.name_zh} = ${total.toLocaleString()} 测试代币。不会产生真实扣款。`,
+          ? `Confirm this gift: ${giftQuantity} × ${gift.name_en} = ${total.toLocaleString()} R. No real money is charged.`
+          : `确认礼物：${giftQuantity} × ${gift.name_zh} = ${total.toLocaleString()} R。不会产生真实扣款。`,
       )
     )
       return;
@@ -4307,8 +5180,8 @@ function RoomView({
       setGiftNotice(
         (error as Error).message === "409"
           ? t.title === "Stream MVP"
-            ? "Not enough test tokens for this gift."
-            : "测试代币余额不足。"
+            ? "Not enough R for this gift."
+            : "R 余额不足。"
           : t.title === "Stream MVP"
             ? "The test gift could not be sent. Please try again."
             : "测试礼物发送失败，请重试。",
@@ -4318,6 +5191,7 @@ function RoomView({
     }
   }
   async function purchaseAction(id: string) {
+    if (!authenticated) return onRequireAuth("action");
     const d = await request(`/api/rooms/${room.slug}/actions/${id}/purchase`, {
       method: "POST",
       body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
@@ -4331,6 +5205,7 @@ function RoomView({
     refreshSupportFeed();
   }
   async function buyAccess() {
+    if (!authenticated) return onRequireAuth("private-access");
     const d = await request(`/api/rooms/${room.slug}/private-show/purchase`, {
       method: "POST",
       body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
@@ -4340,27 +5215,82 @@ function RoomView({
     refreshShow();
     refreshPlayback();
   }
-  async function follow() {
+  async function follow(forceFollowing?: boolean) {
+    if (!authenticated) return onRequireAuth("follow");
+    const nextFollowing = forceFollowing ?? !following;
     await request(`/api/streamers/${room.streamer_id}/follow`, {
-      method: following ? "DELETE" : "POST",
-      ...(following ? {} : { body: "{}" }),
+      method: nextFollowing ? "POST" : "DELETE",
+      ...(nextFollowing ? { body: "{}" } : {}),
     });
-    setFollowing((current) => !current);
+    setFollowing(nextFollowing);
   }
   async function report() {
+    if (!authenticated) return onRequireAuth("report");
     await request(`/api/rooms/${room.slug}/reports`, {
       method: "POST",
       body: JSON.stringify({ reason: "Local test report" }),
     });
     setGiftNotice(t.reportSent);
   }
+  const supportAvailable = broadcast.state === "live";
+  useEffect(() => {
+    if (!authenticated || !resumeIntent || handledAuthIntentRef.current === resumeIntent.id) return;
+    if (!["follow", "chat", "gift", "action", "private-access", "report"].includes(resumeIntent.kind)) return;
+    handledAuthIntentRef.current = resumeIntent.id;
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    if (resumeIntent.kind === "follow") {
+      void follow(true)
+        .then(() => onIntentHandled(t.title === "Stream MVP" ? "Signed in — you are now following this creator." : "登录成功——已关注该主播。"))
+        .catch(() => onIntentHandled(t.title === "Stream MVP" ? "Signed in, but follow failed. Please try again." : "登录成功，但关注失败，请重试。"));
+      return;
+    }
+    if (resumeIntent.kind === "chat") {
+      if (mobile) setMobileSheet("chat");
+      window.setTimeout(() => document.querySelector<HTMLInputElement>(mobile ? "#room-chat-input-sheet" : "#room-chat-input")?.focus(), 0);
+      onIntentHandled(t.title === "Stream MVP" ? "Signed in — your message is still here. Review it, then send." : "登录成功——消息仍在，请确认后发送。");
+      return;
+    }
+    if (resumeIntent.kind === "gift") {
+      if (supportAvailable) {
+        if (mobile) setMobileSheet("gifts");
+        else window.setTimeout(() => document.querySelector("#room-gifts")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      }
+      onIntentHandled(supportAvailable
+        ? t.title === "Stream MVP" ? "Signed in — choose a gift. Nothing has been sent." : "登录成功——请选择礼物，系统尚未发送任何礼物。"
+        : t.title === "Stream MVP" ? "Signed in. Gifts will be available when the creator is live." : "登录成功。主播开播后可使用礼物。"
+      );
+      return;
+    }
+    if (resumeIntent.kind === "action") {
+      if (supportAvailable) window.setTimeout(() => {
+        document.querySelector(".support-actions")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document.querySelector<HTMLButtonElement>(".viewer-actions button")?.focus();
+      }, 0);
+      onIntentHandled(supportAvailable
+        ? t.title === "Stream MVP" ? "Signed in — review the action before purchasing." : "登录成功——请确认动作后再购买。"
+        : t.title === "Stream MVP" ? "Signed in. Actions are available only during a live stream." : "登录成功。动作仅在直播期间可用。"
+      );
+      return;
+    }
+    if (resumeIntent.kind === "private-access") {
+      window.setTimeout(() => document.querySelector<HTMLButtonElement>(".room-private-button")?.focus(), 0);
+      onIntentHandled(t.title === "Stream MVP" ? "Signed in — review private access before purchasing. Nothing was charged." : "登录成功——请确认私密访问，系统尚未扣除任何 R。");
+      return;
+    }
+    window.setTimeout(() => {
+      const menu = document.querySelector<HTMLDetailsElement>(".room-more-actions, .mobile-room-more");
+      if (menu) menu.open = true;
+      document.querySelector<HTMLButtonElement>('[data-auth-action="report"]')?.focus();
+    }, 0);
+    onIntentHandled(t.title === "Stream MVP" ? "Signed in — review Report and submit it when ready." : "登录成功——请确认后再提交举报。");
+  }, [authenticated, resumeIntent?.id, supportAvailable, room.slug]);
   return (
     <section className="workspace audience-room">
       <button className="secondary room-back" onClick={back}>
         {t.back}
       </button>
       <div className="room-media-panel">
-        {broadcast.state === "live" &&
+        {broadcast.state === "live" && broadcast.source !== "local" &&
         broadcast.transport === "browser_webrtc" ? (
           <>
             <p className="watching-live">
@@ -4370,7 +5300,7 @@ function RoomView({
             </p>
             <WhepPlayer slug={room.slug} active t={t} />
           </>
-        ) : iframeUrl && broadcast.state === "live" ? (
+        ) : iframeUrl && broadcast.state === "live" && broadcast.source !== "local" ? (
           <>
             <p className="watching-live">
               {t.title === "Stream MVP"
@@ -4387,7 +5317,9 @@ function RoomView({
           </>
         ) : (
           <div className="player-placeholder">
-            {broadcast.state === "connecting"
+            {broadcast.source === "local"
+              ? (t.title === "Stream MVP" ? `Simulated ${broadcast.state}: no media is being published.` : `模拟${broadcast.state}：此状态不会发布视频。`)
+              : broadcast.state === "connecting"
               ? t.connectingBroadcast
               : broadcast.state === "unavailable"
                 ? t.unavailableBroadcast
@@ -4409,17 +5341,20 @@ function RoomView({
           unfollowLabel={t.title === "Stream MVP" ? "Unfollow" : "取消关注"}
           chatLabel={t.liveChat}
           giftLabel={t.title === "Stream MVP" ? "Gift" : "礼物"}
+          shareLabel={t.title === "Stream MVP" ? "Share" : "分享"}
+          giftEnabled={supportAvailable}
           moreLabel={t.title === "Stream MVP" ? "More stream actions" : "更多直播操作"}
           reportLabel={t.report}
-          privateAccessLabel={show?.active && !show.session.hasAccess ? t.buyAccess : undefined}
+          privateAccessLabel={supportAvailable && show?.active && !show.session.hasAccess ? t.buyAccess : undefined}
           profileLabel={t.title === "Stream MVP" ? `Open ${room.streamer_name} profile` : `打开 ${room.streamer_name} 的主页`}
           onBack={back}
           onFollow={() => void follow()}
           onProfile={onOpenProfile}
           onChat={() => setMobileSheet("chat")}
-          onGift={() => setMobileSheet("gifts")}
+          onGift={() => authenticated ? setMobileSheet("gifts") : onRequireAuth("gift")}
+          onShare={() => void shareRoom()}
           onReport={() => void report()}
-          onBuyPrivateAccess={show?.active && !show.session.hasAccess ? () => void buyAccess() : undefined}
+          onBuyPrivateAccess={supportAvailable && show?.active && !show.session.hasAccess ? () => void buyAccess() : undefined}
         />
       </div>
       <RoomCreatorBar
@@ -4436,23 +5371,39 @@ function RoomView({
         followLabel={t.follow}
         unfollowLabel={t.title === "Stream MVP" ? "Unfollow" : "取消关注"}
         giftLabel={t.title === "Stream MVP" ? "Send gift" : "赠送礼物"}
+        shareLabel={t.title === "Stream MVP" ? "Share" : "分享"}
+        copyLabel={t.title === "Stream MVP" ? "Copy link" : "复制链接"}
+        giftEnabled={supportAvailable}
         reportLabel={t.report}
         moreLabel={t.title === "Stream MVP" ? "More stream actions" : "更多直播操作"}
-        privateAccessLabel={show?.active && !show.session.hasAccess ? t.buyAccess : undefined}
-        privateAccessCost={show?.active && !show.session.hasAccess ? (show.session.mode === "ticket" ? show.session.ticket_cost : show.session.per_minute_cost) : undefined}
+        privateAccessLabel={supportAvailable && show?.active && !show.session.hasAccess ? t.buyAccess : undefined}
+        privateAccessCost={supportAvailable && show?.active && !show.session.hasAccess ? (show.session.mode === "ticket" ? show.session.ticket_cost : show.session.per_minute_cost) : undefined}
         profileLabel={t.title === "Stream MVP" ? `Open ${room.streamer_name} profile` : `打开 ${room.streamer_name} 的主页`}
         onFollow={() => void follow()}
+        onGift={() => authenticated ? document.querySelector("#room-gifts")?.scrollIntoView({ behavior: "smooth" }) : onRequireAuth("gift")}
+        onShare={() => void shareRoom()}
+        onCopy={() => void shareRoom(true)}
         onProfile={onOpenProfile}
         onReport={() => void report()}
-        onBuyPrivateAccess={show?.active && !show.session.hasAccess ? () => void buyAccess() : undefined}
+        onBuyPrivateAccess={supportAvailable && show?.active && !show.session.hasAccess ? () => void buyAccess() : undefined}
       />
-      {room.goal_text && !goalProgress && (
+      {shareNotice ? <p className="notice auth-resume-notice share-notice room-share-notice" role="status">{shareNotice}</p> : null}
+      {!supportAvailable ? (
+        <aside className="room-offline-guidance" role="status">
+          <div>
+            <p className="eyebrow">{t.title === "Stream MVP" ? "CREATOR OFFLINE" : "主播离线"}</p>
+            <strong>{t.title === "Stream MVP" ? "Follow this creator for their next live session." : "关注主播，不错过下一场直播。"}</strong>
+          </div>
+          <button type="button" className="secondary" onClick={onOpenProfile}>{t.title === "Stream MVP" ? "View profile & schedule" : "查看主页和日程"}</button>
+        </aside>
+      ) : null}
+      {supportAvailable && room.goal_text && !goalProgress && (
         <aside className="room-goal room-goal-compact">
           <p className="eyebrow">{t.goal}</p>
           <strong>{room.goal_text}</strong>
         </aside>
       )}
-      {goalProgress && (
+      {supportAvailable && goalProgress && (
         <aside className="support-actions">
           <div>
             <p className="eyebrow">
@@ -4499,7 +5450,7 @@ function RoomView({
           </div>
         </aside>
       )}
-      <aside className="public-support-feed">
+      {supportAvailable ? <aside className="public-support-feed">
         <p className="eyebrow">
           {t.title === "Stream MVP"
             ? "Recent support"
@@ -4528,7 +5479,7 @@ function RoomView({
               : "\u6682\u65e0\u652f\u6301\u52a8\u6001\u3002"}
           </p>
         )}
-      </aside>
+      </aside> : null}
       <RoomCreatorProfileCard
         streamerId={room.streamer_id}
         fallbackName={room.streamer_name}
@@ -4538,23 +5489,23 @@ function RoomView({
         onOpenProfile={onOpenProfile}
         t={t}
       />
-      <PrivateShowStatus show={show} t={t} />
-      <section className="room-gift-tray desktop-room-gifts" id="room-gifts">
+      {supportAvailable ? <PrivateShowStatus show={show} t={t} /> : null}
+      {supportAvailable && authenticated ? <section className="room-gift-tray desktop-room-gifts" id="room-gifts">
         <div className="gift-tray-heading">
           <div>
             <p className="eyebrow">{t.title === "Stream MVP" ? "Send a gift" : "赠送礼物"}</p>
             <strong>{t.title === "Stream MVP" ? "Support this creator" : "支持这位主播"}</strong>
           </div>
           <div className="test-wallet-balance">
-            <span>{t.title === "Stream MVP" ? "Test balance" : "测试余额"}</span>
+            <span>{t.title === "Stream MVP" ? "R balance" : "R 余额"}</span>
             <strong>{wallet?.toLocaleString() ?? "…"}</strong>
           </div>
           <button type="button" className="secondary gift-sound-toggle" aria-pressed={giftSoundEnabled} onClick={() => setGiftSoundEnabled((current) => !current)}>{giftSoundEnabled ? (t.title === "Stream MVP" ? "Gift sounds: on" : "礼物提示音：开") : (t.title === "Stream MVP" ? "Gift sounds: off" : "礼物提示音：关")}</button>
         </div>
         <p className="gift-token-note">
           {t.title === "Stream MVP"
-            ? "Test tokens only · no purchase, cashout, or real-money redemption"
-            : "仅限测试代币 · 不支持购买、提现或真实货币兑换"}
+            ? "R has no cash value · no cashout or real-money redemption"
+            : "R 没有现金价值 · 不支持提现或真实货币兑换"}
         </p>
         <div
           className="gift-catalog"
@@ -4592,7 +5543,7 @@ function RoomView({
               <div>
                 <span>{t.title === "Stream MVP" ? "Total" : "合计"}</span>
                 <strong>{total.toLocaleString()} {t.coins}</strong>
-                <small>{total.toLocaleString()} {t.title === "Stream MVP" ? "test tokens" : "测试代币"}</small>
+                <small>{total.toLocaleString()} R</small>
               </div>
               <button
                 type="button"
@@ -4609,8 +5560,8 @@ function RoomView({
           );
         })()}
         {giftNotice && <p className="gift-notice" role="status">{giftNotice}</p>}
-      </section>
-      <aside className="wallet-history room-wallet">
+      </section> : null}
+      {supportAvailable && authenticated ? <aside className="wallet-history room-wallet">
         <p className="eyebrow">
           {t.title === "Stream MVP" ? "Recent test activity" : "最近测试记录"}
         </p>
@@ -4623,7 +5574,7 @@ function RoomView({
               {entry.amount} {t.coins}
             </p>
           ))}
-      </aside>
+      </aside> : null}
       <LiveChatPanel
         title={t.liveChat}
         status={chatStatus}
@@ -4634,9 +5585,11 @@ function RoomView({
         placeholder={t.message}
         sendLabel={t.send}
         giftLabel={t.title === "Stream MVP" ? "Send a gift" : "赠送礼物"}
+        giftEnabled={supportAvailable}
         emptyLabel={t.title === "Stream MVP" ? "Be the first to say hello." : "来发送第一条消息吧。"}
         onDraftChange={setDraft}
         onSend={send}
+        onGift={() => authenticated ? document.querySelector("#room-gifts")?.scrollIntoView({ behavior: "smooth" }) : onRequireAuth("gift")}
         className="desktop-room-chat"
       />
       <section className="mobile-room-recommendations" aria-labelledby="mobile-room-next-title">
@@ -4674,17 +5627,19 @@ function RoomView({
           placeholder={t.message}
           sendLabel={t.send}
           giftLabel={t.title === "Stream MVP" ? "Send a gift" : "赠送礼物"}
+          giftEnabled={supportAvailable}
           emptyLabel={t.title === "Stream MVP" ? "Be the first to say hello." : "来发送第一条消息吧。"}
           onDraftChange={setDraft}
           onSend={send}
+          onGift={() => authenticated ? setMobileSheet("gifts") : onRequireAuth("gift")}
           className="room-chat-sheet"
           inputId="room-chat-input-sheet"
         />
       </BottomSheet>
       <BottomSheet
-        open={mobileSheet === "gifts"}
+        open={authenticated && supportAvailable && mobileSheet === "gifts"}
         title={t.title === "Stream MVP" ? "Send a gift" : "赠送礼物"}
-        description={t.title === "Stream MVP" ? "Test coins only · no real-money charge" : "仅限测试代币 · 不会产生真实扣款"}
+        description={t.title === "Stream MVP" ? "R has no cash value · no real-money charge" : "R 没有现金价值 · 不会产生真实扣款"}
         closeLabel={t.title === "Stream MVP" ? "Close gift picker" : "关闭礼物选择器"}
         onClose={() => setMobileSheet(null)}
       >
@@ -4695,7 +5650,7 @@ function RoomView({
               <strong>{t.title === "Stream MVP" ? "Support this creator" : "支持这位主播"}</strong>
             </div>
             <div className="test-wallet-balance">
-              <span>{t.title === "Stream MVP" ? "Test balance" : "测试余额"}</span>
+              <span>{t.title === "Stream MVP" ? "R balance" : "R 余额"}</span>
               <strong>{wallet?.toLocaleString() ?? "…"}</strong>
             </div>
           </div>

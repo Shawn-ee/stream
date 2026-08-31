@@ -17,7 +17,8 @@ for (const component of ["MobileRoomOverlay", "LiveChatPanel"]) {
 
 assert.match(app, /useState<"chat" \| "gifts" \| null>\(null\)/);
 assert.match(app, /<BottomSheet[\s\S]*open=\{mobileSheet === "chat"\}/);
-assert.match(app, /<BottomSheet[\s\S]*open=\{mobileSheet === "gifts"\}/);
+assert.match(app, /<BottomSheet[\s\S]*open=\{authenticated && supportAvailable && mobileSheet === "gifts"\}/);
+assert.match(app, /const supportAvailable = broadcast\.state === "live"/);
 assert.match(app, /inputId="room-chat-input-sheet"/);
 assert.match(app, /className="desktop-room-chat"/);
 assert.match(app, /className="room-gift-tray desktop-room-gifts"/);

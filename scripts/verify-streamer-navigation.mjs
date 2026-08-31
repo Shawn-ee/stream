@@ -10,7 +10,7 @@ const packageJson = JSON.parse(packageText);
 
 for (const behavior of [
   /window\.addEventListener\("beforeunload", protectActiveBroadcast\)/,
-  /type StreamerSection = "live" \| "earnings" \| "supporters" \| "actions" \| "private" \| "profile" \| "settings"/,
+  /type StreamerSection = "live" \| "earnings" \| "supporters" \| "followers" \| "actions" \| "private" \| "profile" \| "settings"/,
   /const openAuxiliarySection = useCallback\(\(section: Exclude<StreamerSection, "live">\)/,
   /const nextUrl = `#streamer-\$\{section\}`/,
   /window\.history\.pushState\(nextState/,
@@ -32,6 +32,7 @@ for (const behavior of [
   /\["profile", zh \? "公开主页" : "Public profile"/,
   /\["earnings", zh \? "收益" : "Earnings",/,
   /\["supporters", zh \? "支持者排行" : "Top supporters"/,
+  /\["followers", zh \? "关注者" : "Followers"/,
   /\["actions", zh \? "互动与私密直播" : "Actions & private show"/,
   /\["settings", zh \? "设置" : "Settings",/,
 ]) assert.match(app, behavior);

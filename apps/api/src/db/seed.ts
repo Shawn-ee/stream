@@ -22,6 +22,17 @@ const accounts = [
     "Night Creator",
     "streamer",
   ],
+  ["10000000-0000-4000-8000-000000000005", "demo-luna-creator", "Luna Chen", "streamer"],
+  ["10000000-0000-4000-8000-000000000006", "demo-jade-creator", "Jade Lin", "streamer"],
+  ["10000000-0000-4000-8000-000000000007", "demo-maya-creator", "Maya Rivers", "streamer"],
+  ["10000000-0000-4000-8000-000000000008", "demo-alex-creator", "Alex Park", "streamer"],
+] as const;
+
+const discoveryFixtures = [
+  { userId: accounts[4][0], roomId: "20000000-0000-4000-8000-000000000003", slug: "luna-creator", title: "深夜轻松聊天", bio: "中文生活与轻松聊天测试主播。", category: "Lifestyle", schedule: "周二、周四晚上 9 点", timezone: "Asia/Shanghai", language: "zh", days: 3 },
+  { userId: accounts[5][0], roomId: "20000000-0000-4000-8000-000000000004", slug: "jade-creator", title: "音乐与点歌时间", bio: "中文音乐和点歌测试主播。", category: "Music", schedule: "周末晚上 8 点", timezone: "Asia/Shanghai", language: "zh", days: 4 },
+  { userId: accounts[6][0], roomId: "20000000-0000-4000-8000-000000000005", slug: "maya-creator", title: "Cozy gaming and conversation", bio: "English gaming and conversation test creator.", category: "Gaming", schedule: "Monday and Friday at 7 PM", timezone: "America/Chicago", language: "en", days: 2 },
+  { userId: accounts[7][0], roomId: "20000000-0000-4000-8000-000000000006", slug: "alex-creator", title: "Coffee, stories, and requests", bio: "English talk and music discovery fixture.", category: "Talk", schedule: "Wednesday at 6 PM", timezone: "America/Los_Angeles", language: "en", days: 5 },
 ] as const;
 
 const client = new Client({
@@ -40,6 +51,10 @@ try {
   }
   await client.query(
     "DELETE FROM auth_sessions WHERE user_id = ANY($1::uuid[])",
+    [accounts.map((account) => account[0])],
+  );
+  await client.query(
+    "DELETE FROM audience_discovery_preferences WHERE user_id = ANY($1::uuid[])",
     [accounts.map((account) => account[0])],
   );
   await client.query(
@@ -88,10 +103,10 @@ try {
     ],
   );
   await client.query(
-    "UPDATE live_rooms SET private_show_enabled = FALSE, goal_text = 'Test goal: enjoy the stream.', status=CASE WHEN $1='live' THEN 'live'::room_status ELSE 'offline'::room_status END, broadcast_state=$1::broadcast_lifecycle_state, broadcast_checked_at=NOW(), broadcast_status_message=$2 WHERE id = '20000000-0000-4000-8000-000000000001'",
+    "UPDATE live_rooms SET private_show_enabled = FALSE, goal_text = 'Test goal: enjoy the stream.', stream_language='en', stream_tags='{}'::text[], stream_thumbnail_url=NULL, chat_slow_mode_seconds=0, blocked_terms='{}'::text[], status=CASE WHEN $1='live' THEN 'live'::room_status ELSE 'offline'::room_status END, broadcast_state=$1::broadcast_lifecycle_state, broadcast_checked_at=NOW(), broadcast_status_message=$2 WHERE id = '20000000-0000-4000-8000-000000000001'",
     [
       config.localBroadcastStatus,
-      `Local development fallback reports ${config.localBroadcastStatus} broadcast.`,
+      `Simulation only: ${config.localBroadcastStatus}. No media is being published by this control.`,
     ],
   );
   await client.query(
@@ -109,8 +124,8 @@ try {
     accounts[2][0],
   ]);
   await client.query(
-    "DELETE FROM follows WHERE follower_id IN ($1,$2,$3) OR streamer_id IN ($1,$2,$3)",
-    [accounts[0][0], accounts[1][0], accounts[2][0]],
+    "DELETE FROM follows WHERE follower_id=ANY($1::uuid[]) OR streamer_id=ANY($1::uuid[])",
+    [accounts.map((account) => account[0])],
   );
   await client.query(
     "DELETE FROM broadcast_sessions WHERE room_id IN ('20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002')",
@@ -166,11 +181,21 @@ try {
     [accounts[3][0]],
   );
   await client.query(
-    "INSERT INTO live_rooms (id,streamer_id,slug,title,status,goal_text,broadcast_state,broadcast_checked_at,broadcast_status_message) VALUES ($1,$2,'night-creator','Night Creator: Music Room','offline','Test goal: enjoy the music.','offline',NOW(),'Local test broadcast is offline.') ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title,status=EXCLUDED.status,goal_text=EXCLUDED.goal_text,broadcast_state=EXCLUDED.broadcast_state,broadcast_checked_at=EXCLUDED.broadcast_checked_at,broadcast_status_message=EXCLUDED.broadcast_status_message",
+    "INSERT INTO live_rooms (id,streamer_id,slug,title,status,goal_text,broadcast_state,broadcast_checked_at,broadcast_status_message) VALUES ($1,$2,'night-creator','Night Creator: Music Room','offline','Test goal: enjoy the music.','offline',NOW(),'Local test broadcast is offline.') ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title,status=EXCLUDED.status,goal_text=EXCLUDED.goal_text,stream_language='en',stream_tags='{}'::text[],stream_thumbnail_url=NULL,chat_slow_mode_seconds=0,blocked_terms='{}'::text[],broadcast_state=EXCLUDED.broadcast_state,broadcast_checked_at=EXCLUDED.broadcast_checked_at,broadcast_status_message=EXCLUDED.broadcast_status_message",
     ["20000000-0000-4000-8000-000000000002", accounts[3][0]],
   );
+  for (const fixture of discoveryFixtures) {
+    await client.query(
+      "INSERT INTO streamer_profiles (user_id,bio,category,schedule_text,next_stream_at,schedule_timezone,is_featured) VALUES ($1,$2,$3,$4,NOW()+($5 || ' days')::interval,$6,FALSE) ON CONFLICT (user_id) DO UPDATE SET bio=EXCLUDED.bio,avatar_url=NULL,category=EXCLUDED.category,schedule_text=EXCLUDED.schedule_text,next_stream_at=EXCLUDED.next_stream_at,schedule_timezone=EXCLUDED.schedule_timezone,is_featured=FALSE",
+      [fixture.userId, fixture.bio, fixture.category, fixture.schedule, fixture.days, fixture.timezone],
+    );
+    await client.query(
+      "INSERT INTO live_rooms (id,streamer_id,slug,title,status,goal_text,broadcast_state,broadcast_checked_at,broadcast_status_message,stream_language,stream_tags,stream_thumbnail_url,chat_slow_mode_seconds,blocked_terms) VALUES ($1,$2,$3,$4,'offline','Welcome to this test room.', 'offline',NOW(),'Local test broadcast is offline.',$5,'{}'::text[],NULL,0,'{}'::text[]) ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title,status='offline',goal_text=EXCLUDED.goal_text,broadcast_state='offline',broadcast_checked_at=NOW(),broadcast_status_message=EXCLUDED.broadcast_status_message,stream_language=EXCLUDED.stream_language,stream_tags='{}'::text[],stream_thumbnail_url=NULL,chat_slow_mode_seconds=0,blocked_terms='{}'::text[]",
+      [fixture.roomId, fixture.userId, fixture.slug, fixture.title, fixture.language],
+    );
+  }
   console.log(
-    "Seeded demo audience, streamer, admin, and second creator accounts.",
+    "Seeded demo audience, administrator, and six creator discovery accounts.",
   );
 } finally {
   await client.end();

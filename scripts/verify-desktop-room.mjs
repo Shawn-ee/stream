@@ -29,7 +29,7 @@ for (const semantic of [
   /aria-relevant="additions"/,
   /inputId = "room-chat-input"/,
   /htmlFor=\{inputId\}/,
-  /href="#room-gifts"/,
+  /className="room-gift-jump" onClick=\{onGift\}/,
 ]) assert.match(components, semantic);
 
 for (const layout of [

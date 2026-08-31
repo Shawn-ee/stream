@@ -37,10 +37,10 @@ export function normalizeCloudflareLiveInput(value: unknown): BroadcastStatus {
 export function localBroadcastStatus(): BroadcastStatus {
   const state = config.localBroadcastStatus;
   const messages: Record<BroadcastState, string> = {
-    live: "Local development fallback reports a live broadcast.",
-    connecting: "Local development fallback reports a connecting broadcast.",
-    offline: "Local test broadcast is offline.",
-    unavailable: "Broadcast status is temporarily unavailable.",
+    live: "Simulation only: live. No media is being published by this control.",
+    connecting: "Simulation only: connecting. No media is being published by this control.",
+    offline: "Simulation only: offline. No media is being published by this control.",
+    unavailable: "Simulation only: unavailable. No media is being published by this control.",
   };
   return { state, message: messages[state], source: "local" };
 }

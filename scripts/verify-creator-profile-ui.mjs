@@ -13,10 +13,11 @@ const packageJson = JSON.parse(packageText);
 assert.match(app, /function PublicCreatorProfileView\(/);
 assert.match(app, /Promise\.all\(\[[\s\S]*\/api\/streamers\/\$\{room\.streamer_id\}[\s\S]*follow-status/);
 assert.match(app, /method: nextFollowing \? "POST" : "DELETE"/);
-assert.match(app, /follower_count: Math\.max\(0,/);
+assert.match(app, /follower_count: typeof result\?\.followerCount === "number"/);
+assert.match(app, /Math\.max\(0, current\.follower_count/);
 assert.match(app, /profile\.broadcast_state \?\? room\.broadcast_state/);
 assert.match(app, /<CreatorProfileSurface/);
-assert.match(app, /setProfileRoom\(room\)/);
+assert.match(app, /showProfile\(room\)/);
 assert.match(app, /onProfile=\{onOpenProfile\}/);
 assert.match(app, /<RoomCreatorProfileCard/);
 

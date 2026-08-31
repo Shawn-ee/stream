@@ -13,10 +13,12 @@ export function CreatorAvatar({
   name,
   url,
   className,
+  objectPosition,
 }: {
   name: string;
   url?: string | null;
   className: string;
+  objectPosition?: string;
 }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
@@ -29,6 +31,7 @@ export function CreatorAvatar({
           alt=""
           loading="lazy"
           decoding="async"
+          style={objectPosition ? { objectPosition } : undefined}
           onError={() => setFailed(true)}
         />
       ) : creatorInitials(name)}

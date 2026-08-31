@@ -20,7 +20,7 @@ for (const behavior of [
   /Data temporarily unavailable/,
   /Load more/,
   /Supporters/,
-  /Test coins only · No deposits or withdrawals/,
+  /R has no cash value · No deposits or withdrawals/,
   /CreatorSessionSummary slug=\{slug\}/,
 ]) assert.match(app, behavior);
 

@@ -12,6 +12,33 @@ const bin = join(fixture, "bin");
 mkdirSync(bin);
 
 const expectedCommit = "0123456789abcdef0123456789abcdef01234567";
+const dockerAvailable =
+  spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], {
+    cwd: repository,
+    encoding: "utf8",
+    timeout: 5_000,
+  }).status === 0;
+
+function toWslPath(path) {
+  const match = /^([A-Za-z]):\\(.*)$/.exec(path);
+  assert.ok(match, `cannot translate Windows path for WSL: ${path}`);
+  return `/mnt/${match[1].toLowerCase()}/${match[2].replaceAll("\\", "/")}`;
+}
+
+function runWsl(args, environment = {}) {
+  return spawnSync(
+    "wsl.exe",
+    [
+      "-d",
+      "Ubuntu",
+      "--",
+      "env",
+      ...Object.entries(environment).map(([name, value]) => `${name}=${value}`),
+      ...args,
+    ],
+    { cwd: repository, encoding: "utf8" },
+  );
+}
 
 writeFileSync(
   join(bin, "git"),
@@ -22,7 +49,7 @@ case "$1" in
   --version) printf 'git version 2.45.0\\n' ;;
   *) exit 1 ;;
 esac
-`,
+`.replaceAll("\r\n", "\n"),
 );
 writeFileSync(
   join(bin, "docker"),
@@ -31,10 +58,36 @@ printf '%s\\n' "$*" >> /tmp/stream-docker-calls
 if [ "$1" = "version" ]; then printf '24.0.0\\n'; exit 0; fi
 if [ "$1" = "compose" ] && [ "$2" = "version" ]; then printf '2.20.0\\n'; exit 0; fi
 exit 0
-`,
+`.replaceAll("\r\n", "\n"),
+);
+writeFileSync(
+  join(fixture, "run-operator.sh"),
+  `#!/bin/sh
+fixture="$1"
+repository="$2"
+shift 2
+mkdir -p /tmp/mockbin
+cp "$fixture"/bin/* /tmp/mockbin/
+chmod +x /tmp/mockbin/*
+PATH=/tmp/mockbin:$PATH exec sh "$repository/deploy/private-staging-operator.sh" "$@"
+`.replaceAll("\r\n", "\n"),
 );
 
 function runOperator(args, environment = {}) {
+  if (!dockerAvailable) {
+    const repositoryWsl = toWslPath(repository);
+    const fixtureWsl = toWslPath(fixture);
+    return runWsl(
+      [
+        "sh",
+        `${fixtureWsl}/run-operator.sh`,
+        fixtureWsl,
+        repositoryWsl,
+        ...args,
+      ],
+      environment,
+    );
+  }
   return spawnSync(
     "docker",
     [
@@ -57,34 +110,28 @@ function runOperator(args, environment = {}) {
 }
 
 try {
-  execFileSync(
-    "docker",
-    [
-      "run",
-      "--rm",
-      "--mount",
-      `type=bind,source=${repository},target=/workspace,readonly`,
-      nodeImage,
-      "sh",
-      "-n",
-      "/workspace/deploy/private-staging-operator.sh",
-    ],
-    { cwd: repository, stdio: "pipe" },
-  );
-  execFileSync(
-    "docker",
-    [
-      "run",
-      "--rm",
-      "--mount",
-      `type=bind,source=${repository},target=/workspace,readonly`,
-      nodeImage,
-      "sh",
-      "-n",
-      "/workspace/deploy/verify-host-prerequisites.sh",
-    ],
-    { cwd: repository, stdio: "pipe" },
-  );
+  if (dockerAvailable) {
+    for (const script of ["private-staging-operator.sh", "verify-host-prerequisites.sh"])
+      execFileSync(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "--mount",
+          `type=bind,source=${repository},target=/workspace,readonly`,
+          nodeImage,
+          "sh",
+          "-n",
+          `/workspace/deploy/${script}`,
+        ],
+        { cwd: repository, stdio: "pipe" },
+      );
+  } else {
+    for (const script of ["private-staging-operator.sh", "verify-host-prerequisites.sh"]) {
+      const syntax = runWsl(["sh", "-n", `${toWslPath(repository)}/deploy/${script}`]);
+      assert.equal(syntax.status, 0, syntax.stderr || `${script} syntax check failed`);
+    }
+  }
 
   const missingApproval = runOperator(["plan"], {
     EXPECTED_RELEASE_COMMIT: expectedCommit,

@@ -61,6 +61,14 @@ import {
   removeStoredAvatar,
   saveAvatar,
 } from "./avatar-storage.js";
+import {
+  removeStoredStreamThumbnail,
+  saveStreamThumbnail,
+  streamThumbnailPath,
+  StreamThumbnailUploadError,
+  streamThumbnailUploadLimitBytes,
+} from "./stream-thumbnail-storage.js";
+import { renderSocialPreview, validSocialPreviewPath, type SocialPreviewKind } from "./social-preview.js";
 
 type Role = "audience" | "streamer" | "admin";
 type DemoUser = {
@@ -71,6 +79,35 @@ type DemoUser = {
   locale: "en" | "zh";
   ageAcknowledged: boolean;
 };
+
+async function createDueScheduleReminders(client: ReturnType<typeof database>, userId: string) {
+  return client.query<{
+    id: string;
+    user_id: string;
+    room_slug: string;
+  }>(
+    `INSERT INTO notifications
+       (id,user_id,kind,title,body,room_id,notification_key)
+     SELECT gen_random_uuid(),f.follower_id,'schedule_reminder',
+            CASE WHEN viewer.locale='zh' THEN '关注的主播即将开播' ELSE 'A creator you follow starts soon' END,
+            CASE WHEN viewer.locale='zh'
+              THEN creator.display_name || ' 计划在一小时内开播。'
+              ELSE creator.display_name || ' is scheduled to go live within the next hour.' END,
+            room.id,'schedule_reminder:' || f.streamer_id::text || ':' || EXTRACT(EPOCH FROM profile.next_stream_at)::bigint::text
+     FROM follows f
+     JOIN users viewer ON viewer.id=f.follower_id
+     JOIN users creator ON creator.id=f.streamer_id
+     JOIN streamer_profiles profile ON profile.user_id=f.streamer_id
+     JOIN live_rooms room ON room.streamer_id=f.streamer_id
+     WHERE f.follower_id=$1 AND f.reminder_enabled=TRUE
+       AND profile.next_stream_at>NOW()
+       AND profile.next_stream_at<=NOW()+INTERVAL '1 hour'
+       AND room.broadcast_state<>'live'
+     ON CONFLICT (user_id,notification_key) WHERE notification_key IS NOT NULL DO NOTHING
+     RETURNING id,user_id,(SELECT slug FROM live_rooms WHERE id=room_id) AS room_slug`,
+    [userId],
+  );
+}
 type BroadcastTransport = "obs_hls" | "browser_webrtc";
 type CreatorWalletPeriod = "session" | "7d" | "30d" | "lifetime";
 type CreatorWalletType = "all" | "gift" | "action" | "private_show";
@@ -81,7 +118,7 @@ type CreatorPeriodBounds = {
 type WebRtcResource = {
   resourceUrl: string | null;
   roomSlug: string;
-  userId: string;
+  userId: string | null;
   kind: "publish" | "playback";
   expiresAt: number;
 };
@@ -127,6 +164,24 @@ function encodeCreatorWalletCursor(createdAt: Date, id: string) {
 }
 
 function decodeCreatorWalletCursor(value: unknown): { createdAt: Date; id: string } | null {
+  if (typeof value !== "string" || value.length > 256) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    if (!Array.isArray(decoded) || decoded.length !== 2) return null;
+    const createdAt = new Date(decoded[0]);
+    const id = decoded[1];
+    if (Number.isNaN(createdAt.getTime()) || typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return null;
+    return { createdAt, id };
+  } catch {
+    return null;
+  }
+}
+
+function encodeFollowerCursor(createdAt: Date, id: string) {
+  return Buffer.from(JSON.stringify([createdAt.toISOString(), id]), "utf8").toString("base64url");
+}
+
+function decodeFollowerCursor(value: unknown): { createdAt: Date; id: string } | null {
   if (typeof value !== "string" || value.length > 256) return null;
   try {
     const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
@@ -242,8 +297,8 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
     const changed = previous.rows[0].broadcast_state !== status.state;
     const recovering = broadcastRecoveryWindows.has(slug);
     await client.query(
-      "UPDATE live_rooms SET status=CASE WHEN $1::broadcast_lifecycle_state='live' THEN 'live'::room_status ELSE 'offline'::room_status END,broadcast_state=$1::broadcast_lifecycle_state,broadcast_checked_at=NOW(),broadcast_status_message=$2,updated_at=NOW() WHERE slug=$3",
-      [status.state, status.message, slug],
+      "UPDATE live_rooms SET status=CASE WHEN $1::broadcast_lifecycle_state='live' THEN 'live'::room_status ELSE 'offline'::room_status END,broadcast_state=$1::broadcast_lifecycle_state,broadcast_checked_at=NOW(),broadcast_status_message=$2,broadcast_status_source=$3,updated_at=NOW() WHERE slug=$4",
+      [status.state, status.message, status.source, slug],
     );
     const eventType = broadcastLifecycleEvent(
       previous.rows[0].broadcast_state as BroadcastStatus["state"],
@@ -284,6 +339,7 @@ async function persistBroadcastStatus(slug: string, status: BroadcastStatus) {
       const event = {
         slug,
         state: status.state,
+        source: status.source,
         transport: previous.rows[0].broadcast_transport,
         message: status.message,
         checkedAt: new Date().toISOString(),
@@ -529,12 +585,15 @@ export function buildApi() {
       );
   });
   api.addHook("preHandler", async (request, reply) => {
+    const publicPlaybackSignal = /^\/api\/rooms\/[^/]+\/webrtc\/play(?:\/[^/?]+)?(?:\?.*)?$/.test(request.url);
     if (
       !["POST", "PUT", "PATCH", "DELETE"].includes(request.method) ||
-      ["/api/auth/login", "/api/auth/register"].includes(request.url)
+      ["/api/auth/login", "/api/auth/register"].includes(request.url) ||
+      publicPlaybackSignal
     )
       return;
     if (!request.url.startsWith("/api/")) return;
+    if (!request.cookies.stream_session) return;
     const cookieToken = request.cookies.stream_csrf;
     const headerToken = request.headers["x-csrf-token"];
     if (
@@ -562,6 +621,22 @@ export function buildApi() {
       return reply.type("image/webp").send(createReadStream(filePath));
     },
   );
+  api.get<{ Params: { filename: string } }>(
+    "/api/media/stream-thumbnails/:filename",
+    async (request, reply) => {
+      const filePath = streamThumbnailPath(config.avatarStoragePath, request.params.filename);
+      if (!filePath) return reply.code(404).send({ error: "thumbnail_not_found" });
+      try {
+        const file = await stat(filePath);
+        reply.header("content-type", "image/webp");
+        reply.header("content-length", file.size);
+        reply.header("cache-control", "public, max-age=31536000, immutable");
+        return reply.send(createReadStream(filePath));
+      } catch {
+        return reply.code(404).send({ error: "thumbnail_not_found" });
+      }
+    },
+  );
   function setSessionCookies(
     reply: FastifyReply,
     session: Awaited<ReturnType<typeof createSession>>,
@@ -582,6 +657,23 @@ export function buildApi() {
       path: "/",
     });
   }
+  api.get<{ Params: { slug: string } }>("/api/streamer/rooms/:slug/moderation", async (request, reply) => {
+    const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+    if (!streamer) return;
+    const client = database();
+    await client.connect();
+    try {
+      const room = await client.query<{ id: string }>("SELECT id FROM live_rooms WHERE slug=$1 AND streamer_id=$2", [request.params.slug, streamer.id]);
+      if (!room.rows[0]) return reply.code(404).send({ error: "streamer_room_not_found" });
+      const restrictions = await client.query(
+        "SELECT u.id AS user_id,u.display_name,r.is_muted,r.is_banned,r.muted_until,r.updated_at FROM room_moderation_restrictions r JOIN users u ON u.id=r.user_id WHERE r.room_id=$1 AND (r.is_banned OR (r.is_muted AND r.muted_until IS NULL) OR r.muted_until>NOW()) ORDER BY r.updated_at DESC LIMIT 100",
+        [room.rows[0].id],
+      );
+      return { restrictions: restrictions.rows };
+    } finally {
+      await client.end();
+    }
+  });
   api.post<{
     Body: {
       handle: string;
@@ -883,19 +975,175 @@ export function buildApi() {
     const user = await requireRole(request, reply, "audience");
     return user ? { user } : undefined;
   });
-  api.get<{ Querystring: { q?: string; category?: string } }>(
+  const defaultDiscoveryPreferences = {
+    preferred_languages: [] as string[],
+    preferred_categories: [] as string[],
+    prioritize_live: true,
+    prioritize_following: true,
+    personalization_enabled: true,
+  };
+  api.get("/api/me/discovery-preferences", async (request, reply) => {
+    const viewer = await requireRole(request, reply, "audience") as DemoUser | undefined;
+    if (!viewer) return;
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query(
+        "SELECT preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled,updated_at FROM audience_discovery_preferences WHERE user_id=$1",
+        [viewer.id],
+      );
+      return { preferences: result.rows[0] ?? { ...defaultDiscoveryPreferences, updated_at: null } };
+    } finally {
+      await client.end();
+    }
+  });
+  api.put<{
+    Body: {
+      preferredLanguages?: unknown;
+      preferredCategories?: unknown;
+      prioritizeLive?: unknown;
+      prioritizeFollowing?: unknown;
+      personalizationEnabled?: unknown;
+    };
+  }>("/api/me/discovery-preferences", async (request, reply) => {
+    const viewer = await requireRole(request, reply, "audience") as DemoUser | undefined;
+    if (!viewer) return;
+    const body = request.body ?? {};
+    const preferredLanguages = body.preferredLanguages;
+    const preferredCategories = body.preferredCategories;
+    if (
+      !Array.isArray(preferredLanguages) ||
+      preferredLanguages.length > 2 ||
+      preferredLanguages.some((item) => item !== "en" && item !== "zh") ||
+      new Set(preferredLanguages).size !== preferredLanguages.length
+    ) return reply.code(400).send({ error: "invalid_preferred_languages" });
+    if (
+      !Array.isArray(preferredCategories) ||
+      preferredCategories.length > 10 ||
+      preferredCategories.some((item) => typeof item !== "string" || !item.trim() || item.trim().length > 60) ||
+      new Set(preferredCategories.map((item) => String(item).trim())).size !== preferredCategories.length
+    ) return reply.code(400).send({ error: "invalid_preferred_categories" });
+    if (
+      typeof body.prioritizeLive !== "boolean" ||
+      typeof body.prioritizeFollowing !== "boolean" ||
+      typeof body.personalizationEnabled !== "boolean"
+    ) return reply.code(400).send({ error: "invalid_discovery_preferences" });
+    const normalizedCategories = preferredCategories.map((item) => String(item).trim());
+    const client = database();
+    await client.connect();
+    try {
+      if (normalizedCategories.length) {
+        const valid = await client.query<{ category: string }>(
+          "SELECT DISTINCT category FROM streamer_profiles WHERE category=ANY($1::text[])",
+          [normalizedCategories],
+        );
+        if (valid.rows.length !== normalizedCategories.length)
+          return reply.code(400).send({ error: "unknown_preferred_category" });
+      }
+      const result = await client.query(
+        `INSERT INTO audience_discovery_preferences
+           (user_id,preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled,updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           preferred_languages=EXCLUDED.preferred_languages,
+           preferred_categories=EXCLUDED.preferred_categories,
+           prioritize_live=EXCLUDED.prioritize_live,
+           prioritize_following=EXCLUDED.prioritize_following,
+           personalization_enabled=EXCLUDED.personalization_enabled,
+           updated_at=NOW()
+         RETURNING preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled,updated_at`,
+        [viewer.id, preferredLanguages, normalizedCategories, body.prioritizeLive, body.prioritizeFollowing, body.personalizationEnabled],
+      );
+      return { preferences: result.rows[0] };
+    } finally {
+      await client.end();
+    }
+  });
+  api.delete("/api/me/discovery-preferences", async (request, reply) => {
+    const viewer = await requireRole(request, reply, "audience") as DemoUser | undefined;
+    if (!viewer) return;
+    const client = database();
+    await client.connect();
+    try {
+      await client.query("DELETE FROM audience_discovery_preferences WHERE user_id=$1", [viewer.id]);
+      return { preferences: { ...defaultDiscoveryPreferences, updated_at: null } };
+    } finally {
+      await client.end();
+    }
+  });
+  api.get<{ Querystring: { q?: string; category?: string; language?: string } }>(
     "/api/rooms",
     async (request, reply) => {
+      const viewer = await currentUser(request);
       const client = database();
       await client.connect();
       try {
         const query = request.query.q?.trim() ?? "";
         const category = request.query.category?.trim() ?? "";
-        const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.goal_text, u.id AS streamer_id, u.display_name AS streamer_name, p.avatar_url, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%') AND ($2='' OR p.category=$2) ORDER BY r.status = 'live' DESC, r.title LIMIT 100`,
-          [query, category],
+        const language = request.query.language?.trim() ?? "";
+        if (language && language !== "en" && language !== "zh")
+          return reply.code(400).send({ error: "invalid_stream_language" });
+        const preferencesResult = viewer?.role === "audience"
+          ? await client.query<{
+              preferred_languages: string[];
+              preferred_categories: string[];
+              prioritize_live: boolean;
+              prioritize_following: boolean;
+              personalization_enabled: boolean;
+            }>("SELECT preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled FROM audience_discovery_preferences WHERE user_id=$1", [viewer.id])
+          : { rows: [] };
+        const preferences = preferencesResult.rows[0] ?? defaultDiscoveryPreferences;
+        const personalizationApplied = Boolean(viewer?.role === "audience" && preferences.personalization_enabled);
+        const result = await client.query<{
+          slug: string;
+          title: string;
+          status: string;
+          broadcast_state: string;
+          follower_count: number;
+          live_started_at: Date | null;
+          is_following: boolean;
+          recent_visit_count: number;
+          last_visited_at: Date | null;
+          [key: string]: unknown;
+        }>(
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.goal_text, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id, u.display_name AS streamer_name, p.avatar_url, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count, (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at, ($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following, (SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count, (SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%') AND ($2='' OR p.category=$2) AND ($3='' OR r.stream_language=$3) LIMIT 100`,
+          [query, category, language, viewer?.id ?? null],
         );
-        return { rooms: result.rows };
+        const rooms = await Promise.all(result.rows.map(async (room) => {
+          const presence = realtime ? await roomPresence(room.slug) : { count: 0, users: [] };
+          const viewerCount = presence.users.filter((member) => member.role === "audience").length;
+          const state = room.broadcast_state ?? room.status;
+          const live = state === "live";
+          const startedAt = room.live_started_at ? new Date(room.live_started_at).getTime() : 0;
+          const freshness = live && startedAt
+            ? Math.max(0, 180 - Math.floor((Date.now() - startedAt) / 60_000))
+            : 0;
+          const recommendationScore =
+            (live ? (personalizationApplied && !preferences.prioritize_live ? 250_000 : 1_000_000) : 0) +
+            (personalizationApplied && preferences.prioritize_following && room.is_following ? 400_000 : 0) +
+            (personalizationApplied && preferences.preferred_languages.includes(String(room.stream_language)) ? 180_000 : 0) +
+            (personalizationApplied && preferences.preferred_categories.includes(String(room.category)) ? 140_000 : 0) +
+            (personalizationApplied ? Math.min(5, Number(room.recent_visit_count)) * 12_000 : 0) +
+            (personalizationApplied && room.last_visited_at && Date.now() - new Date(room.last_visited_at).getTime() < 60 * 60 * 1000 ? -30_000 : 0) +
+            viewerCount * 10_000 +
+            Math.round(Math.log2(Math.max(1, Number(room.follower_count) + 1)) * 1_000) +
+            freshness;
+          const recommendationReasons = personalizationApplied ? [
+            live ? "live" : null,
+            preferences.prioritize_following && room.is_following ? "following" : null,
+            preferences.preferred_languages.includes(String(room.stream_language)) ? "preferred_language" : null,
+            preferences.preferred_categories.includes(String(room.category)) ? "preferred_category" : null,
+            Number(room.recent_visit_count) > 0 ? "recently_watched" : null,
+          ].filter(Boolean) : [];
+          const { recent_visit_count: _recentVisitCount, last_visited_at: _lastVisitedAt, ...publicRoom } = room;
+          return { ...publicRoom, viewer_count: viewerCount, recommendation_score: recommendationScore, recommendation_reasons: recommendationReasons, personalization_applied: personalizationApplied };
+        }));
+        rooms.sort((left, right) =>
+          Number(right.recommendation_score) - Number(left.recommendation_score) ||
+          String(left.title).localeCompare(String(right.title)) ||
+          String(left.slug).localeCompare(String(right.slug)),
+        );
+        return { rooms };
       } finally {
         await client.end();
       }
@@ -920,7 +1168,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT u.id,u.handle,u.display_name,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state FROM users u JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
+          "SELECT u.id,u.handle,u.display_name,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state,r.broadcast_status_source FROM users u JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
           [request.params.streamerId],
         );
         if (!result.rows[0])
@@ -940,8 +1188,8 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
-        const target = await client.query(
-          "SELECT id FROM users WHERE id=$1 AND role='streamer'",
+        const target = await client.query<{ id: string; slug: string | null }>(
+          "SELECT u.id,r.slug FROM users u LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
           [request.params.streamerId],
         );
         if (!target.rows[0])
@@ -950,7 +1198,17 @@ export function buildApi() {
           "INSERT INTO follows (follower_id,streamer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING follower_id",
           [viewer.id, request.params.streamerId],
         );
-        return { following: true, created: Boolean(inserted.rows[0]) };
+        const count = await client.query<{ count: number }>(
+          "SELECT COUNT(*)::int AS count FROM follows WHERE streamer_id=$1",
+          [request.params.streamerId],
+        );
+        const followerCount = count.rows[0]?.count ?? 0;
+        if (inserted.rows[0] && target.rows[0].slug) {
+          const publicEvent = { streamerId: request.params.streamerId, slug: target.rows[0].slug, followerCount };
+          realtime?.to("discovery").to(`room:${target.rows[0].slug}`).emit("follow:changed", publicEvent);
+          realtime?.to(`user:${viewer.id}`).emit("follow:state", { ...publicEvent, following: true });
+        }
+        return { following: true, created: Boolean(inserted.rows[0]), followerCount };
       } finally {
         await client.end();
       }
@@ -967,10 +1225,10 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id=$1 AND streamer_id=$2) AS following",
+          "SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id=$1 AND streamer_id=$2) AS following,COALESCE((SELECT reminder_enabled FROM follows WHERE follower_id=$1 AND streamer_id=$2),FALSE) AS reminder_enabled",
           [viewer.id, request.params.streamerId],
         );
-        return { following: result.rows[0].following };
+        return result.rows[0];
       } finally {
         await client.end();
       }
@@ -985,16 +1243,16 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,
+        `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_source,
                 u.id AS streamer_id,u.display_name AS streamer_name,
                 p.avatar_url,p.category,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,
-                f.created_at AS followed_at
+                f.created_at AS followed_at,f.reminder_enabled
          FROM follows f
          JOIN users u ON u.id=f.streamer_id
          JOIN streamer_profiles p ON p.user_id=u.id
          JOIN live_rooms r ON r.streamer_id=u.id
          WHERE f.follower_id=$1
-         ORDER BY (r.broadcast_state='live') DESC,
+         ORDER BY (r.broadcast_state='live' AND r.broadcast_status_source='cloudflare') DESC,
                   p.next_stream_at ASC NULLS LAST,f.created_at DESC
          LIMIT 100`,
         [viewer.id],
@@ -1004,6 +1262,101 @@ export function buildApi() {
       await client.end();
     }
   });
+  api.patch<{
+    Params: { streamerId: string };
+    Body: { enabled?: boolean };
+  }>("/api/streamers/:streamerId/reminder", async (request, reply) => {
+    const viewer = (await requireRole(request, reply, "audience")) as DemoUser | undefined;
+    if (!viewer) return;
+    if (typeof request.body?.enabled !== "boolean")
+      return reply.code(400).send({ error: "invalid_reminder_preference" });
+    const client = database();
+    await client.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ reminder_enabled: boolean }>(
+        "UPDATE follows SET reminder_enabled=$1 WHERE follower_id=$2 AND streamer_id=$3 RETURNING reminder_enabled",
+        [request.body.enabled, viewer.id, request.params.streamerId],
+      );
+      if (!result.rows[0]) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "follow_required" });
+      }
+      if (!request.body.enabled)
+        await client.query(
+          "DELETE FROM notifications WHERE user_id=$1 AND kind IN ('schedule_updated','schedule_reminder') AND read_at IS NULL AND room_id=(SELECT id FROM live_rooms WHERE streamer_id=$2)",
+          [viewer.id, request.params.streamerId],
+        );
+      await client.query("COMMIT");
+      realtime?.to(`user:${viewer.id}`).emit("reminder:preference", {
+        streamerId: request.params.streamerId,
+        enabled: result.rows[0].reminder_enabled,
+      });
+      return { enabled: result.rows[0].reminder_enabled };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      await client.end();
+    }
+  });
+  api.get<{
+    Params: { slug: string };
+    Querystring: { cursor?: string; limit?: string };
+  }>(
+    "/api/streamer/rooms/:slug/followers",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+      if (!streamer) return;
+      const rawLimit = Number(request.query.limit ?? 20);
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 && rawLimit <= 50 ? rawLimit : null;
+      const cursor = request.query.cursor ? decodeFollowerCursor(request.query.cursor) : null;
+      if (!limit) return reply.code(400).send({ error: "invalid_follower_limit" });
+      if (request.query.cursor && !cursor)
+        return reply.code(400).send({ error: "invalid_follower_cursor" });
+      const client = database();
+      await client.connect();
+      try {
+        const room = await client.query<{ id: string }>(
+          "SELECT id FROM live_rooms WHERE slug=$1 AND streamer_id=$2",
+          [request.params.slug, streamer.id],
+        );
+        if (!room.rows[0]) return reply.code(404).send({ error: "streamer_room_not_found" });
+        const [count, result] = await Promise.all([
+          client.query<{ count: number }>(
+            "SELECT COUNT(*)::int AS count FROM follows WHERE streamer_id=$1",
+            [streamer.id],
+          ),
+          client.query<{
+            id: string;
+            handle: string;
+            display_name: string;
+            created_at: Date;
+          }>(
+            "SELECT u.id,u.handle,u.display_name,f.created_at FROM follows f JOIN users u ON u.id=f.follower_id WHERE f.streamer_id=$1 AND ($2::timestamptz IS NULL OR (f.created_at,f.follower_id)<($2::timestamptz,$3::uuid)) ORDER BY f.created_at DESC,f.follower_id DESC LIMIT $4",
+            [streamer.id, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1],
+          ),
+        ]);
+        const hasMore = result.rows.length > limit;
+        const rows = result.rows.slice(0, limit);
+        return {
+          totalCount: count.rows[0]?.count ?? 0,
+          followers: rows.map((row) => ({
+            id: row.id,
+            handle: row.handle,
+            displayName: row.display_name,
+            followedAt: row.created_at.toISOString(),
+            status: "following",
+          })),
+          nextCursor: hasMore && rows.length
+            ? encodeFollowerCursor(rows[rows.length - 1].created_at, rows[rows.length - 1].id)
+            : null,
+        };
+      } finally {
+        await client.end();
+      }
+    },
+  );
   api.delete<{ Params: { streamerId: string } }>(
     "/api/streamers/:streamerId/follow",
     async (request, reply) => {
@@ -1013,10 +1366,27 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
-        await client.query(
-          "DELETE FROM follows WHERE follower_id=$1 AND streamer_id=$2",
+        const target = await client.query<{ slug: string | null }>(
+          "SELECT r.slug FROM users u LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
+          [request.params.streamerId],
+        );
+        const deleted = await client.query(
+          "DELETE FROM follows WHERE follower_id=$1 AND streamer_id=$2 RETURNING follower_id",
           [viewer.id, request.params.streamerId],
         );
+        if (deleted.rows[0] && target.rows[0]?.slug) {
+          const count = await client.query<{ count: number }>(
+            "SELECT COUNT(*)::int AS count FROM follows WHERE streamer_id=$1",
+            [request.params.streamerId],
+          );
+          const publicEvent = {
+            streamerId: request.params.streamerId,
+            slug: target.rows[0].slug,
+            followerCount: count.rows[0]?.count ?? 0,
+          };
+          realtime?.to("discovery").to(`room:${target.rows[0].slug}`).emit("follow:changed", publicEvent);
+          realtime?.to(`user:${viewer.id}`).emit("follow:state", { ...publicEvent, following: false });
+        }
         return reply.code(204).send();
       } finally {
         await client.end();
@@ -1030,10 +1400,17 @@ export function buildApi() {
     const client = database();
     await client.connect();
     try {
+      const delivered = await createDueScheduleReminders(client, viewer.id);
       const result = await client.query(
-        "SELECT id,kind,title,body,read_at,created_at FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
+        "SELECT n.id,n.kind,n.title,n.body,n.read_at,n.created_at,n.room_id,r.slug AS room_slug FROM notifications n LEFT JOIN live_rooms r ON r.id=n.room_id WHERE n.user_id=$1 ORDER BY n.created_at DESC LIMIT 50",
         [viewer.id],
       );
+      for (const notification of delivered.rows)
+        realtime?.to(`user:${viewer.id}`).emit("notification:new", {
+          id: notification.id,
+          kind: "schedule_reminder",
+          roomSlug: notification.room_slug,
+        });
       return { notifications: result.rows };
     } finally {
       await client.end();
@@ -1097,12 +1474,35 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_transport, r.cloudflare_live_input_id, u.id AS streamer_id,u.display_name AS streamer_name, p.avatar_url,p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.broadcast_transport, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id,u.display_name AS streamer_name, p.avatar_url,p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
           [request.params.slug],
         );
         if (!result.rows[0])
           return reply.code(404).send({ error: "room_not_found" });
         return { room: result.rows[0] };
+      } finally {
+        await client.end();
+      }
+    },
+  );
+  api.get<{ Params: { kind: string; slug: string } }>(
+    "/api/public/social-preview/:kind/:slug",
+    async (request, reply) => {
+      const { kind, slug } = request.params;
+      if (!validSocialPreviewPath(kind, slug)) return reply.code(404).send({ error: "preview_not_found" });
+      const client = database();
+      await client.connect();
+      try {
+        const result = await client.query(
+          "SELECT r.slug,r.title,r.broadcast_state,r.broadcast_status_source,r.stream_language,r.stream_thumbnail_url,u.display_name AS streamer_name,u.handle,p.avatar_url,p.category,p.bio FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1",
+          [slug],
+        );
+        if (!result.rows[0]) return reply.code(404).send({ error: "preview_not_found" });
+        reply.header("cache-control", "public, max-age=60, stale-while-revalidate=300");
+        reply.header("vary", "User-Agent, Accept-Encoding");
+        return reply.type("text/html; charset=utf-8").send(
+          renderSocialPreview(kind as SocialPreviewKind, result.rows[0], config.webOrigin),
+        );
       } finally {
         await client.end();
       }
@@ -1136,14 +1536,12 @@ export function buildApi() {
   api.get<{ Params: { slug: string } }>(
     "/api/rooms/:slug/chat-history",
     async (request, reply) => {
-      const user = await currentUser(request);
-      if (!user)
-        return reply.code(401).send({ error: "demo_session_required" });
+      const viewer = await currentUser(request);
       const client = database();
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT m.id,m.body,m.created_at,u.display_name,u.role FROM chat_messages m JOIN live_rooms r ON r.id=m.room_id JOIN users u ON u.id=m.sender_id WHERE r.slug=$1 ORDER BY m.created_at DESC LIMIT 40",
+          "SELECT m.id,m.body,m.created_at,u.id AS sender_id,u.display_name,u.role FROM chat_messages m JOIN live_rooms r ON r.id=m.room_id JOIN users u ON u.id=m.sender_id WHERE r.slug=$1 AND m.deleted_at IS NULL ORDER BY m.created_at DESC LIMIT 40",
           [request.params.slug],
         );
         return {
@@ -1151,7 +1549,11 @@ export function buildApi() {
             id: message.id,
             body: message.body,
             createdAt: message.created_at,
-            sender: { displayName: message.display_name, role: message.role },
+            sender: {
+              ...(viewer ? { id: message.sender_id } : {}),
+              displayName: message.display_name,
+              role: message.role,
+            },
           })),
         };
       } finally {
@@ -1204,7 +1606,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT broadcast_state,broadcast_checked_at,broadcast_status_message,broadcast_transport FROM live_rooms WHERE slug=$1",
+          "SELECT broadcast_state,broadcast_checked_at,broadcast_status_message,broadcast_status_source,broadcast_transport FROM live_rooms WHERE slug=$1",
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -1215,6 +1617,7 @@ export function buildApi() {
             checkedAt:
               result.rows[0].broadcast_checked_at?.toISOString() ?? null,
             message: result.rows[0].broadcast_status_message,
+            source: result.rows[0].broadcast_status_source,
             transport: result.rows[0].broadcast_transport,
           },
         };
@@ -1251,7 +1654,7 @@ export function buildApi() {
       }
     },
   );
-  api.post(
+  api.post<{ Querystring: { focusX?: string; focusY?: string } }>(
     "/api/streamer/avatar",
     { bodyLimit: avatarUploadLimitBytes + 64 * 1024 },
     async (request, reply) => {
@@ -1273,6 +1676,10 @@ export function buildApi() {
 
       let saved: Awaited<ReturnType<typeof saveAvatar>>;
       try {
+        const focusX = Number(request.query.focusX ?? 0.5);
+        const focusY = Number(request.query.focusY ?? 0.5);
+        if (!Number.isFinite(focusX) || !Number.isFinite(focusY) || focusX < 0 || focusX > 1 || focusY < 0 || focusY > 1)
+          return reply.code(400).send({ error: "avatar_focus_invalid" });
         const buffer = await upload.toBuffer();
         if (upload.file.truncated)
           return reply.code(413).send({ error: "avatar_too_large" });
@@ -1281,6 +1688,8 @@ export function buildApi() {
           userId: streamer.id,
           mimeType: upload.mimetype,
           buffer,
+          focusX,
+          focusY,
         });
       } catch (error) {
         if (error instanceof AvatarUploadError)
@@ -1350,6 +1759,85 @@ export function buildApi() {
       await client.end();
     }
     await removeStoredAvatar(config.avatarStoragePath, previousAvatarUrl);
+    return reply.code(204).send();
+  });
+  api.post(
+    "/api/streamer/stream-thumbnail",
+    { bodyLimit: streamThumbnailUploadLimitBytes + 64 * 1024 },
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+      if (!streamer) return;
+      let upload;
+      try {
+        upload = await request.file({ limits: { files: 1, fields: 0, fileSize: streamThumbnailUploadLimitBytes } });
+      } catch {
+        return reply.code(413).send({ error: "thumbnail_too_large" });
+      }
+      if (!upload) return reply.code(400).send({ error: "thumbnail_file_required" });
+      let saved: Awaited<ReturnType<typeof saveStreamThumbnail>>;
+      try {
+        const buffer = await upload.toBuffer();
+        if (upload.file.truncated) return reply.code(413).send({ error: "thumbnail_too_large" });
+        saved = await saveStreamThumbnail({ storagePath: config.avatarStoragePath, userId: streamer.id, mimeType: upload.mimetype, buffer });
+      } catch (error) {
+        if (error instanceof StreamThumbnailUploadError)
+          return reply.code(400).send({ error: error.code });
+        throw error;
+      }
+      const client = database();
+      await client.connect();
+      let previous: string | null = null;
+      try {
+        await client.query("BEGIN");
+        const current = await client.query<{ stream_thumbnail_url: string | null }>(
+          "SELECT stream_thumbnail_url FROM live_rooms WHERE streamer_id=$1 FOR UPDATE",
+          [streamer.id],
+        );
+        if (!current.rows[0]) {
+          await client.query("ROLLBACK");
+          await removeStoredStreamThumbnail(config.avatarStoragePath, saved.url);
+          return reply.code(404).send({ error: "streamer_room_not_found" });
+        }
+        previous = current.rows[0].stream_thumbnail_url;
+        await client.query("UPDATE live_rooms SET stream_thumbnail_url=$1,updated_at=NOW() WHERE streamer_id=$2", [saved.url, streamer.id]);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        await removeStoredStreamThumbnail(config.avatarStoragePath, saved.url);
+        throw error;
+      } finally {
+        await client.end();
+      }
+      await removeStoredStreamThumbnail(config.avatarStoragePath, previous);
+      return { thumbnailUrl: saved.url };
+    },
+  );
+  api.delete("/api/streamer/stream-thumbnail", async (request, reply) => {
+    const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+    if (!streamer) return;
+    const client = database();
+    await client.connect();
+    let previous: string | null = null;
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ stream_thumbnail_url: string | null }>(
+        "SELECT stream_thumbnail_url FROM live_rooms WHERE streamer_id=$1 FOR UPDATE",
+        [streamer.id],
+      );
+      previous = result.rows[0]?.stream_thumbnail_url ?? null;
+      if (!result.rows[0]) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "streamer_room_not_found" });
+      }
+      await client.query("UPDATE live_rooms SET stream_thumbnail_url=NULL,updated_at=NOW() WHERE streamer_id=$1", [streamer.id]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      await client.end();
+    }
+    await removeStoredStreamThumbnail(config.avatarStoragePath, previous);
     return reply.code(204).send();
   });
   api.post<{
@@ -1498,6 +1986,69 @@ export function buildApi() {
       });
       broadcastRecoveryWindows.delete(request.params.slug);
       return reply.code(204).send();
+    },
+  );
+  api.post<{ Params: { slug: string } }>(
+    "/api/streamer/rooms/:slug/broadcast/end",
+    async (request, reply) => {
+      const streamer = (await requireRole(request, reply, "streamer")) as
+        | DemoUser
+        | undefined;
+      if (!streamer) return;
+      const client = database();
+      await client.connect();
+      let selectedRoom: {
+        broadcast_state: BroadcastStatus["state"];
+        broadcast_transport: BroadcastTransport;
+        broadcast_status_source: BroadcastStatus["source"];
+      } | null = null;
+      try {
+        const room = await client.query<{
+          broadcast_state: BroadcastStatus["state"];
+          broadcast_transport: BroadcastTransport;
+          broadcast_status_source: BroadcastStatus["source"];
+        }>(
+          "SELECT broadcast_state,broadcast_transport,broadcast_status_source FROM live_rooms WHERE slug=$1 AND streamer_id=$2",
+          [request.params.slug, streamer.id],
+        );
+        if (!room.rows[0])
+          return reply.code(404).send({ error: "streamer_room_not_found" });
+        selectedRoom = room.rows[0];
+        if (
+          room.rows[0].broadcast_transport === "obs_hls" &&
+          room.rows[0].broadcast_status_source === "cloudflare" &&
+          room.rows[0].broadcast_state === "live"
+        )
+          return reply.code(409).send({ error: "external_broadcast_still_live" });
+        await client.query(
+          "UPDATE broadcast_sessions s SET state='ended',ended_at=NOW(),failure_code='creator_ended',updated_at=NOW() FROM live_rooms r WHERE s.room_id=r.id AND r.slug=$1 AND s.creator_id=$2 AND s.state IN ('connecting','active')",
+          [request.params.slug, streamer.id],
+        );
+      } finally {
+        await client.end();
+      }
+      if (!selectedRoom)
+        return reply.code(404).send({ error: "streamer_room_not_found" });
+      const resources = [...webRtcResources.entries()].filter(
+        ([, resource]) =>
+          resource.kind === "publish" &&
+          resource.roomSlug === request.params.slug &&
+          resource.userId === streamer.id,
+      );
+      for (const [sessionId, resource] of resources) {
+        webRtcResources.delete(sessionId);
+        await endWebRtcResource(resource.resourceUrl);
+      }
+      broadcastRecoveryWindows.delete(request.params.slug);
+      await persistBroadcastStatus(request.params.slug, {
+        state: "offline",
+        message:
+          selectedRoom.broadcast_status_source === "cloudflare"
+            ? "Broadcast ended by the creator."
+            : "Simulation only: offline. No media is being published by this control.",
+        source: selectedRoom.broadcast_status_source,
+      });
+      return { ended: true };
     },
   );
   api.patch<{ Params: { slug: string; sessionId: string } }>(
@@ -1672,7 +2223,7 @@ export function buildApi() {
         ? {
             ...localBroadcastStatus(),
             state: requested,
-            message: `Local development fallback reports ${requested} broadcast.`,
+            message: `Simulation only: ${requested}. No media is being published by this control.`,
           }
         : localBroadcastStatus();
       return {
@@ -1687,8 +2238,6 @@ export function buildApi() {
     "/api/rooms/:slug/webrtc/play",
     async (request, reply) => {
       const user = await currentUser(request);
-      if (!user)
-        return reply.code(401).send({ error: "demo_session_required" });
       if (!hasCloudflareQuickLiveConfiguration())
         return reply.code(503).send({ error: "webrtc_service_unavailable" });
       const offerSdp = request.body?.sdp;
@@ -1719,7 +2268,9 @@ export function buildApi() {
           "SELECT s.id FROM private_show_sessions s WHERE s.room_id=$1 AND s.status='live'",
           [room.id],
         );
-        if (privateShow.rows[0] && user.role === "audience") {
+        if (privateShow.rows[0] && (!user || user.role === "audience")) {
+          if (!user)
+            return reply.code(403).send({ error: "private_show_access_required" });
           const access = await client.query(
             "SELECT id FROM private_show_access WHERE session_id=$1 AND viewer_id=$2 AND (expires_at IS NULL OR expires_at>NOW())",
             [privateShow.rows[0].id, user.id],
@@ -1744,7 +2295,7 @@ export function buildApi() {
         webRtcResources.set(sessionId, {
           resourceUrl: exchange.resourceUrl,
           roomSlug: request.params.slug,
-          userId: user.id,
+          userId: user?.id ?? null,
           kind: "playback",
           expiresAt: Date.now() + playbackResourceTtlMilliseconds,
         });
@@ -1759,14 +2310,12 @@ export function buildApi() {
     "/api/rooms/:slug/webrtc/play/:sessionId",
     async (request, reply) => {
       const user = await currentUser(request);
-      if (!user)
-        return reply.code(401).send({ error: "demo_session_required" });
       const resource = webRtcResources.get(request.params.sessionId);
       if (
         !resource ||
         resource.kind !== "playback" ||
         resource.roomSlug !== request.params.slug ||
-        resource.userId !== user.id
+        resource.userId !== (user?.id ?? null)
       )
         return reply.code(404).send({ error: "playback_session_not_found" });
       webRtcResources.delete(request.params.sessionId);
@@ -1778,14 +2327,12 @@ export function buildApi() {
     "/api/rooms/:slug/webrtc/play/:sessionId",
     async (request, reply) => {
       const user = await currentUser(request);
-      if (!user)
-        return reply.code(401).send({ error: "demo_session_required" });
       const resource = webRtcResources.get(request.params.sessionId);
       if (
         !resource ||
         resource.kind !== "playback" ||
         resource.roomSlug !== request.params.slug ||
-        resource.userId !== user.id
+        resource.userId !== (user?.id ?? null)
       )
         return reply.code(404).send({ error: "playback_session_not_found" });
       resource.expiresAt = Date.now() + playbackResourceTtlMilliseconds;
@@ -1796,8 +2343,6 @@ export function buildApi() {
     "/api/rooms/:slug/playback",
     async (request, reply) => {
       const user = await currentUser(request);
-      if (!user)
-        return reply.code(401).send({ error: "demo_session_required" });
       const client = database();
       await client.connect();
       try {
@@ -1819,7 +2364,9 @@ export function buildApi() {
           "SELECT s.id FROM private_show_sessions s JOIN live_rooms r ON r.id=s.room_id WHERE r.slug=$1 AND s.status='live'",
           [request.params.slug],
         );
-        if (privateShow.rows[0] && user.role === "audience") {
+        if (privateShow.rows[0] && (!user || user.role === "audience")) {
+          if (!user)
+            return reply.code(403).send({ error: "private_show_access_required" });
           const access = await client.query(
             "SELECT id FROM private_show_access WHERE session_id=$1 AND viewer_id=$2 AND (expires_at IS NULL OR expires_at > NOW())",
             [privateShow.rows[0].id, user.id],
@@ -1878,6 +2425,62 @@ export function buildApi() {
       await client.end();
     }
   });
+  api.get("/api/wallet/orders", async (request, reply) => {
+    const user = (await requireRole(request, reply, "audience")) as DemoUser | undefined;
+    if (!user) return;
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query(
+        "SELECT id,amount,created_at FROM test_credit_orders WHERE user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 30",
+        [user.id],
+      );
+      return { packages: [100, 500, 1000, 5000], orders: result.rows };
+    } finally {
+      await client.end();
+    }
+  });
+  api.post<{ Body: { amount?: number; idempotencyKey?: string } }>(
+    "/api/wallet/orders",
+    { schema: { body: mutationSchemas.testCreditOrder } },
+    async (request, reply) => {
+      const user = (await requireRole(request, reply, "audience")) as DemoUser | undefined;
+      if (!user) return;
+      const amount = request.body?.amount;
+      const idempotencyKey = request.body?.idempotencyKey;
+      if (!amount || !idempotencyKey)
+        return reply.code(400).send({ error: "test_order_required" });
+      const client = database();
+      await client.connect();
+      try {
+        await client.query("BEGIN");
+        const existing = await client.query<{ id: string; amount: number; created_at: Date }>(
+          "SELECT id,amount,created_at FROM test_credit_orders WHERE idempotency_key=$1 AND user_id=$2",
+          [idempotencyKey, user.id],
+        );
+        if (existing.rows[0]) {
+          await client.query("COMMIT");
+          return { order: existing.rows[0], duplicate: true };
+        }
+        const orderId = crypto.randomUUID();
+        const created = await client.query<{ id: string; amount: number; created_at: Date }>(
+          "INSERT INTO test_credit_orders (id,user_id,amount,idempotency_key) VALUES ($1,$2,$3,$4) RETURNING id,amount,created_at",
+          [orderId, user.id, amount, idempotencyKey],
+        );
+        await client.query(
+          "INSERT INTO wallet_ledger (id,user_id,entry_type,amount,idempotency_key,reference_type,reference_id) VALUES ($1,$2,'test_order_credit',$3,$4,'test_order',$5)",
+          [crypto.randomUUID(), user.id, amount, `${idempotencyKey}:credit`, orderId],
+        );
+        await client.query("COMMIT");
+        return { order: created.rows[0], duplicate: false };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        await client.end();
+      }
+    },
+  );
   api.get<{ Querystring: { period?: string } }>(
     "/api/streamer/wallet/summary",
     async (request, reply) => {
@@ -2117,14 +2720,19 @@ export function buildApi() {
         title: string;
         streamer_id: string;
         room_id: string;
+        broadcast_state: string;
       }>(
-        "SELECT a.id,a.coin_cost,a.title,r.streamer_id,r.id room_id FROM room_actions a JOIN live_rooms r ON r.id=a.room_id WHERE r.slug=$1 AND a.id=$2 AND a.is_active=TRUE FOR UPDATE",
+        "SELECT a.id,a.coin_cost,a.title,r.streamer_id,r.id room_id,r.broadcast_state FROM room_actions a JOIN live_rooms r ON r.id=a.room_id WHERE r.slug=$1 AND a.id=$2 AND a.is_active=TRUE FOR UPDATE",
         [request.params.slug, request.params.actionId],
       );
       const item = action.rows[0];
       if (!item) {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "action_not_found" });
+      }
+      if (item.broadcast_state !== "live") {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({ error: "broadcast_not_live" });
       }
       const balance = await client.query<{ balance: string }>(
         "SELECT COALESCE(SUM(amount),0)::text balance FROM (SELECT amount FROM wallet_ledger WHERE user_id=$1 FOR UPDATE) AS locked_entries",
@@ -2214,8 +2822,8 @@ export function buildApi() {
         await client.query("COMMIT");
         return { duplicate: true };
       }
-      const room = await client.query<{ id: string; streamer_id: string }>(
-        "SELECT id, streamer_id FROM live_rooms WHERE slug = $1",
+      const room = await client.query<{ id: string; streamer_id: string; broadcast_state: string }>(
+        "SELECT id, streamer_id, broadcast_state FROM live_rooms WHERE slug = $1 FOR UPDATE",
         [request.params.slug],
       );
       const gift = await client.query<{
@@ -2233,6 +2841,10 @@ export function buildApi() {
       if (!room.rows[0] || !gift.rows[0]) {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "room_or_gift_not_found" });
+      }
+      if (room.rows[0].broadcast_state !== "live") {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({ error: "broadcast_not_live" });
       }
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
         `${room.rows[0].id}:${sender.id}:${giftId}:gift-combo`,
@@ -2392,10 +3004,14 @@ export function buildApi() {
       DemoUser | undefined;
     if (!admin) return;
     const { targetId, action, reason } = request.body ?? {};
+    const normalizedReason = reason?.trim();
     if (
       !targetId ||
       !action ||
-      !["mute", "ban", "unmute", "unban"].includes(action)
+      !["mute", "ban", "unmute", "unban"].includes(action) ||
+      !normalizedReason ||
+      normalizedReason.length < 2 ||
+      normalizedReason.length > 500
     )
       return reply.code(400).send({ error: "invalid_moderation_action" });
     const client = database();
@@ -2411,7 +3027,7 @@ export function buildApi() {
         action === "mute" || action === "unmute" ? "is_muted" : "is_banned";
       const value = action === "mute" || action === "ban";
       const target = await client.query<{ id: string; display_name: string }>(
-        `UPDATE users SET ${flag} = $1, updated_at = NOW() WHERE id = $2 RETURNING id, display_name`,
+        `UPDATE users SET ${flag} = $1, updated_at = NOW() WHERE id = $2 AND role<>'admin' RETURNING id, display_name`,
         [value, targetId],
       );
       if (!target.rows[0])
@@ -2424,14 +3040,14 @@ export function buildApi() {
           admin.id,
           targetId,
           action,
-          reason ?? null,
+          normalizedReason,
         ],
       );
       const event = {
         action,
         targetId,
         targetName: target.rows[0].display_name,
-        reason: reason ?? null,
+        reason: normalizedReason,
       };
       realtime
         ?.to(`room:${request.params.slug}`)
@@ -2443,13 +3059,18 @@ export function buildApi() {
   });
   api.post<{
     Params: { slug: string };
-    Body: { targetId?: string; action?: "mute" | "unmute" };
+    Body: {
+      targetId?: string;
+      messageId?: string;
+      action?: "mute" | "unmute" | "timeout" | "ban" | "unban" | "delete";
+      durationSeconds?: number;
+    };
   }>("/api/streamer/rooms/:slug/moderation", async (request, reply) => {
     const streamer = (await requireRole(request, reply, "streamer")) as
       DemoUser | undefined;
     if (!streamer) return;
-    const { targetId, action } = request.body ?? {};
-    if (!targetId || !action || !["mute", "unmute"].includes(action))
+    const { targetId, messageId, action, durationSeconds } = request.body ?? {};
+    if (!action || !["mute", "unmute", "timeout", "ban", "unban", "delete"].includes(action))
       return reply
         .code(400)
         .send({ error: "invalid_creator_moderation_action" });
@@ -2462,16 +3083,34 @@ export function buildApi() {
       );
       if (!room.rows[0])
         return reply.code(404).send({ error: "streamer_room_not_found" });
+      if (action === "delete") {
+        if (!messageId) return reply.code(400).send({ error: "message_id_required" });
+        const deleted = await client.query<{ id: string; sender_id: string; display_name: string }>(
+          "UPDATE chat_messages m SET deleted_at=NOW(),deleted_by=$1 FROM users u WHERE m.id=$2 AND m.room_id=$3 AND m.deleted_at IS NULL AND u.id=m.sender_id RETURNING m.id,m.sender_id,u.display_name",
+          [streamer.id, messageId, room.rows[0].id],
+        );
+        if (!deleted.rows[0]) return reply.code(404).send({ error: "chat_message_not_found" });
+        await client.query(
+          "INSERT INTO moderation_events (id,room_id,actor_id,target_id,action,reason) VALUES ($1,$2,$3,$4,$5,$6)",
+          [crypto.randomUUID(), room.rows[0].id, streamer.id, deleted.rows[0].sender_id, "creator_delete_message", "creator live-chat moderation"],
+        );
+        const event = { action: "creator_delete_message", messageId, targetId: deleted.rows[0].sender_id, targetName: deleted.rows[0].display_name };
+        realtime?.to(`room:${request.params.slug}`).emit("chat:deleted", event);
+        return { event };
+      }
+      if (!targetId) return reply.code(400).send({ error: "audience_target_required" });
       const target = await client.query<{ display_name: string }>(
         "SELECT display_name FROM users WHERE id=$1 AND role='audience'",
         [targetId],
       );
       if (!target.rows[0])
         return reply.code(404).send({ error: "audience_target_not_found" });
-      const muted = action === "mute";
+      const timeoutSeconds = action === "timeout" ? Math.min(86_400, Math.max(30, Math.round(durationSeconds ?? 600))) : null;
+      const muted = action === "mute" || action === "timeout";
+      const banned = action === "ban";
       await client.query(
-        "INSERT INTO room_moderation_restrictions (room_id,user_id,is_muted) VALUES ($1,$2,$3) ON CONFLICT (room_id,user_id) DO UPDATE SET is_muted=EXCLUDED.is_muted,updated_at=NOW()",
-        [room.rows[0].id, targetId, muted],
+        "INSERT INTO room_moderation_restrictions (room_id,user_id,is_muted,is_banned,muted_until) VALUES ($1,$2,$3,$4,CASE WHEN $5::int IS NULL THEN NULL ELSE NOW()+($5::text || ' seconds')::interval END) ON CONFLICT (room_id,user_id) DO UPDATE SET is_muted=CASE WHEN $6 IN ('mute','timeout') THEN TRUE WHEN $6='unmute' THEN FALSE ELSE room_moderation_restrictions.is_muted END,is_banned=CASE WHEN $6='ban' THEN TRUE WHEN $6='unban' THEN FALSE ELSE room_moderation_restrictions.is_banned END,muted_until=CASE WHEN $6='timeout' THEN NOW()+($5::text || ' seconds')::interval WHEN $6 IN ('mute','unmute') THEN NULL ELSE room_moderation_restrictions.muted_until END,updated_at=NOW()",
+        [room.rows[0].id, targetId, muted, banned, timeoutSeconds, action],
       );
       await client.query(
         "INSERT INTO moderation_events (id,room_id,actor_id,target_id,action,reason) VALUES ($1,$2,$3,$4,$5,$6)",
@@ -2481,7 +3120,7 @@ export function buildApi() {
           streamer.id,
           targetId,
           `creator_${action}`,
-          "local creator moderation",
+          action === "timeout" ? `timeout_${timeoutSeconds}_seconds` : "creator live-chat moderation",
         ],
       );
       const event = {
@@ -2493,6 +3132,34 @@ export function buildApi() {
         ?.to(`room:${request.params.slug}`)
         .emit("moderation:action", event);
       return { event };
+    } finally {
+      await client.end();
+    }
+  });
+  api.put<{
+    Params: { slug: string };
+    Body: { slowModeSeconds?: number; blockedTerms?: string[] };
+  }>("/api/streamer/rooms/:slug/chat-settings", async (request, reply) => {
+    const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
+    if (!streamer) return;
+    const slowModeSeconds = request.body?.slowModeSeconds;
+    const blockedTerms = request.body?.blockedTerms?.map((term) => term.trim().toLocaleLowerCase()).filter(Boolean);
+    if (
+      (slowModeSeconds === undefined && blockedTerms === undefined) ||
+      (slowModeSeconds !== undefined && (!Number.isInteger(slowModeSeconds) || slowModeSeconds < 0 || slowModeSeconds > 300)) ||
+      (blockedTerms && (blockedTerms.length > 50 || blockedTerms.some((term) => term.length > 60)))
+    ) return reply.code(400).send({ error: "invalid_chat_settings" });
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query(
+        "UPDATE live_rooms SET chat_slow_mode_seconds=COALESCE($1,chat_slow_mode_seconds),blocked_terms=COALESCE($2,blocked_terms),updated_at=NOW() WHERE slug=$3 AND streamer_id=$4 RETURNING chat_slow_mode_seconds,blocked_terms",
+        [slowModeSeconds ?? null, blockedTerms ? Array.from(new Set(blockedTerms)) : null, request.params.slug, streamer.id],
+      );
+      if (!result.rows[0]) return reply.code(404).send({ error: "streamer_room_not_found" });
+      const event = { slowModeSeconds: result.rows[0].chat_slow_mode_seconds, blockedTermsCount: result.rows[0].blocked_terms.length };
+      realtime?.to(`room:${request.params.slug}`).emit("chat:settings", event);
+      return { settings: result.rows[0] };
     } finally {
       await client.end();
     }
@@ -2573,8 +3240,6 @@ export function buildApi() {
     "/api/rooms/:slug/private-show",
     async (request, reply) => {
       const viewer = await currentUser(request);
-      if (!viewer)
-        return reply.code(401).send({ error: "demo_session_required" });
       const client = database();
       await client.connect();
       try {
@@ -2590,10 +3255,12 @@ export function buildApi() {
         );
         const session = result.rows[0];
         if (!session) return { active: false };
-        const access = await client.query<{ expires_at: Date | null }>(
-          "SELECT expires_at FROM private_show_access WHERE session_id=$1 AND viewer_id=$2 AND (expires_at IS NULL OR expires_at > NOW())",
-          [session.id, viewer.id],
-        );
+        const access = viewer
+          ? await client.query<{ expires_at: Date | null }>(
+              "SELECT expires_at FROM private_show_access WHERE session_id=$1 AND viewer_id=$2 AND (expires_at IS NULL OR expires_at > NOW())",
+              [session.id, viewer.id],
+            )
+          : { rows: [] as { expires_at: Date | null }[] };
         return {
           active: true,
           session: {
@@ -2718,7 +3385,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
+        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,r.stream_language,r.stream_tags,r.stream_thumbnail_url,r.chat_slow_mode_seconds,r.blocked_terms,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
         [user.id],
       );
       return {
@@ -2817,7 +3484,17 @@ export function buildApi() {
           "SELECT sender,SUM(coin_cost)::int AS total FROM (SELECT u.display_name AS sender,g.coin_cost FROM gifts g JOIN users u ON u.id=g.sender_id WHERE g.room_id=$1 AND g.created_at>=$2 AND ($3::timestamptz IS NULL OR g.created_at<$3) UNION ALL SELECT u.display_name AS sender,p.coin_cost FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id JOIN users u ON u.id=p.viewer_id WHERE a.room_id=$1 AND p.created_at>=$2 AND ($3::timestamptz IS NULL OR p.created_at<$3)) support GROUP BY sender ORDER BY total DESC,sender LIMIT 1",
           bounds,
         );
+        const engagement = await client.query<{
+          chat_messages: number;
+          unique_chatters: number;
+          supporter_count: number;
+          new_followers: number;
+        }>(
+          "SELECT (SELECT COUNT(*)::int FROM chat_messages m WHERE m.room_id=$1 AND m.deleted_at IS NULL AND m.created_at>=$2 AND ($3::timestamptz IS NULL OR m.created_at<$3)) AS chat_messages,(SELECT COUNT(DISTINCT m.sender_id)::int FROM chat_messages m WHERE m.room_id=$1 AND m.deleted_at IS NULL AND m.created_at>=$2 AND ($3::timestamptz IS NULL OR m.created_at<$3)) AS unique_chatters,(SELECT COUNT(DISTINCT supporter_id)::int FROM (SELECT g.sender_id AS supporter_id FROM gifts g WHERE g.room_id=$1 AND g.created_at>=$2 AND ($3::timestamptz IS NULL OR g.created_at<$3) UNION SELECT p.viewer_id AS supporter_id FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id WHERE a.room_id=$1 AND p.created_at>=$2 AND ($3::timestamptz IS NULL OR p.created_at<$3)) s) AS supporter_count,(SELECT COUNT(*)::int FROM follows f JOIN live_rooms lr ON lr.streamer_id=f.streamer_id WHERE lr.id=$1 AND f.created_at>=$2 AND ($3::timestamptz IS NULL OR f.created_at<$3)) AS new_followers",
+          bounds,
+        );
         const stats = totals.rows[0];
+        const activity = engagement.rows[0];
         const endedAt = room.ended_at?.toISOString() ?? null;
         const durationEnd = room.ended_at?.getTime() ?? Date.now();
         return {
@@ -2837,6 +3514,10 @@ export function buildApi() {
             actionCount: stats.action_count,
             totalSupport: stats.gift_total + stats.action_total,
             topSupporter: top.rows[0] ?? null,
+            supporterCount: activity.supporter_count,
+            chatMessages: activity.chat_messages,
+            uniqueChatters: activity.unique_chatters,
+            newFollowers: activity.new_followers,
           },
         };
       } finally {
@@ -2847,8 +3528,6 @@ export function buildApi() {
   api.get<{ Params: { slug: string } }>(
     "/api/rooms/:slug/support-feed",
     async (request, reply) => {
-      const viewer = await requireRole(request, reply, "audience");
-      if (!viewer) return;
       const client = database();
       await client.connect();
       try {
@@ -2899,6 +3578,11 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
+        await client.query("BEGIN");
+        const before = await client.query<{ next_stream_at: Date | null }>(
+          "SELECT next_stream_at FROM streamer_profiles WHERE user_id=$1 FOR UPDATE",
+          [streamer.id],
+        );
         const update = await client.query(
           `UPDATE streamer_profiles
            SET bio=COALESCE($1,bio),category=COALESCE($2,category),
@@ -2919,7 +3603,57 @@ export function buildApi() {
             streamer.id,
           ],
         );
+        const room = await client.query<{ id: string; slug: string }>(
+          "SELECT id,slug FROM live_rooms WHERE streamer_id=$1",
+          [streamer.id],
+        );
+        const changedSchedule = nextStreamSupplied &&
+          (before.rows[0]?.next_stream_at?.toISOString() ?? null) !==
+            (update.rows[0]?.next_stream_at?.toISOString() ?? null);
+        let notified: { user_id: string; id: string }[] = [];
+        if (changedSchedule && update.rows[0]?.next_stream_at && new Date(update.rows[0].next_stream_at).getTime() > Date.now() && room.rows[0]) {
+          const created = await client.query<{ user_id: string; id: string }>(
+            `INSERT INTO notifications
+               (id,user_id,kind,title,body,room_id,notification_key)
+             SELECT gen_random_uuid(),f.follower_id,'schedule_updated',
+                    CASE WHEN viewer.locale='zh' THEN '主播更新了直播时间' ELSE 'Creator schedule updated' END,
+                    CASE WHEN viewer.locale='zh'
+                      THEN $1 || ' 发布了新的下一场直播时间。'
+                      ELSE $1 || ' published a new upcoming stream time.' END,
+                    $2,'schedule_updated:' || $3::uuid::text || ':' || EXTRACT(EPOCH FROM $4::timestamptz)::bigint::text
+             FROM follows f JOIN users viewer ON viewer.id=f.follower_id
+             WHERE f.streamer_id=$3::uuid AND f.reminder_enabled=TRUE
+             ON CONFLICT (user_id,notification_key) WHERE notification_key IS NOT NULL DO NOTHING
+             RETURNING user_id,id`,
+            [streamer.displayName, room.rows[0].id, streamer.id, update.rows[0].next_stream_at],
+          );
+          notified = created.rows;
+        } else if (changedSchedule && !update.rows[0]?.next_stream_at && room.rows[0]) {
+          await client.query(
+            "DELETE FROM notifications WHERE room_id=$1 AND kind IN ('schedule_updated','schedule_reminder') AND read_at IS NULL",
+            [room.rows[0].id],
+          );
+        }
+        await client.query("COMMIT");
+        if (changedSchedule && room.rows[0]) {
+          const event = {
+            streamerId: streamer.id,
+            slug: room.rows[0].slug,
+            nextStreamAt: update.rows[0]?.next_stream_at?.toISOString() ?? null,
+            scheduleTimezone: update.rows[0]?.schedule_timezone ?? scheduleTimezone ?? "UTC",
+          };
+          realtime?.to("discovery").emit("schedule:changed", event);
+          for (const item of notified)
+            realtime?.to(`user:${item.user_id}`).emit("notification:new", {
+              id: item.id,
+              kind: "schedule_updated",
+              roomSlug: room.rows[0].slug,
+            });
+        }
         return { profile: update.rows[0] };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
       } finally {
         await client.end();
       }
@@ -2927,7 +3661,14 @@ export function buildApi() {
   );
   api.put<{
     Params: { slug: string };
-    Body: { title?: string; goalText?: string; goalTarget?: number };
+    Body: {
+      title?: string;
+      goalText?: string;
+      goalTarget?: number;
+      category?: string;
+      streamLanguage?: "en" | "zh";
+      streamTags?: string[];
+    };
   }>("/api/streamer/rooms/:slug", async (request, reply) => {
     const streamer = (await requireRole(request, reply, "streamer")) as
       DemoUser | undefined;
@@ -2935,10 +3676,16 @@ export function buildApi() {
     const title = request.body?.title?.trim();
     const goal = request.body?.goalText?.trim();
     const goalTarget = request.body?.goalTarget;
+    const category = request.body?.category?.trim();
+    const streamLanguage = request.body?.streamLanguage;
+    const streamTags = request.body?.streamTags?.map((item) => item.trim()).filter(Boolean);
     if (
-      (!title && !goal && goalTarget === undefined) ||
+      (!title && !goal && goalTarget === undefined && !category && !streamLanguage && streamTags === undefined) ||
       (title && title.length > 120) ||
       (goal && goal.length > 300) ||
+      (category && category.length > 60) ||
+      (streamLanguage && !["en", "zh"].includes(streamLanguage)) ||
+      (streamTags && (streamTags.length > 5 || streamTags.some((item) => item.length > 24))) ||
       (goalTarget !== undefined &&
         (!Number.isInteger(goalTarget) ||
           goalTarget < 1 ||
@@ -2948,19 +3695,30 @@ export function buildApi() {
     const client = database();
     await client.connect();
     try {
+      await client.query("BEGIN");
       const update = await client.query(
-        "UPDATE live_rooms SET title=COALESCE($1,title),goal_text=COALESCE($2,goal_text),goal_target=COALESCE($3,goal_target),updated_at=NOW() WHERE slug=$4 AND streamer_id=$5 RETURNING title,goal_text,goal_target,goal_progress",
+        "UPDATE live_rooms SET title=COALESCE($1,title),goal_text=COALESCE($2,goal_text),goal_target=COALESCE($3,goal_target),stream_language=COALESCE($4,stream_language),stream_tags=COALESCE($5,stream_tags),updated_at=NOW() WHERE slug=$6 AND streamer_id=$7 RETURNING title,goal_text,goal_target,goal_progress,stream_language,stream_tags,stream_thumbnail_url",
         [
           title ?? null,
           goal ?? null,
           goalTarget ?? null,
+          streamLanguage ?? null,
+          streamTags ?? null,
           request.params.slug,
           streamer.id,
         ],
       );
-      if (!update.rows[0])
+      if (!update.rows[0]) {
+        await client.query("ROLLBACK");
         return reply.code(404).send({ error: "streamer_room_not_found" });
+      }
+      if (category)
+        await client.query("UPDATE streamer_profiles SET category=$1 WHERE user_id=$2", [category, streamer.id]);
+      await client.query("COMMIT");
       return { room: update.rows[0] };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
     } finally {
       await client.end();
     }
@@ -3282,7 +4040,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT r.slug,r.title,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,u.display_name AS streamer_name FROM live_rooms r JOIN users u ON u.id=r.streamer_id ORDER BY r.title LIMIT 100",
+        "SELECT r.slug,r.title,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,u.display_name AS streamer_name FROM live_rooms r JOIN users u ON u.id=r.streamer_id ORDER BY r.title LIMIT 100",
       );
       return { rooms: result.rows };
     } finally {
@@ -3397,8 +4155,15 @@ io.use(async (socket, next) => {
     const user = await userForSessionToken(
       sessionTokenFromCookieHeader(socket.handshake.headers.cookie),
     );
-    if (!user) return next(new Error("session_required"));
-    socket.data.user = user;
+    socket.data.user = user ?? {
+      id: `guest:${socket.id}`,
+      handle: "public-guest",
+      displayName: "Guest",
+      role: "audience",
+      locale: "en",
+      ageAcknowledged: false,
+    } satisfies DemoUser;
+    socket.data.authenticated = Boolean(user);
     next();
   } catch (error) {
     next(error as Error);
@@ -3408,6 +4173,7 @@ io.on("connection", (socket) => {
   runtimeMetrics.realtimeConnectionsTotal += 1;
   runtimeMetrics.realtimeConnectionsCurrent += 1;
   const user = socket.data.user as DemoUser;
+  if (socket.data.authenticated) void socket.join(`user:${user.id}`);
   api.log.info(
     { socketId: socket.id, role: user.role },
     "Realtime test client connected",
@@ -3467,13 +4233,14 @@ io.on("connection", (socket) => {
     ) => {
       const slug = payload.roomSlug;
       const body = payload.body?.trim();
+      if (!socket.data.authenticated)
+        return done?.({ error: "session_required" });
       if (!slug || !socket.rooms.has(`room:${slug}`))
         return done?.({ error: "room_join_required" });
       if (!body || body.length > 500)
         return done?.({ error: "invalid_message" });
       if (user.role !== "admin" && Date.now() - lastMessageAt < 800)
         return done?.({ error: "rate_limited" });
-      lastMessageAt = Date.now();
       const client = database();
       await client.connect();
       try {
@@ -3483,17 +4250,25 @@ io.on("connection", (socket) => {
         }>("SELECT is_muted, is_banned FROM users WHERE id = $1", [user.id]);
         if (restriction.rows[0]?.is_banned) return done?.({ error: "banned" });
         if (restriction.rows[0]?.is_muted) return done?.({ error: "muted" });
-        const room = await client.query<{ id: string }>(
-          "SELECT id FROM live_rooms WHERE slug = $1",
+        const room = await client.query<{ id: string; chat_slow_mode_seconds: number; blocked_terms: string[] }>(
+          "SELECT id,chat_slow_mode_seconds,blocked_terms FROM live_rooms WHERE slug = $1",
           [slug],
         );
         if (!room.rows[0]) return done?.({ error: "room_not_found" });
-        const roomRestriction = await client.query<{ is_muted: boolean }>(
-          "SELECT is_muted FROM room_moderation_restrictions WHERE room_id=$1 AND user_id=$2",
+        const roomRestriction = await client.query<{ is_muted: boolean; is_banned: boolean; muted_until: Date | null }>(
+          "SELECT is_muted,is_banned,muted_until FROM room_moderation_restrictions WHERE room_id=$1 AND user_id=$2",
           [room.rows[0].id, user.id],
         );
-        if (roomRestriction.rows[0]?.is_muted)
+        if (roomRestriction.rows[0]?.is_banned)
+          return done?.({ error: "banned" });
+        if (roomRestriction.rows[0]?.is_muted && (!roomRestriction.rows[0].muted_until || roomRestriction.rows[0].muted_until.getTime() > Date.now()))
           return done?.({ error: "muted" });
+        if (user.role === "audience" && room.rows[0].chat_slow_mode_seconds > 0 && Date.now() - lastMessageAt < room.rows[0].chat_slow_mode_seconds * 1000)
+          return done?.({ error: "slow_mode", retryAfterSeconds: Math.ceil((room.rows[0].chat_slow_mode_seconds * 1000 - (Date.now() - lastMessageAt)) / 1000) });
+        const normalizedBody = body.toLocaleLowerCase();
+        if (user.role === "audience" && room.rows[0].blocked_terms.some((term) => normalizedBody.includes(term.toLocaleLowerCase())))
+          return done?.({ error: "blocked_term" });
+        lastMessageAt = Date.now();
         const messageId = crypto.randomUUID();
         await client.query(
           "INSERT INTO chat_messages (id, room_id, sender_id, body) VALUES ($1, $2, $3, $4)",

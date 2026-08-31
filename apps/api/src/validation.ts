@@ -89,6 +89,15 @@ export const mutationSchemas = {
       confirmedHighValue: { type: "boolean" },
     },
   },
+  testCreditOrder: {
+    type: "object",
+    additionalProperties: false,
+    required: ["amount", "idempotencyKey"],
+    properties: {
+      amount: { type: "integer", enum: [100, 500, 1000, 5000] },
+      idempotencyKey: boundedString(160),
+    },
+  },
   createRoomAction: {
     type: "object",
     additionalProperties: false,

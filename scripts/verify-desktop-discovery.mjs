@@ -41,7 +41,9 @@ for (const layoutRule of [
   /\.live-stream-card:focus-visible/,
 ]) assert.match(styles, layoutRule);
 
-assert.doesNotMatch(components, /viewerCount|viewer_count|1\.2K|1,284/, "discovery must not invent unavailable viewer counts");
+assert.match(components, /viewer_count/);
+assert.match(components, /live-card-language/);
+assert.match(app, /discovery-language-filter/);
 assert.equal(packageJson.scripts["verify:desktop-discovery"], "node scripts/verify-desktop-discovery.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:desktop-discovery"));
 

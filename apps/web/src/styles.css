@@ -348,6 +348,12 @@ p {
   background: #7c5cfc;
   color: #fff;
 }
+.auth-resume-notice {
+  position: fixed;
+  inset: auto 1rem 6rem auto;
+  margin: 0;
+}
+
 .login-form {
   display: grid;
   gap: 0.8rem;
@@ -596,18 +602,16 @@ p {
   gap: 0.65rem;
   margin-top: 0.8rem;
 }
-.following-feed-list button {
+.following-feed-list .following-feed-open {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  min-width: 0;
-  border: 1px solid #2b3655;
-  background: #202a44;
-  text-align: left;
 }
-.following-feed-list button > span:last-child {
+.following-feed-list .following-feed-open > span:last-child {
   display: grid;
-  min-width: 0;
+}
+.reminder-toggle {
+  min-height: 44px;
 }
 .following-feed-list small {
   overflow: hidden;
@@ -836,6 +840,7 @@ p {
     0 0 0 1px #7c5cfc44;
 }
 @media (max-width: 700px) {
+  .r-package-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   main {
     padding: 1.1rem;
   }
@@ -2395,6 +2400,7 @@ p {
   color: #aab4cc;
   font-size: 0.8rem;
 }
+
 .creator-toast {
   position: sticky;
   z-index: 3;
@@ -2556,9 +2562,49 @@ p {
   width: 100%;
 }
 .account-sessions,
+.account-r-wallet,
 .account-recovery {
   grid-column: 1 / -1;
 }
+.account-r-wallet {
+  display: grid;
+  gap: 0.8rem;
+}
+.account-wallet-heading,
+.r-wallet-history p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.account-wallet-heading h3,
+.account-wallet-heading p,
+.r-wallet-history h4,
+.r-wallet-history p {
+  margin: 0;
+}
+.account-wallet-heading > strong {
+  color: #f6b73c;
+  font-size: 1.5rem;
+}
+.r-package-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.r-package-grid button.active {
+  border-color: #f6b73c;
+  background: #4b3716;
+  color: #fff1c2;
+}
+.r-wallet-history {
+  display: grid;
+  gap: 0.5rem;
+  border-top: 1px solid #2b3655;
+  padding-top: 0.8rem;
+}
+.r-wallet-history p { color: #aab4cc; }
+.r-wallet-history strong { color: #f7f8fc; }
 .account-sessions article {
   display: flex;
   align-items: center;

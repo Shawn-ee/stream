@@ -47,6 +47,17 @@ assert.ok(categories.categories.includes("Featured"));
 const discovery = await audience("/api/rooms?q=Demo&category=Featured");
 assert.equal(discovery.rooms.length, 1);
 const room = discovery.rooms[0];
+await streamer("/api/auth/login", {
+  method: "POST",
+  body: {
+    handle: "demo-streamer",
+    password: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
+  },
+});
+await streamer(`/api/streamer/rooms/${room.slug}/broadcast/local-status`, {
+  method: "PUT",
+  body: { state: "live" },
+});
 const profile = await audience(`/api/streamers/${room.streamer_id}`);
 assert.equal(profile.streamer.room_slug, room.slug);
 assert.ok(profile.streamer.bio);
@@ -102,13 +113,6 @@ await audience("/api/streamer/wallet/summary?period=lifetime", { expected: 403 }
 await audience("/api/streamer/wallet/transactions?period=lifetime", { expected: 403 });
 await audience(`/api/streamer/rooms/${room.slug}/supporters?period=lifetime`, { expected: 403 });
 
-await streamer("/api/auth/login", {
-  method: "POST",
-  body: {
-    handle: "demo-streamer",
-    password: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
-  },
-});
 assert.equal((await streamer("/api/wallet")).balance, gifts.gifts[0].coin_cost);
 await streamer(`/api/rooms/${room.slug}/gifts`, {
   method: "POST",
@@ -118,6 +122,10 @@ await streamer(`/api/rooms/${room.slug}/gifts`, {
     quantity: 1,
     idempotencyKey: crypto.randomUUID(),
   },
+});
+await streamer(`/api/streamer/rooms/${room.slug}/broadcast/local-status`, {
+  method: "PUT",
+  body: { state: "offline" },
 });
 const testSdp = "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=test\r\nt=0 0\r\n";
 await audience(`/api/streamer/rooms/${room.slug}/webrtc/publish`, {
@@ -333,8 +341,8 @@ assert.ok(
   ),
 );
 const users = await admin("/api/admin/users");
-assert.equal(users.users.length, 4);
-assert.equal(users.users.filter((user) => user.role === "streamer").length, 2);
+assert.equal(users.users.length, 8);
+assert.equal(users.users.filter((user) => user.role === "streamer").length, 6);
 const broadcasts = await admin("/api/admin/rooms/broadcasts");
 assert.ok(
   broadcasts.rooms.some(

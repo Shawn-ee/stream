@@ -70,3 +70,23 @@ test("rejects unsupported or invalid image input and path traversal", async () =
     await rm(storagePath, { recursive: true, force: true });
   }
 });
+
+test("honors the selected avatar crop focus", async () => {
+  const storagePath = await mkdtemp(path.join(os.tmpdir(), "holiwyn-avatar-focus-"));
+  try {
+    const left = await sharp({ create: { width: 500, height: 500, channels: 3, background: "#ff0000" } }).png().toBuffer();
+    const right = await sharp({ create: { width: 500, height: 500, channels: 3, background: "#0000ff" } }).png().toBuffer();
+    const source = await sharp({ create: { width: 1000, height: 500, channels: 3, background: "#000000" } })
+      .composite([{ input: left, left: 0, top: 0 }, { input: right, left: 500, top: 0 }])
+      .png()
+      .toBuffer();
+    const leftCrop = await saveAvatar({ storagePath, userId, mimeType: "image/png", buffer: source, focusX: 0, focusY: 0.5 });
+    const rightCrop = await saveAvatar({ storagePath, userId, mimeType: "image/png", buffer: source, focusX: 1, focusY: 0.5 });
+    const leftStats = await sharp(await readFile(path.join(storagePath, leftCrop.filename))).stats();
+    const rightStats = await sharp(await readFile(path.join(storagePath, rightCrop.filename))).stats();
+    assert.ok(leftStats.channels[0].mean > leftStats.channels[2].mean, "left focus should retain the red side");
+    assert.ok(rightStats.channels[2].mean > rightStats.channels[0].mean, "right focus should retain the blue side");
+  } finally {
+    await rm(storagePath, { recursive: true, force: true });
+  }
+});

@@ -13,7 +13,14 @@ export type DiscoveryRoom = {
   next_stream_at?: string | null;
   schedule_timezone?: string;
   follower_count?: number;
+  viewer_count?: number;
+  is_following?: boolean;
   broadcast_state?: "live" | "connecting" | "offline" | "unavailable";
+  broadcast_status_message?: string;
+  broadcast_status_source?: "local" | "cloudflare";
+  stream_language?: "en" | "zh";
+  stream_tags?: string[];
+  stream_thumbnail_url?: string | null;
 };
 
 type DiscoveryCopy = Record<string, string>;
@@ -21,6 +28,10 @@ export type MobileDiscoveryView = "for-you" | "following" | "live";
 
 function roomState(room: DiscoveryRoom) {
   return room.broadcast_state ?? (room.status === "live" ? "live" : "offline");
+}
+
+function isSimulated(room: DiscoveryRoom) {
+  return room.broadcast_status_source === "local";
 }
 
 function stateLabel(state: string, zh: boolean) {
@@ -63,20 +74,37 @@ export function LiveStreamCard({
       onClick={() => onOpen(room)}
       aria-label={`${room.streamer_name}: ${room.title}`}
     >
-      <span className={`live-card-preview room-card-art-${index % 4}`}>
+      <span className={`live-card-preview room-card-art-${index % 6}`}>
+        {room.stream_thumbnail_url ? <img className="live-card-thumbnail" src={room.stream_thumbnail_url} alt="" loading="lazy" decoding="async" /> : null}
         <span className="live-card-status">
           {state === "live" ? <i aria-hidden="true" /> : null}
-          {stateLabel(state, zh)}
+          {isSimulated(room) ? (zh ? "模拟" : "SIMULATED") : stateLabel(state, zh)}
         </span>
         <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="live-card-preview-avatar" />
         <span className="live-card-category">{room.category}</span>
+        <span className="live-card-language">{room.stream_language === "zh" ? "中文" : "EN"}</span>
+        {state === "live" ? <span className="live-card-viewers">{room.viewer_count ?? 0} {zh ? "观看" : "watching"}</span> : null}
+        <span className="mobile-live-card-overlay">
+          <span className="mobile-live-card-meta">
+            <span>{room.stream_language === "zh" ? "中文" : "English"}</span>
+            <span>{room.category}</span>
+            {state === "live" ? <span>{room.viewer_count ?? 0} {zh ? "人正在观看" : "watching"}</span> : null}
+          </span>
+          <strong>{room.title}</strong>
+          <span className="mobile-live-card-creator">
+            <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="mobile-live-card-avatar" />
+            <span><b>{room.streamer_name}</b><small>{room.follower_count ?? 0} {t.followers}</small></span>
+          </span>
+          {state !== "live" ? <small className="mobile-live-card-schedule">{scheduleLabel(room, zh)}</small> : null}
+          <span className="mobile-live-card-cta">{state === "live" ? (zh ? "进入直播" : "Watch live") : (zh ? "查看主播" : "View creator")}</span>
+        </span>
       </span>
       <span className="live-card-details">
         <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className={`live-card-avatar state-${state}`} />
         <span className="live-card-copy">
           <strong>{room.title}</strong>
           <span className="live-card-creator">{room.streamer_name}</span>
-          <small>{room.follower_count ?? 0} {t.followers}</small>
+          <small>{room.follower_count ?? 0} {t.followers}{room.is_following ? ` · ${zh ? "已关注" : "Following"}` : ""}</small>
         </span>
       </span>
     </button>
@@ -98,12 +126,13 @@ export function FeaturedLive({
   return (
     <section className={`featured-live state-${state}`} aria-labelledby="featured-live-title">
       <div className="featured-live-art room-card-art-0" aria-hidden="true">
+        {room.stream_thumbnail_url ? <img className="live-card-thumbnail" src={room.stream_thumbnail_url} alt="" /> : null}
         <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="featured-live-avatar" />
       </div>
       <div className="featured-live-overlay">
         <span className="featured-kicker">
           {state === "live" ? <i aria-hidden="true" /> : null}
-          {state === "live" ? (zh ? "精选直播" : "FEATURED LIVE") : (zh ? "推荐主播" : "FEATURED CREATOR")}
+          {isSimulated(room) ? (zh ? "模拟直播状态" : "SIMULATED STATUS") : state === "live" ? (zh ? "精选直播" : "FEATURED LIVE") : (zh ? "推荐主播" : "FEATURED CREATOR")}
         </span>
         <div>
           <p>{room.streamer_name} · {room.category}</p>
@@ -123,6 +152,7 @@ export function MobileDiscoveryFeed({
   following,
   view,
   category,
+  language,
   categories,
   roomsLoading,
   followingLoading,
@@ -132,6 +162,7 @@ export function MobileDiscoveryFeed({
   zh,
   onViewChange,
   onCategoryChange,
+  onLanguageChange,
   onRetry,
   onOpen,
 }: {
@@ -139,6 +170,7 @@ export function MobileDiscoveryFeed({
   following: DiscoveryRoom[];
   view: MobileDiscoveryView;
   category: string;
+  language: "" | "en" | "zh";
   categories: string[];
   roomsLoading: boolean;
   followingLoading: boolean;
@@ -148,6 +180,7 @@ export function MobileDiscoveryFeed({
   zh: boolean;
   onViewChange: (view: MobileDiscoveryView) => void;
   onCategoryChange: (category: string) => void;
+  onLanguageChange: (language: "" | "en" | "zh") => void;
   onRetry: () => void;
   onOpen: (room: DiscoveryRoom) => void;
 }) {
@@ -159,8 +192,8 @@ export function MobileDiscoveryFeed({
   const visibleRooms = view === "following"
     ? following
     : view === "live"
-      ? rooms.filter((room) => roomState(room) === "live")
-      : [...rooms].sort((a, b) => Number(roomState(b) === "live") - Number(roomState(a) === "live"));
+      ? rooms.filter((room) => roomState(room) === "live" && !isSimulated(room))
+      : [...rooms].sort((a, b) => Number(roomState(b) === "live" && !isSimulated(b)) - Number(roomState(a) === "live" && !isSimulated(a)));
   const loading = view === "following" ? followingLoading : roomsLoading;
   const error = view === "following" ? followingError : roomsError;
   const emptyTitle = view === "following"
@@ -172,7 +205,7 @@ export function MobileDiscoveryFeed({
     ? (zh ? "从推荐列表进入直播间并关注喜欢的主播。" : "Open a room from For You and follow creators you want to see again.")
     : view === "live"
       ? (zh ? "可以先看看推荐主播，直播开始后状态会自动更新。" : "Explore recommended creators while live status updates automatically.")
-      : (zh ? "请尝试其他搜索或清除分类筛选。" : "Try another search or clear the category filter.");
+      : (zh ? "请尝试其他搜索，或清除分类与语言筛选。" : "Try another search, or clear the category and language filters.");
 
   return (
     <section className="mobile-discovery-feed" aria-labelledby="mobile-discovery-title">
@@ -202,6 +235,14 @@ export function MobileDiscoveryFeed({
           <select value={category} onChange={(event) => onCategoryChange(event.target.value)} aria-label={t.allCategories}>
             <option value="">{t.allCategories}</option>
             {categories.map((item) => <option key={item}>{item}</option>)}
+          </select>
+        </label>
+        <label className="mobile-language-filter">
+          <span className="sr-only">{zh ? "直播语言" : "Stream language"}</span>
+          <select value={language} onChange={(event) => onLanguageChange(event.target.value as "" | "en" | "zh")} aria-label={zh ? "直播语言" : "Stream language"}>
+            <option value="">{zh ? "所有语言" : "All languages"}</option>
+            <option value="en">English</option>
+            <option value="zh">中文</option>
           </select>
         </label>
       </div>

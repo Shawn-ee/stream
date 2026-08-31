@@ -1,4 +1,5 @@
 import { CreatorAvatar, creatorInitials } from "./avatar";
+import { ShareButton } from "./share";
 
 function nextStreamLabel(
   value: string | null | undefined,
@@ -34,6 +35,8 @@ export function CreatorProfileSurface({
   onBack,
   onFollow,
   onOpenRoom,
+  onShare,
+  onCopy,
 }: {
   displayName: string;
   avatarUrl?: string | null;
@@ -51,6 +54,8 @@ export function CreatorProfileSurface({
   onBack: () => void;
   onFollow: () => void;
   onOpenRoom: () => void;
+  onShare: () => void;
+  onCopy: () => void;
 }) {
   const nextStream = nextStreamLabel(nextStreamAt, scheduleTimezone, zh);
   const stateText = state === "live"
@@ -83,6 +88,8 @@ export function CreatorProfileSurface({
             <button type="button" className={state === "live" ? "creator-profile-watch live" : "creator-profile-watch"} onClick={onOpenRoom}>
               {state === "live" ? (zh ? "观看直播" : "Watch live") : (zh ? "进入直播间" : "Visit room")}
             </button>
+            <ShareButton label={zh ? "分享主播" : "Share creator"} onShare={onShare} />
+            <button type="button" className="creator-profile-copy" onClick={onCopy}>{zh ? "复制链接" : "Copy link"}</button>
           </div>
         </div>
       </div>

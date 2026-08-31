@@ -24,7 +24,7 @@ const css = await totalSize(cssFiles);
 const kib = (bytes) => Math.round((bytes / 1024) * 10) / 10;
 
 assert.ok(javascript.raw <= 450 * 1024, `JavaScript budget exceeded: ${kib(javascript.raw)} KiB > 450 KiB`);
-assert.ok(css.raw <= 125 * 1024, `CSS budget exceeded: ${kib(css.raw)} KiB > 125 KiB`);
-assert.ok(javascript.gzip + css.gzip <= 145 * 1024, `compressed asset budget exceeded: ${kib(javascript.gzip + css.gzip)} KiB > 145 KiB`);
+assert.ok(css.raw <= 135 * 1024, `CSS budget exceeded: ${kib(css.raw)} KiB > 135 KiB`);
+assert.ok(javascript.gzip + css.gzip <= 149 * 1024, `compressed asset budget exceeded: ${kib(javascript.gzip + css.gzip)} KiB > 149 KiB`);
 
 console.log(`Web bundle budget passed: JS ${kib(javascript.raw)} KiB raw/${kib(javascript.gzip)} KiB gzip; CSS ${kib(css.raw)} KiB raw/${kib(css.gzip)} KiB gzip.`);

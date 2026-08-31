@@ -1,5 +1,103 @@
 # Local Runbook
 
+## P0 truth-and-safety acceptance
+
+Docker Desktop was recovered on 2026-08-31 without a factory reset or volume deletion. The exact transient runtime directory containing only the malformed `dockerInference` reparse point was renamed to `C:\Users\hecto\AppData\Local\Docker\run.broken-20260831-restore`, and Docker recreated a clean `run` directory. If the same failure recurs, first stop only Docker Desktop/backend, verify the exact path and contents, and obtain owner approval before moving any Docker-owned runtime artifact. Never use this procedure on Docker data, image, container, or volume directories. With Docker healthy, run `docker compose up -d postgres redis`, then `npm run db:migrate`, `npm run db:seed`, `npm run verify:p0-truth-safety`, and `npm run verify:staging`.
+
+For rendered acceptance, use separate audience, streamer, and administrator sessions. In audience discovery, confirm only a Cloudflare-sourced live room appears under **Live now**, offline/simulated rooms remain under **Creators to follow**, and follow/unfollow plus a lifecycle change update ordering without page refresh. Confirm synthetic cards/header say **SIMULATED**, Following does not rank them as real live, the room does not initialize playback, and social preview copy says **Creator room**, not **Live now**.
+
+In the streamer health rows, a local source must say **Simulation status**, **No media published**, and **No audience media**. Only a Cloudflare source may say ingest is receiving or audience playback authorization is available.
+
+As the streamer, start only a local synthetic/browser test. Choose sign out while active and confirm the room becomes offline before the session closes. Simulate a failed end request and confirm sign-out does not proceed. For production OBS, do not start media during this check; the endpoint must return `external_broadcast_still_live` when provider-confirmed OBS remains live, and the UI must instruct the creator to stop OBS first.
+
+As administrator, select a non-admin account, enter a unique test reason, choose mute, inspect the confirmation, apply it, and verify the selected account—not a fixed demo account—changes state and receives an audit event. Reverse the action with a second reason. Run `npm run db:seed` afterward. This procedure does not authorize Cloudflare contact, camera/microphone use, deployment, public changes, or a soak test.
+
+## Personalized discovery verification
+
+Run `npm run db:migrate`, `npm run db:seed`, `npm run verify:personalized-discovery`, and `npm run verify:staging`. The focused verifier covers audience-only ownership, invalid/unknown preferences, deterministic ordering, followed/live priorities, bounded visit influence, response privacy, opt-out equivalence with anonymous discovery, reset, and cleanup.
+
+For rendered acceptance, sign in as `demo-audience`, acknowledge the local test gate, and open **For You preferences**. Select 中文 and Music, save, and confirm Jade Lin becomes the first recommendation without changing the current All categories/All languages filters. Switch the interface to 中文 and confirm the panel, controls, and status are bilingual. Disable personalized ordering and save; compare the creator order with a signed-out window. Select Reset and confirm defaults return. Run `npm run db:seed` afterward.
+
+Do not use this procedure to create tracking data, contact external analytics, start media, spend R, configure Cloudflare, deploy, or conduct a soak test. A soak test is a separate bounded milestone with explicit duration, load, thresholds, monitoring, and cleanup.
+
+## Live schedule reminder verification
+
+Run `npm run db:migrate`, `npm run db:seed`, `npm run verify:schedule-reminders`, and `npm run verify:staging`. The focused verifier covers audience ownership, invalid input, follow-required behavior, default opt-in, opt-out cleanup, timezone-safe creator schedule changes, update and one-hour reminder deduplication, safe room links, and secret exclusion.
+
+For rendered acceptance, sign in as the synthetic audience and follow Demo Streamer. Open Following and confirm the creator shows the next scheduled time plus **Reminder on**; switch it off and confirm **Remind me** and the Upcoming status update without reloading. Switch to 中文 and confirm the equivalent labels. Open Notifications and use **View room** only on a synthetic reminder; it must mark/read safely and navigate to the canonical room without spending R or sending chat.
+
+To test due delivery, use the synthetic streamer to set a future `next_stream_at` within one hour in a valid timezone, then return to the audience session. The active audience app checks once per minute; confirm exactly one schedule-update notice and one due reminder appear even after repeated refreshes. Disable the reminder and confirm unread schedule notices for that creator are removed. Reseed afterward. This procedure does not authorize external notifications, camera/media, Cloudflare work, deployment, or public launch.
+
+## Server-rendered social-preview verification
+
+Run `npm run db:seed`, `npm run verify:social-previews`, and `npm run verify:staging`. The focused verifier checks canonical route validation, metadata escaping, owned-image allowlisting, cache and `Vary` headers, invalid-route 404 responses, crawler-only Nginx routing, and ordinary SPA fallback.
+
+With the local API and web app running, open `/room/demo-streamer` in an ordinary browser and confirm the complete interactive Holiwyn room loads. Then open `/api/public/social-preview/room/demo-streamer` and `/api/public/social-preview/creator/demo-streamer` directly on the API origin; confirm each lightweight page has the correct route-specific title and an **Open on Holiwyn** link to its canonical URL. The local Vite server does not emulate crawler routing.
+
+After an explicitly approved deployment, verify the production reverse proxy without sharing externally: request `/room/demo-streamer` once with an ordinary browser user agent and once with a supported preview-bot user agent such as `Twitterbot`. The ordinary response must be the SPA and the bot response must be escaped preview HTML with the canonical Holiwyn URL. Do not use this check to post links, configure Cloudflare, start media, or authorize public launch. Run `npm run db:seed` afterward.
+
+## Audience sharing verification
+
+Run `npm run verify:audience-sharing`, `npm run verify:web-bundle-budget`, and `npm run verify:staging`. The focused verifier covers room/profile canonical payloads, native Share cancellation/fallback policy, explicit clipboard support, bilingual controls, live browser metadata, static crawler fallback metadata, and staging-gate inclusion.
+
+At desktop width, open `/room/demo-streamer`, expand More, select Copy link, and confirm the status says Link copied and the clipboard contains the exact same-origin `/room/demo-streamer` URL. Open the creator profile, repeat Copy link, and confirm `/creator/demo-streamer`. Inspect the document title, canonical link, `og:title`, and `og:url` after each navigation. Switch to 中文 and repeat the visible control/status check.
+
+At 390×844, confirm Share is a reachable touch target in the room action rail and does not crowd Follow, Chat, or More. Select Share only to confirm the operating-system share sheet opens, then cancel without choosing a recipient; cancellation must not show an error or transmit anything. Confirm profile Share/Copy controls fit without horizontal overflow, then reset the viewport. Run `npm run db:seed` afterward. This procedure does not authorize sending a link to a third party, deployment, Cloudflare changes, or public launch.
+
+The raw SPA HTML retains a generic Holiwyn fallback. Supported link-preview crawlers now receive the route-specific server-rendered HTML described above; unsupported or JavaScript-only crawlers may still use the generic fallback.
+
+## Canonical audience-route verification
+
+Run `npm run db:seed`, `npm run verify:canonical-audience-routing`, and `npm run verify:staging`. The focused verifier covers route parsing, canonical paths, public API hydration, History API restoration, safe invalid-route recovery, SPA fallback, and authentication-intent compatibility.
+
+While signed out, open `/room/demo-streamer` directly and confirm the public room loads; refresh and confirm the URL and room persist. Open the creator profile and confirm the URL becomes `/creator/demo-streamer`; use browser Back and Forward to move between the two without losing context. Open `/room/not-a-real-creator`, confirm the bilingual not-found state, and use its recovery action to return to `/`. Repeat the room-card, Back, and refresh checks at 390×844 and confirm there is no horizontal overflow.
+
+For authentication continuity, open the canonical demo room as a guest, click Follow, and sign in as the synthetic audience. Confirm the same room URL remains active, the authoritative follow state updates, and no chat, gift, action, private-access purchase, or report is submitted automatically. Reset the viewport and run `npm run db:seed` afterward. This check does not authorize deployment, Cloudflare media, or external sharing.
+
+## Anonymous-to-account continuity verification
+
+Run `npm run db:seed`, `npm run verify:auth-intent-continuity`, and `npm run verify:staging`. The focused verifier confirms typed intent policy, one-shot guards, safe Follow completion, navigation restoration, bilingual feedback, and the absence of gift/action/private-access submission from authentication-resume branches.
+
+In a signed-out desktop browser, enter the demo room and click Follow. Sign in as the synthetic audience and confirm the same room remains open, Follow becomes Following, and the completion notice appears once. Sign out, type a disposable chat draft, click Send, and sign in; confirm the draft remains focused but is not posted. Sign out again, click Wallet, sign in, and confirm the Wallet section opens. At 390×844, sign out, select Following, sign in, and confirm Following remains selected with no horizontal overflow. Closing the authentication gate or signing out must discard any pending intent. Reset the viewport and run `npm run db:seed` afterward.
+
+Do not click a final gift/action/private-access/report confirmation during this read-only acceptance pass. Authentication must never be treated as consent to spend R, send chat, or submit a report. This procedure does not authorize deployment, Cloudflare media, or external service changes.
+
+## Public discovery and authentication-gate verification
+
+Run `npm run db:seed`, `npm run verify:public-discovery`, and `npm run verify:staging`. The focused verifier confirms safe anonymous room/profile/chat/support/playback reads, absence of infrastructure/internal identity fields, protected wallet/follow/creator reads, 401 mutation gates, and read-only anonymous Socket.IO behavior.
+
+In a browser with no active session, confirm Holiwyn opens directly to six synthetic creator cards rather than a login wall. At desktop width, open a creator and a public room; verify truthful lifecycle, profile, schedule, chat history, and presence remain visible. Click Following, Wallet, Go Live, Follow, Send, Gift, or Report and confirm the same bilingual sign-in/create-account modal appears without performing the interaction. At 390×844, confirm For You/Following/Live, language/category filters, creator cards, account access, and the authentication modal fit without horizontal overflow. Reset the viewport and run `npm run db:seed` afterward.
+
+Do not use this procedure to start media, spend R, create persistent test accounts, access a private show, configure Cloudflare, or deploy. Public access is not a production moderation, abuse-prevention, rate-limit, privacy, or legal-launch approval.
+
+## Audience feed polish and offline-room verification
+
+Run `npm run db:seed`, `npm run verify:audience-feed-polish`, `npm run verify:gift-polish`, and `npm run verify:staging`. The feed verifier confirms at least six synthetic creator cards, English/中文 variety, deterministic ranking data, immersive mobile presentation hooks, and server rejection of offline gift/action spending. The live gift verifier temporarily marks only the demo room live and restores its prior lifecycle state.
+
+For rendered acceptance, sign in as `demo-audience`. At desktop width confirm the creator rail/grid still render. At 390×844 confirm For You shows one large static-preview card per swipe with title, creator, language/category, schedule, and View creator/Watch live action; no card should be hidden behind bottom navigation and there must be no horizontal overflow. Enter an offline creator room and confirm Follow, profile/schedule, chat, and recommended creators remain available while Gift, Support/Actions, private access, and wallet activity are absent. Return to discovery, reset the viewport, and run `npm run db:seed`. This check never authorizes real R purchases, Cloudflare media, or deployment.
+
+## Audience discovery and R wallet verification
+
+Run `npm run db:migrate`, `npm run db:seed`, `npm run verify:audience-discovery-wallet`, and `npm run verify:staging`. The focused verifier confirms optional language filtering, invalid-language rejection, live audience presence, deterministic ranking fields, package validation, ledger credit, duplicate-safe order handling, authorization, and cleanup.
+
+For rendered acceptance, sign in as the synthetic audience. At desktop width confirm room cards show language, live rooms show truthful watching counts, All languages is selected by default, and English/中文 filters work independently from category and search. Open Following and confirm only followed creators appear. Open Wallet, confirm the balance and package choices use only `R`, and do not place a test order during a read-only check. At 390×844 confirm For You/Following/Live remain usable, the two filters fit without horizontal overflow, cards snap vertically inside the feed, and tapping a card opens the existing room. Repeat key labels in Chinese, reset the viewport, and reseed afterward. R has no cash value; this procedure does not authorize payments, cashout, deployment, or Cloudflare usage.
+
+## Follower management verification
+
+Run `npm run db:migrate`, `npm run db:seed`, `npm run verify:follower-management`, and `npm run db:seed`. The focused verifier confirms audience-only mutation, creator-room ownership, safe response fields, bounded cursor pagination, duplicate-follow idempotency, public aggregate events, private viewer state events, and cleanup.
+
+For rendered acceptance, sign in simultaneously as the synthetic audience and streamer. Open Creator menu → Followers and confirm the empty state. From the audience room, follow the demo streamer. Without reloading either page, confirm the audience Following feed contains the creator, discovery shows the updated count, and the creator list shows only display name, handle, follow date, and Following status. Unfollow and confirm both lists/counts return immediately. Repeat the creator list in English and Chinese at desktop and 390×844; confirm there is no page-level horizontal overflow. Reseed afterward.
+
+## Streamer production-polish and moderation verification
+
+Run `npm run check`, `npm run build`, `npm run verify:streamer-production-polish`, `npm run verify:avatar-gateway`, and the avatar/thumbnail storage tests. Start the local API/web plus localhost PostgreSQL and Redis, run `npm run verify:staging`, then reset demo data with `npm run db:seed`. The staging-operator verifier uses its digest-pinned Docker image when the daemon is healthy and otherwise uses the same read-only shell/mock checks through Ubuntu WSL on Windows.
+
+Sign in as the synthetic streamer and remain offline. Confirm the entry page says **HOLIWYN** and **PRIVATE STAGING**. Before granting device permission, save a title, category, language, up to five comma-separated tags, and a non-sensitive JPEG/PNG/WebP thumbnail under 6 MB. Confirm the audience-card preview uses the thumbnail and discovery reflects it after save. In Profile, choose a non-sensitive avatar and move the horizontal/vertical focal controls before saving; reload and confirm both normalized media paths persist. Enable local camera preview only when device testing is explicitly intended.
+
+For moderation testing, use a seeded/local audience to send disposable messages. From the creator chat, verify Delete removes only that message in realtime; Mute blocks until removed; Timeout blocks for ten minutes and then expires; Ban blocks until removed. Set slow mode and a disposable blocked term, verify the API rejects messages accordingly, then clear both settings. Confirm Settings lists only active restrictions. Reseed after mutation tests; the seed must leave the demo room offline with no thumbnail, zero slow mode, no blocked terms, and no active moderation restriction.
+
+For a Cloudflare-free lifecycle check, use the Settings-only local broadcast-state fallback. When it reports `live`, confirm the header and moderation chat enter the live cockpit even though no local publisher is active; return it to `offline`, open Earnings, and inspect the completed session summary. During an owner-approved physical broadcast, confirm the three health rows never overstate one another: Device reflects local camera/microphone, Cloudflare ingest reflects publisher/provider lifecycle, and Audience playback becomes ready only with live playback authorization. End with confirmation and inspect the summary for duration, peak viewers, test support, supporters, chat messages, new followers, and top supporter. Starting camera/microphone or Cloudflare media still requires immediate owner approval; this runbook does not authorize deployment or spending.
+
 ## Unified creator menu and avatar verification
 
 Run `npm run verify:streamer-navigation`, `npm run verify:creator-profile-ui`, `npm run verify:creator-avatar`, `npm run check`, and `npm run build`. The avatar API verifier requires the local API, PostgreSQL, and seeded demo data; it uploads only a generated synthetic image and removes it before exit.

@@ -22,7 +22,7 @@ assert.match(app, /Ready to go live/);
 assert.doesNotMatch(app, /Step 1 of 3|Step 2 of 3/);
 assert.match(app, /Stream title/);
 assert.match(app, /maxLength=\{120\}/);
-assert.match(app, /await onSaveTitle\(\);[\s\S]*createWhipPublisher\(/);
+assert.match(app, /await onSaveMetadata\(\);[\s\S]*createWhipPublisher\(/);
 
 assert.match(transport, /export async function replacePublishedTrack\(/);
 assert.match(transport, /getSenders\(\)/);

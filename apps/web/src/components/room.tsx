@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 import { CreatorAvatar } from "./avatar";
+import { ShareButton } from "./share";
 
 type ChatMessage = {
   id: string;
@@ -21,12 +22,18 @@ export function RoomCreatorBar({
   followLabel,
   unfollowLabel,
   giftLabel,
+  shareLabel,
+  copyLabel,
+  giftEnabled,
   reportLabel,
   moreLabel,
   privateAccessLabel,
   privateAccessCost,
   profileLabel,
   onFollow,
+  onGift,
+  onShare,
+  onCopy,
   onProfile,
   onReport,
   onBuyPrivateAccess,
@@ -44,12 +51,18 @@ export function RoomCreatorBar({
   followLabel: string;
   unfollowLabel: string;
   giftLabel: string;
+  shareLabel: string;
+  copyLabel: string;
+  giftEnabled: boolean;
   reportLabel: string;
   moreLabel: string;
   privateAccessLabel?: string;
   privateAccessCost?: number;
   profileLabel: string;
   onFollow: () => void;
+  onGift: () => void;
+  onShare: () => void;
+  onCopy: () => void;
   onProfile: () => void;
   onReport: () => void;
   onBuyPrivateAccess?: () => void;
@@ -71,7 +84,8 @@ export function RoomCreatorBar({
         <button type="button" className="room-follow-button" aria-pressed={following} onClick={onFollow}>
           {following ? unfollowLabel : followLabel}
         </button>
-        <a className="room-gift-jump" href="#room-gifts">{giftLabel}</a>
+        {giftEnabled ? <button type="button" className="room-gift-jump" onClick={onGift}>{giftLabel}</button> : null}
+        <ShareButton label={shareLabel} onShare={onShare} />
         {privateAccessLabel && onBuyPrivateAccess ? (
           <button type="button" className="room-private-button" onClick={onBuyPrivateAccess}>
             {privateAccessLabel}{privateAccessCost === undefined ? "" : ` · ${privateAccessCost}`}
@@ -79,7 +93,10 @@ export function RoomCreatorBar({
         ) : null}
         <details className="room-more-actions">
           <summary aria-label={moreLabel}>•••</summary>
-          <div><button type="button" onClick={onReport}>{reportLabel}</button></div>
+          <div>
+            <button type="button" onClick={onCopy}>{copyLabel}</button>
+            <button type="button" data-auth-action="report" onClick={onReport}>{reportLabel}</button>
+          </div>
         </details>
       </div>
     </section>
@@ -96,9 +113,11 @@ export function LiveChatPanel({
   placeholder,
   sendLabel,
   giftLabel,
+  giftEnabled,
   emptyLabel,
   onDraftChange,
   onSend,
+  onGift,
   className = "",
   inputId = "room-chat-input",
 }: {
@@ -111,9 +130,11 @@ export function LiveChatPanel({
   placeholder: string;
   sendLabel: string;
   giftLabel: string;
+  giftEnabled: boolean;
   emptyLabel: string;
   onDraftChange: (value: string) => void;
   onSend: () => void;
+  onGift: () => void;
   className?: string;
   inputId?: string;
 }) {
@@ -138,7 +159,7 @@ export function LiveChatPanel({
           </p>
         )) : <p className="room-chat-empty">{emptyLabel}</p>}
       </div>
-      <div className="room-chat-actions"><a href="#room-gifts">{giftLabel}</a></div>
+      {giftEnabled ? <div className="room-chat-actions"><button type="button" onClick={onGift}>{giftLabel}</button></div> : null}
       <form onSubmit={submit}>
         <label className="sr-only" htmlFor={inputId}>{placeholder}</label>
         <input
@@ -168,6 +189,8 @@ export function MobileRoomOverlay({
   unfollowLabel,
   chatLabel,
   giftLabel,
+  shareLabel,
+  giftEnabled,
   moreLabel,
   reportLabel,
   privateAccessLabel,
@@ -177,6 +200,7 @@ export function MobileRoomOverlay({
   onProfile,
   onChat,
   onGift,
+  onShare,
   onReport,
   onBuyPrivateAccess,
 }: {
@@ -193,6 +217,8 @@ export function MobileRoomOverlay({
   unfollowLabel: string;
   chatLabel: string;
   giftLabel: string;
+  shareLabel: string;
+  giftEnabled: boolean;
   moreLabel: string;
   reportLabel: string;
   privateAccessLabel?: string;
@@ -202,6 +228,7 @@ export function MobileRoomOverlay({
   onProfile: () => void;
   onChat: () => void;
   onGift: () => void;
+  onShare: () => void;
   onReport: () => void;
   onBuyPrivateAccess?: () => void;
 }) {
@@ -228,9 +255,12 @@ export function MobileRoomOverlay({
         <button type="button" aria-label={chatLabel} onClick={onChat}>
           <span aria-hidden="true">✦</span><small>{chatLabel}</small>
         </button>
-        <button type="button" className="mobile-room-gift" aria-label={giftLabel} onClick={onGift}>
-          <span aria-hidden="true">◆</span><small>{giftLabel}</small>
-        </button>
+        {giftEnabled ? (
+          <button type="button" className="mobile-room-gift" aria-label={giftLabel} onClick={onGift}>
+            <span aria-hidden="true">◆</span><small>{giftLabel}</small>
+          </button>
+        ) : null}
+        <ShareButton label={shareLabel} onShare={onShare} className="mobile-room-share" />
         {privateAccessLabel && onBuyPrivateAccess ? (
           <button type="button" aria-label={privateAccessLabel} onClick={onBuyPrivateAccess}>
             <span aria-hidden="true">◇</span><small>{privateAccessLabel}</small>
@@ -238,7 +268,7 @@ export function MobileRoomOverlay({
         ) : null}
         <details className="mobile-room-more">
           <summary aria-label={moreLabel}>•••</summary>
-          <button type="button" onClick={onReport}>{reportLabel}</button>
+          <button type="button" data-auth-action="report" onClick={onReport}>{reportLabel}</button>
         </details>
       </div>
     </div>

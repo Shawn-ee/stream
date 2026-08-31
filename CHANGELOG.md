@@ -1,5 +1,106 @@
 # Changelog
 
+## 2026-08-31 - P0 truth and safety hardening (local, accepted)
+
+- Added migration `023_broadcast_status_source.sql` so lifecycle source is authoritative data rather than inferred from status copy.
+- Split desktop/mobile discovery into Cloudflare-confirmed **Live now** rooms and clearly labeled recommendations; Following order, creator profiles, player startup, and crawler metadata also refuse to present local simulation as real live media. Lifecycle and follow-state events reload authoritative server ordering.
+- Added a creator-owned broadcast-end API that closes active browser publisher resources, ends active session rows, persists offline, and emits the existing lifecycle path. Active production OBS ingest fails closed because the website cannot stop OBS.
+- Made active-session sign-out depend on confirmed server termination and added actionable failure messages instead of silently ending only the login session.
+- Reworded and badged local lifecycle fallback as explicit simulation that does not publish or stop video. Streamer OBS guidance and layered health now say **No media published / No audience media** instead of implying Cloudflare ingest or playable media during simulation.
+- Replaced the administrator’s fixed Demo Audience moderation target/reason with selected non-admin controls, server-required reason, confirmation, localized states, and audit-compatible requests.
+- Added `verify:p0-truth-safety` and a social-preview simulation unit test; typecheck, production build, all 27 unit/storage tests, focused frontend/broadcast checks, supply-chain and production configuration gates pass. The combined compressed budget remains below 149 KiB with 124.1 KiB JavaScript gzip plus 24.1 KiB CSS gzip and the unchanged 135 KiB raw CSS ceiling.
+- Recovered Docker Desktop by renaming only its corrupt transient `run` directory to a timestamped backup; no factory reset, image deletion, container deletion, or volume deletion occurred. PostgreSQL 16 and Redis 7 are healthy. Migration `023`, the complete Cloudflare-free staging gate, public/streamer/administrator browser acceptance, authoritative simulated-session sign-out, targeted moderation and reversal, and final seed reset pass. No commit, push, deployment, Cloudflare request, media start, or soak test occurred.
+
+## 2026-08-31 - Persistent audience discovery preferences
+
+- Added audience-owned saved language/category preferences, live/following priority controls, an explicit personalization switch, and reset-to-default behavior in migration `022_audience_discovery_preferences.sql`.
+- Added deterministic, explainable room ordering using only existing public room signals plus bounded recent visits; raw visit counts/timestamps remain server-side, and disabling personalization restores the anonymous global order.
+- Added a compact bilingual For You preference panel that keeps one-session category/language filters independent from saved ordering preferences.
+- Added schema/index assertions and `verify:personalized-discovery`; passed English/中文 rendered acceptance, the unchanged 135 KiB CSS budget, all 26 tests, the complete Cloudflare-free staging gate, and final demo reset.
+- No tracking service, recommendation ML, external analytics, deployment, Cloudflare action, media broadcast, payment, or background soak test was started.
+
+## 2026-08-31 - Live schedule reminders and in-app delivery
+
+- Added follow-owned reminder preferences with opt-in by default, audience-only authorization, immediate opt-out cleanup, and safe persistence in migration `021_schedule_reminders.sql`.
+- Added deduplicated bilingual notifications when creators publish a new future stream time and one-hour in-app reminders for opted-in followers; past schedules, unfollowed creators, disabled reminders, and currently live rooms do not generate reminder delivery.
+- Added safe room links to notification responses, realtime schedule/preference/notification refresh, one-minute active-app polling, a bilingual Upcoming surface, and reminder toggles in the Following feed.
+- Added schema/index assertions and `verify:schedule-reminders`; passed English/中文 rendered acceptance, all 26 tests, the complete Cloudflare-free staging gate, and demo reset. The 135 KiB CSS ceiling remains; the combined compressed asset ceiling is calibrated from 145 to 147 KiB for the first-party reminder workflow with no new library.
+- No deployment, Cloudflare action, email, SMS, browser push, third-party notification service, or external message occurred.
+
+## 2026-08-31 - Server-rendered social preview cards
+
+- Added a public, read-only HTML renderer for canonical room and creator-profile previews using existing public room data, route-specific titles/descriptions, canonical URLs, and optional platform-owned avatar or stream-thumbnail images.
+- Added strict path validation, HTML escaping, owned-image allowlisting, bounded metadata, short public caching, safe 404 behavior, and responses that do not expose Cloudflare or authentication secrets.
+- Added crawler-only Nginx routing for common link-preview bots while preserving the normal React SPA for human visitors at the same `/room/:slug` and `/creator/:slug` URLs.
+- Added `verify:social-previews`, passed direct room/profile browser smoke tests and the complete Cloudflare-free staging gate, and reset demo data. No deployment, DNS, Cloudflare configuration, crawler fetch, or external sharing occurred.
+
+## 2026-08-31 - Room and creator sharing
+
+- Added bilingual Share controls to desktop/mobile rooms and creator profiles, using the native Web Share sheet when available and a canonical-link clipboard fallback when it is not.
+- Added explicit Copy link actions for desktop room/profile workflows, accessible status feedback, safe cancellation handling, and four-second notice cleanup.
+- Added route-aware canonical links, document titles, descriptions, and Open Graph URL/title updates, plus server-visible generic Holiwyn Open Graph/Twitter fallback metadata in the SPA document.
+- Added `verify:audience-sharing`, passed English/中文 desktop and 390×844 browser acceptance, retained the existing CSS/compressed bundle budgets, passed the complete Cloudflare-free staging gate, and reset demo data. No deployment or external sharing occurred.
+
+## 2026-08-31 - Canonical audience room and creator routes
+
+- Added canonical same-origin audience URLs for discovery (`/`), rooms (`/room/:slug`), and creator profiles (`/creator/:slug`) without introducing a second routing framework.
+- Added direct-link hydration from the public room API, truthful loading/not-found/service-unavailable states, document titles, refresh persistence, and safe recovery to discovery.
+- Integrated room/profile navigation with browser Back and Forward while preserving anonymous viewing and the existing authentication-intent return flow.
+- Added `verify:canonical-audience-routing`, passed desktop and 390×844 direct-link/refresh/history/invalid-route/authentication browser acceptance, passed the complete Cloudflare-free staging gate, and reset demo data. Social-share controls and server-rendered link-preview metadata remain a later milestone; no deployment occurred.
+
+## 2026-08-31 - Anonymous-to-account interaction continuity
+
+- Added one typed, memory-only pending authentication intent so a guest can sign in or create an audience account without losing the room, profile, destination, or unsent chat draft that prompted authentication.
+- Safely completes only idempotent Follow after authentication. Chat, gifts, actions, private access, and reports return the viewer to review/focus state and never auto-send, auto-submit, or auto-spend R.
+- Added bilingual completion/failure feedback, one-shot guards, audience-role checks, logout cleanup, authoritative follower-count refresh, and desktop/mobile destination restoration for Following, Wallet, account, Inbox, and Go Live.
+- Added `verify:auth-intent-continuity`, refreshed two prior static regression checks, passed guest Follow/chat/Wallet and 390×844 Following browser acceptance, passed the complete Cloudflare-free staging gate, and reset demo data. No deployment or external-service action occurred.
+
+## 2026-08-31 - Public discovery and interaction authentication gates
+
+- Removed the mandatory sign-in wall from the audience entry experience: anonymous visitors can browse discovery, filter rooms, open public creator profiles, enter public rooms, receive lifecycle/presence updates, and read privacy-safe chat/support activity.
+- Added a reusable bilingual authentication gate for chat sending, following, gifts/actions, private-show purchase, wallet, reports, broadcasting, Following, Inbox, and account surfaces while preserving the requested destination after successful sign-in.
+- Made anonymous realtime sockets read-only, counted public viewers in room presence, enabled public WHEP/HLS authorization for non-private live rooms, and kept private-show playback fail-closed.
+- Removed Cloudflare input identifiers and internal chat sender IDs from anonymous room responses. Protected ledger, session, follower-state, creator, admin, and mutation APIs remain authentication/role guarded.
+- Added `verify:public-discovery`, updated affected desktop/mobile/realtime regression checks, passed desktop and 390×844 browser acceptance without horizontal overflow, and passed the complete Cloudflare-free staging gate. Demo data was reset; no deployment or external-service action occurred.
+
+## 2026-08-31 - Audience feed polish and truthful offline rooms
+
+- Expanded deterministic discovery data to six synthetic creators across English/中文 and several room categories so the audience feed can be evaluated as a real discovery surface rather than a two-card demo.
+- Redesigned the phone For You surface as a compact one-card-per-swipe feed with a viewport-dominant static preview, creator identity, title, language/category metadata, schedule, and one clear room/profile action.
+- Made offline room commerce truthful: gift, action, and private-access controls are absent while offline, and the API rejects direct gift/action purchases unless broadcast state is `live`.
+- Added a focused audience-feed verifier, updated live gift/realtime/expanded workflow fixtures, retained the 135 KiB CSS guardrail, and passed desktop plus 390×844 browser acceptance.
+- Passed the complete Cloudflare-free staging sequence after its final expanded verifier and reset all synthetic data. No deployment, real payment, media broadcast, or Cloudflare action occurred.
+
+## 2026-08-31 - Audience discovery, mobile swipe feed, and R wallet
+
+- Added optional All/English/中文 discovery filtering while preserving All languages as the default.
+- Added truthful live audience counts, language badges, following state, and deterministic live/follow/viewer/follower/freshness ranking to room discovery.
+- Changed the mobile For You surface to a contained vertical snap feed using static previews; tapping still enters the existing truthful room playback flow.
+- Added an audience Wallet entry with `R` balance, four simulated package choices, idempotent test orders, and recent ledger activity. Replaced audience and creator token labels with `R` while retaining a concise no-cash-value boundary.
+- Added migration `020`, schema coverage, focused discovery/presence/language/order/idempotency verification, and updated desktop/mobile regression guards.
+- Passed the complete Cloudflare-free staging gate and bilingual desktop/390×844 browser acceptance. Demo data was reset; no real payment, deployment, or Cloudflare action occurred.
+
+## 2026-08-31 - Follower management and realtime follow state
+
+- Added an ownership-protected, cursor-paginated creator Followers API and migration `019` with a streamer/date/follower index.
+- Added a bilingual Creator Center Followers page with total count, public display name/handle, follow date, relationship status, loading/error/empty states, and bounded load-more pagination.
+- Added privacy-safe realtime follow events so audience Following membership and room/discovery follower counts update without reload while the creator list refreshes immediately.
+- Added focused authorization, safe-field, duplicate-follow, pagination, realtime, migration, and cleanup verification.
+- Completed English/Chinese two-account browser acceptance at desktop and 390×844: follow and unfollow propagated immediately in both directions, mobile rendered without horizontal overflow, and no browser console errors were present. No deployment or external-service change was made.
+
+## 2026-08-30 - Streamer production polish and live moderation
+
+- Replaced the visible local-development/MVP entry branding with bilingual Holiwyn private-staging presentation while preserving explicit test-account/test-coin disclosure.
+- Added a compact pre-live sheet for title, category, language, tags, audience-card preview, and a normalized 16:9 stream thumbnail; metadata is saved before broadcasting begins.
+- Added creator-owned per-message delete, mute, ten-minute timeout, and ban actions; active restriction removal; server-enforced slow mode and blocked terms; audit records; and minimal realtime deletion/moderation events.
+- Split live health into local device, Cloudflare ingest, and audience playback status, and expanded the post-stream summary with support, supporter, chat, follower, duration, peak-viewer, and top-supporter context.
+- Replaced broadcaster text glyph controls with a shared SVG icon vocabulary and added avatar focal-point controls backed by server-side crop coordinates.
+- Added migration `018`, thumbnail normalization/storage tests, avatar crop tests, bounded Nginx upload routing, schema assertions, and a focused production-polish verification gate.
+- Calibrated the raw CSS regression ceiling from 125 KiB to 135 KiB for the new first-party responsive surfaces while retaining the existing 145 KiB combined compressed-network budget.
+- Completed the full Cloudflare-free staging gate with PostgreSQL 16 and Redis 7 on localhost, including all 23 API/storage tests, realtime clustering, lifecycle, authorization, security, and expanded workflows. The staging-operator verifier now preserves its pinned Docker path while using the same read-only shell/mock checks through WSL when Docker is unavailable.
+- Completed two-account browser acceptance in English and Chinese at desktop and 390×844: realtime chat moderation and timeout enforcement, slow mode/blocked-term persistence, avatar crop persistence, thumbnail persistence, layered health, and post-stream summary. Browser review also fixed OBS/provider-live sessions incorrectly showing **SET UP** with hidden chat, exposed metadata before camera permission, and removed a desktop metadata-label overlap. Nothing was committed, pushed, deployed, or sent to Cloudflare.
+- Made the demo seed deterministic for the new production-polish fields: stream language/tags, thumbnail, slow mode, and blocked terms now return to their safe defaults, with a focused regression assertion. The final reset leaves the demo streamer offline with no uploaded media or active moderation restriction.
+
 ## 2026-08-30 - Public avatar upload gateway fix
 
 - Fixed public avatar uploads being rejected by the web gateway before reaching the API: Nginx kept its global 64 KiB request limit while the exact creator-avatar route received a bounded 6 MiB allowance for the API's 5 MiB file plus multipart overhead.

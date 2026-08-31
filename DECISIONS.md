@@ -1,5 +1,93 @@
 # Architecture Decisions
 
+## 2026-08-31 - Personalization is explicit, deterministic, and locally explainable
+
+- Saved discovery preferences belong only to the authenticated audience account. Language/category interests affect ordering rather than filtering; temporary search/category/language controls remain independent and are never silently persisted.
+- The ranking combines truthful live state, followed creators, selected interests, current viewer/follower popularity, live freshness, and at most five visits from the last 30 days. A one-hour repeat penalty adds variety without hiding a room. Stable title/slug tie-breaks make repeated results reproducible.
+- Responses expose only bounded reason labels such as `preferred_language`, `preferred_category`, and `recently_watched`; visit counts and timestamps remain private server data. Turning personalization off removes every identity-derived scoring signal and restores the same ordering as an anonymous request.
+- Guests retain global discovery and never receive a preference record. No cookies beyond the existing session, browser storage, tracking pixel, external analytics, ML model, profiling vendor, or behavioral data export is introduced.
+- The raw CSS and compressed-asset ceilings remain unchanged; the preference surface reuses existing first-party components and styles.
+
+## 2026-08-31 - Schedule reminders are follow-owned, deduplicated, and in-app only
+
+- Reminder preference belongs to the audience-to-creator follow relationship and defaults on when a viewer deliberately follows. Only that audience account can change it; unfollowing removes the relationship, and opting out removes unread schedule notifications for that creator.
+- A changed future `next_stream_at` creates at most one bilingual `schedule_updated` notification per viewer/time. When the Notifications surface checks within one hour of the scheduled time, the API creates at most one `schedule_reminder`; live rooms, past times, disabled preferences, and non-followers are excluded.
+- Delivery uses the existing authenticated notification API, per-user Socket.IO room, and a one-minute active-app refresh. There is no background worker, email, SMS, browser push, service worker, third-party provider, or guarantee while Holiwyn is closed.
+- Notification responses expose only public room slugs and display copy—not deduplication keys, viewer balances, provider credentials, or infrastructure errors. Creator schedule updates remain owner-only and timezone validated.
+- The raw CSS ceiling remains 135 KiB. The combined compressed JS+CSS ceiling moves from 145 to 147 KiB for this first-party workflow; the resulting build is 145.6 KiB compressed and adds no dependency.
+
+## 2026-08-31 - Canonical routes serve crawler previews without changing human navigation
+
+- Canonical `/room/:slug` and `/creator/:slug` URLs remain the only public share URLs. Nginx internally routes a bounded list of common social-preview crawler user agents to the API HTML renderer; ordinary browser requests continue to the React SPA.
+- Preview HTML is derived only from existing public room/creator fields. Every dynamic value is bounded and escaped, and preview images are allowed only from platform-owned normalized avatar or stream-thumbnail routes. External image URLs and raw infrastructure/provider details are excluded.
+- Preview responses are public but short-lived (`max-age=60`, `stale-while-revalidate=300`) and vary by user agent and content encoding. This balances timely live/offline information with bounded crawler traffic; explicit cache purging is not introduced.
+- The crawler list is intentionally narrow and link-preview focused. Search-engine SSR, generalized bot detection, prerender services, screenshot generation, dynamic edge workers, and Cloudflare configuration remain outside this local milestone.
+
+## 2026-08-31 - Sharing is canonical, explicit, and progressive
+
+- Share payloads always use the canonical same-origin room/profile path. Web Share is preferred where the browser exposes it; cancellation is silent, unsupported/rejected Web Share falls back to the Clipboard API, and a separate Copy link action remains available on desktop.
+- Sharing is public and does not require authentication, mutate account state, spend R, or disclose private identifiers. Payloads contain only public creator/title information and the public URL.
+- The SPA updates document title, canonical URL, Open Graph title, and Open Graph URL when its route changes. The static HTML contains an absolute `https://holiwyn.online/` canonical and generic Holiwyn Open Graph/Twitter fallback for crawlers that do not execute JavaScript.
+- Route-specific crawler previews are intentionally not claimed: they require a separately designed server/edge HTML response and cache policy. No framework migration, backend rewrite, image generator, or external sharing service is introduced here.
+- The existing 135 KiB CSS and 145 KiB compressed-asset limits remain unchanged; the share controls reuse established button and notice primitives.
+
+## 2026-08-31 - Public audience surfaces use canonical same-origin URLs
+
+- Discovery is `/`, a public room is `/room/:slug`, and its creator profile is `/creator/:slug`. Both detail routes use the existing stable public room slug and hydrate through the safe public room API.
+- The current lightweight React application uses the browser History API rather than adding a routing dependency. Holiwyn-owned history state records the parent route so in-product Back returns predictably, while direct links recover to discovery instead of leaving the site.
+- Refresh and browser Back/Forward are authoritative navigation inputs. Malformed or missing slugs show a bilingual recovery state and never silently substitute another creator.
+- Authentication intent remains memory-only and can resume onto a canonical room/profile URL. Canonical routing does not weaken API authorization, private-show playback gates, or mutation consent.
+- Client document titles are updated, but server-rendered Open Graph/social-card metadata and explicit Share/copy-link controls are intentionally deferred.
+
+## 2026-08-31 - Authentication resumes one bounded intent and never implies consent to spend
+
+- The client retains at most one typed authentication intent in memory. Closing the gate, logging out, changing to a non-audience role, or completing the intent clears it; it is not persisted in browser storage or sent as trusted authorization data.
+- Navigation intents restore Following, Wallet/account, Inbox, creator application, or account destinations. Follow is the only interaction completed automatically because its POST is idempotent and the viewer explicitly requested that exact relationship.
+- Chat drafts remain unsent, gift/action/private-access choices remain unpurchased, and reports remain unsubmitted. Authentication only reopens or focuses the relevant review surface and shows bilingual status feedback.
+- Server authentication, role checks, CSRF, balance checks, lifecycle checks, idempotency, and ownership remain authoritative. The pending intent is UX continuity, not a security boundary.
+
+## 2026-08-31 - Public viewing is anonymous; identity-bearing interactions require authentication
+
+- Discovery, safe creator/room metadata, public broadcast lifecycle, public playback authorization, privacy-safe chat history, support activity, and room-scoped realtime presence are readable without an account. Anonymous viewers count toward truthful room presence.
+- Anonymous realtime clients receive a synthetic connection-scoped guest identity only. They may join discovery/room channels but cannot join private user channels or send chat/mutation events.
+- Chat send, follow state/mutation, gifts, action purchases, private-show purchase, wallet/ledger, reports, broadcasting, creator/admin surfaces, sessions, and account management require a server-verified session and existing role checks. The frontend gate is guidance, never the security boundary.
+- Public room payloads do not expose Cloudflare live-input identifiers. Anonymous chat-history payloads omit internal sender UUIDs; authenticated creator moderation retains the identifiers it requires.
+- Public playback remains lifecycle- and privacy-aware: offline/unavailable states stay truthful, public WHEP/HLS access is allowed only for eligible live rooms, and active private shows remain locked without purchased authenticated access.
+
+## 2026-08-31 - Discovery may be rich, but commerce requires a live broadcast
+
+- The deterministic private-staging catalog contains six synthetic creators with varied English/中文 metadata. These are fixtures for discovery and responsive QA, not fabricated live activity; seeded rooms remain offline.
+- Mobile discovery uses one static creator preview per contained snap viewport. It does not autoplay or preload multiple video streams, and selecting a card reuses the existing truthful room lifecycle.
+- Gifts, creator-priced actions, and private-show access are live-session interactions. Offline rooms prioritize follow, profile, schedule, and chat; both the UI and gift/action mutation endpoints fail closed when the broadcast is not `live`.
+- Existing live gift/action ledger, idempotency, realtime, and goal behavior is preserved and explicitly tested by placing only the verification room into a bounded local live state, then restoring/resetting it.
+
+## 2026-08-31 - Audience discovery is transparent and R remains non-monetary
+
+- Language is optional discovery metadata. All languages is the default; English and 中文 are explicit filters and room-card tags, while the creator continues to set the stream language in pre-live metadata.
+- The first recommendation model is deterministic and server-owned: truthful live state, followed-live status, current audience presence, follower count, and a bounded freshness boost. It does not use tracking, profiling, advertising, or machine learning.
+- Mobile discovery uses a contained vertical scroll-snap feed and static thumbnails. Selecting a card opens the one existing room/player lifecycle; discovery never preloads or autoplays many streams.
+- The product unit is displayed only as `R`. Simulated package orders are audience-only, schema-bounded, idempotent, and recorded in the existing synthetic ledger. R has no cash value and cannot be purchased with money, redeemed, withdrawn, or converted into RMB.
+
+## 2026-08-31 - Followers are creator-owned, privacy-safe, cursor-paginated, and realtime
+
+- Audience follow/unfollow remains the only relationship mutation; creators cannot add, remove, or manipulate followers.
+- The creator Followers page exposes only public display name, account handle, follow timestamp, and the current `following` relationship. It does not expose email, wallet, sessions, presence history, IP/device data, or private activity.
+- Creator follower reads are room-owner protected and use stable `(created_at, follower_id)` cursor pagination backed by `follows_streamer_created_idx`; limits are bounded to 1–50.
+- A public `follow:changed` event carries only streamer/room identity and aggregate count. A private `follow:state` event goes only to the acting viewer and refreshes their Following feed, removing the prior reload requirement.
+- Followers and financial supporters remain separate product concepts and separate creator pages.
+
+## 2026-08-30 - Live moderation is room-scoped and broadcast health is layered
+
+- Creator moderation affects one owned room: message deletion is a soft-delete with an audit event, mute/timeout/ban is persisted per viewer/room, and realtime payloads contain only the minimal room event. Global administrator restrictions remain separate.
+- Slow mode and blocked terms are enforced server-side before message persistence. Expired timeouts stop restricting automatically; the creator can remove active restrictions from Settings.
+- Broadcast health is presented as three distinct facts—local device readiness, Cloudflare ingest lifecycle, and audience playback readiness—so one green indicator cannot overstate the full delivery path.
+- Pre-live metadata is saved before WHIP publication. Stream thumbnails and avatars are treated as untrusted media, normalized server-side to bounded WebP assets, and exposed through randomized public paths; upload exceptions remain route-specific at the gateway.
+- Post-stream metrics remain session-local test evidence. They do not create production analytics, financial balances, payouts, or third-party tracking.
+- The raw CSS guardrail moves from 125 KiB to 135 KiB for these first-party responsive/moderation surfaces. The stricter 145 KiB combined compressed-asset budget remains unchanged; no UI library or media dependency was added.
+- Creator session truth may come from either the in-browser publisher runtime or the server-confirmed ingest lifecycle. A provider/OBS stream in `live` or `connecting` state must expose the live cockpit and moderation chat even when this browser did not publish the media.
+- Pre-live metadata and thumbnail selection must remain available before camera/microphone permission. Device access gates preview and browser publication, not preparation of public stream information.
+- The staging-operator verification prefers its digest-pinned Docker container. On Windows, if Docker is unavailable, it may run the identical read-only shell syntax and mocked admission checks through the existing Ubuntu WSL environment; this does not weaken deployment approval checks.
+
 ## 2026-08-29 - Creator identity lives behind one avatar menu
 
 - The broadcaster header exposes one persistent avatar control. Creator utilities, language, and sign-out live in its popover; the old horizontal section strip is removed so mobile and desktop use the same understandable navigation model.
@@ -299,3 +387,12 @@ The active product goal ends at a deployable bilingual test-only streaming platf
 - Approval and provisioning are one locked database transaction. It creates a single creator profile and offline room, changes the role, writes decision/audit/notification records, and revokes all applicant sessions.
 - Rejection leaves the audience account intact and supports a revised application. Every administrator decision requires a non-sensitive reason; duplicate decisions fail closed.
 - A provisioned room has no Cloudflare Live Input. Media resource assignment and creator eligibility/compliance remain separately owner-gated.
+## 2026-08-31 - Live claims and destructive moderation require authoritative state
+
+- “Live now” is reserved for rooms whose normalized lifecycle is `live`; offline and unavailable creators remain discoverable in a separately labeled recommendation section.
+- Follow and lifecycle realtime events trigger an authoritative ranked discovery reload instead of only mutating visible labels and counts.
+- Local lifecycle controls are simulation-only and must say that they do not publish or stop media. Simulated live status is visibly distinguished from provider-confirmed live status.
+- Status source is persisted as `local` or `cloudflare` in migration `023`; message text is presentation and is never an authorization, discovery, playback, social-metadata, or ending-policy boundary.
+- Streamer sign-out during an active browser/local session must first receive a successful server-side end result. Production OBS ingest cannot be stopped by the website, so an active OBS broadcast returns a conflict and instructs the creator to stop OBS first.
+- Administrator moderation requires an explicitly selected non-admin account, a server-validated 2–500 character reason, and a final confirmation. No hidden fixed demo target, fixed reason, or administrator target is allowed.
+- The raw CSS ceiling remains 135 KiB. The combined compressed JS+CSS ceiling is narrowly calibrated from 147 to 149 KiB for these first-party safety flows; no dependency was added.
