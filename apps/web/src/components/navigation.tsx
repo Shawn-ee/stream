@@ -31,23 +31,29 @@ export function MobileBottomNav({
   active,
   zh,
   hidden,
+  showCreatorEntry,
   onNavigate,
 }: {
   active: MobileTab;
   zh: boolean;
   hidden?: boolean;
+  showCreatorEntry: boolean;
   onNavigate: (tab: MobileTab) => void;
 }) {
   const items: { id: MobileTab; icon: string; en: string; zh: string }[] = [
     { id: "home", icon: "⌂", en: "Home", zh: "首页" },
     { id: "discover", icon: "◉", en: "Discover", zh: "发现" },
-    { id: "go-live", icon: "+", en: "Go Live", zh: "开播" },
+    { id: "go-live", icon: "+", en: "Create", zh: "创作" },
     { id: "inbox", icon: "✉", en: "Inbox", zh: "消息" },
     { id: "me", icon: "○", en: "Me", zh: "我的" },
   ];
   return (
-    <nav className={`mobile-bottom-nav ${hidden ? "is-hidden" : ""}`} aria-label={zh ? "移动导航" : "Mobile navigation"}>
-      {items.map((item) => (
+    <nav
+      className={`mobile-bottom-nav ${hidden ? "is-hidden" : ""}`}
+      style={{ gridTemplateColumns: `repeat(${showCreatorEntry ? 5 : 4}, minmax(0, 1fr))` }}
+      aria-label={zh ? "移动导航" : "Mobile navigation"}
+    >
+      {items.filter((item) => item.id !== "go-live" || showCreatorEntry).map((item) => (
         <button
           type="button"
           key={item.id}

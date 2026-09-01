@@ -1,5 +1,11 @@
 # Local Runbook
 
+## Audience-first entry verification
+
+Run `npm run db:seed`, `npm run verify:audience-first-entry`, `npm run verify:creator-applications`, and `npm run verify:staging`. In a signed-out desktop and mobile session, confirm discovery/viewing remains available, the sign-in modal contains only Sign in/Create account plus handle/password fields, and no Go Live, Create, creator application, Streamer, or Administrator shortcut is visible.
+
+Sign in as `demo-audience`, acknowledge the local test gate, and confirm **Become a creator / 申请成为主播** appears. It must open Account & security at the existing application/status workflow; it must not expose broadcast controls or grant a streamer role. Sign out, use the approved synthetic `demo-streamer` credentials through the same neutral form, and confirm the server routes that account directly to broadcaster setup. Administrator queue/approval, transactional provisioning, session revocation, and re-login behavior are covered by `verify:creator-applications`. Reseed afterward. This check does not authorize submitting a real application, changing production roles, camera/microphone access, Cloudflare use, broadcast, deployment, or payment.
+
 ## P0 truth-and-safety acceptance
 
 Docker Desktop was recovered on 2026-08-31 without a factory reset or volume deletion. The exact transient runtime directory containing only the malformed `dockerInference` reparse point was renamed to `C:\Users\hecto\AppData\Local\Docker\run.broken-20260831-restore`, and Docker recreated a clean `run` directory. If the same failure recurs, first stop only Docker Desktop/backend, verify the exact path and contents, and obtain owner approval before moving any Docker-owned runtime artifact. Never use this procedure on Docker data, image, container, or volume directories. With Docker healthy, run `docker compose up -d postgres redis`, then `npm run db:migrate`, `npm run db:seed`, `npm run verify:p0-truth-safety`, and `npm run verify:staging`.

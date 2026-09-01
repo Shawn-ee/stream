@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-01 - Audience-first entry and approval-gated creator access (local)
+
+- Removed public demo-role shortcuts and every signed-out creator/broadcast entry; the sign-in form now asks only for account credentials while the API remains the authority for audience, streamer, or administrator role.
+- Kept discovery and public viewing audience-focused. Signed-in audience accounts receive a **Become a creator / 申请成为主播** entry, and the existing application/status workflow now lives inside Account & security rather than interrupting discovery.
+- Renamed the authenticated mobile creator entry from **Go Live** to **Create / 创作**. It is absent for guests and opens the application workflow for audience accounts; only a server-approved streamer role renders the broadcaster interface.
+- Added `verify:audience-first-entry` to the staging gate. Type checks, focused auth/navigation checks, the full creator-application authorization/provisioning test, and local browser smoke tests for guest, audience, and approved streamer paths pass. No commit, deployment, Cloudflare action, media start, payment, or production role change occurred.
+
 ## 2026-08-31 - P0 truth and safety hardening (local, accepted)
 
 - Added migration `023_broadcast_status_source.sql` so lifecycle source is authoritative data rather than inferred from status copy.

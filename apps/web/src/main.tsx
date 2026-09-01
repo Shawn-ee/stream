@@ -936,6 +936,12 @@ function App() {
       return;
     }
     setMobileTab(tab);
+    if (tab === "go-live") {
+      setAccountOpen(true);
+      setMobileSearchOpen(false);
+      window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      return;
+    }
     if (tab === "me") {
       setAccountOpen(true);
       setMobileSearchOpen(false);
@@ -950,11 +956,7 @@ function App() {
       void loadRooms();
       return;
     }
-    const targetSelector = tab === "discover"
-      ? "#live-now"
-      : tab === "go-live"
-        ? "#creator-program"
-        : "#audience-library";
+    const targetSelector = tab === "discover" ? "#live-now" : "#audience-library";
     document.querySelector(targetSelector)?.scrollIntoView({ block: "start" });
   }
   useEffect(() => {
@@ -972,7 +974,7 @@ function App() {
       setAccountOpen(true);
       window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     } else if (["broadcast", "go-live"].includes(resumeIntent.kind)) {
-      showDiscovery();
+      setAccountOpen(true);
       window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     } else if (resumeIntent.kind === "inbox") {
       setMobileTab("inbox");
@@ -1069,7 +1071,7 @@ function App() {
         )}
         <div className="product-account">
           <LanguagePicker language={language} onChange={setLanguage} />
-          {user.role === "audience" && user.ageAcknowledged ? <button className="secondary header-creator-link" onClick={() => isGuest ? requireAuth("broadcast") : document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth" })}>{language === "en" ? "Go Live" : "开播"}</button> : null}
+          {user.role === "audience" && user.ageAcknowledged && !isGuest ? <button className="secondary header-creator-link" onClick={() => { setAccountOpen(true); window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>{language === "en" ? "Become a creator" : "申请成为主播"}</button> : null}
           {user.role === "audience" && user.ageAcknowledged ? <button className="secondary header-wallet-link" onClick={() => { if (isGuest) return requireAuth("wallet"); setAccountOpen(true); window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>{language === "en" ? "Wallet" : "钱包"}</button> : null}
           {user.role === "audience" && <span className="header-account-label">{isGuest ? (language === "en" ? "Browsing as guest" : "访客浏览") : user.displayName}</span>}
           <button
@@ -1317,7 +1319,6 @@ function App() {
                   creators={followingRooms}
                   onOpenRoom={(slug) => void request(`/api/rooms/${encodeURIComponent(slug)}`).then((data) => showRoom(data.room))}
                 /> : null}
-                {!isGuest ? <div id="creator-program"><CreatorApplication t={t} /></div> : null}
               </div>
             </div>
           </section>
@@ -1337,6 +1338,7 @@ function App() {
           active={accountOpen ? "me" : mobileTab}
           zh={language === "zh"}
           hidden={Boolean(room || profileRoom)}
+          showCreatorEntry={!isGuest}
           onNavigate={navigateMobile}
         />
       ) : null}
@@ -1357,11 +1359,6 @@ function App() {
           <button type="button" className={authMode === "login" ? "active" : ""} onClick={() => { setAuthMode("login"); setLoginError(""); }}>{language === "en" ? "Sign in" : "登录"}</button>
           <button type="button" className={authMode === "register" ? "active" : ""} onClick={() => { setAuthMode("register"); setHandle(""); setLoginError(""); }}>{language === "en" ? "Create account" : "创建账户"}</button>
         </div>
-        {authMode === "login" ? (
-          <div className="account-shortcuts">
-            {(["audience", "streamer", "admin"] as Role[]).map((role) => <button type="button" className="secondary" key={role} onClick={() => setHandle(`demo-${role}`)}>{roleLabel(t, role)}</button>)}
-          </div>
-        ) : null}
         <form className="login-form" onSubmit={(event) => void (authMode === "login" ? login(event) : register(event))}>
           <label>{language === "en" ? "Account handle" : "账户名"}<input value={handle} onChange={(event) => setHandle(event.target.value.toLowerCase())} autoComplete="username" minLength={3} maxLength={30} pattern={authMode === "register" ? "[a-z0-9_]+" : "[a-z0-9_-]+"} required /></label>
           {authMode === "register" ? <label>{language === "en" ? "Display name" : "显示名称"}<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} autoComplete="nickname" minLength={2} maxLength={50} required /></label> : null}
@@ -1512,6 +1509,7 @@ function AccountCenter({
           ))}
         </section>
         {user.role === "audience" ? <AudienceRWallet zh={zh} /> : null}
+        {user.role === "audience" ? <div id="creator-program" className="account-recovery account-creator-program"><CreatorApplication t={copy[language]} /></div> : null}
         <section className="account-recovery">
           <h3>{zh ? "账户恢复" : "Account recovery"}</h3>
           <p>{zh ? "恢复功能尚未启用。当前版本不会收集电子邮箱、发送恢复邮件或使用外部身份服务。" : "Recovery is not enabled yet. This version does not collect email, send reset links, or use an external identity provider."}</p>

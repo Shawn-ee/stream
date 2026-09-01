@@ -1,5 +1,12 @@
 # Architecture Decisions
 
+## 2026-09-01 - Public entry is audience-first and creator access is server-approved
+
+- Holiwyn exposes one neutral sign-in/create-account flow. The browser never asks a visitor to choose audience, streamer, or administrator and never declares its own role; the authenticated server record remains authoritative.
+- Anonymous visitors receive only audience discovery/viewing surfaces. Creator application is visible only after an audience account signs in, and the long form lives in Account & security rather than on the discovery feed.
+- Applying does not grant broadcasting access. Administrator approval transactionally changes the account role and revokes existing sessions; only the resulting streamer session may render or call creator broadcast tools.
+- Administrator and approved-streamer accounts may still use the neutral credential form, but no privileged account type or demo handle is advertised on the public surface.
+
 ## 2026-08-31 - Personalization is explicit, deterministic, and locally explainable
 
 - Saved discovery preferences belong only to the authenticated audience account. Language/category interests affect ordering rather than filtering; temporary search/category/language controls remain independent and are never silently persisted.
