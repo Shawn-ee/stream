@@ -5,11 +5,11 @@ export type SocialPreviewRoom = {
   title: string;
   streamer_name: string;
   handle: string;
-  category: string;
   bio?: string | null;
   broadcast_state?: string | null;
   broadcast_status_source?: string | null;
-  stream_language?: string | null;
+  languages?: { code: string; isPrimary: boolean }[];
+  tags?: { displayName: string }[];
   avatar_url?: string | null;
   stream_thumbnail_url?: string | null;
 };
@@ -42,10 +42,10 @@ export function renderSocialPreview(kind: SocialPreviewKind, room: SocialPreview
   const isRoom = kind === "room";
   const title = isRoom ? `${creator} · ${roomTitle}` : `${creator} on Holiwyn`;
   const description = (isRoom
-    ? `${room.broadcast_state === "live" && room.broadcast_status_source === "cloudflare" ? "Live now" : "Creator room"} · ${roomTitle} · ${room.category}`
+    ? `${room.broadcast_state === "live" && room.broadcast_status_source === "cloudflare" ? "Live now" : "Creator room"} · ${roomTitle}${room.tags?.length ? ` · ${room.tags.slice(0,3).map(tag=>tag.displayName).join(" · ")}` : ""}`
     : room.bio?.trim() || `Discover ${creator} on Holiwyn.`).slice(0, 200);
   const image = absoluteOwnedImage(isRoom ? room.stream_thumbnail_url ?? room.avatar_url : room.avatar_url, origin);
-  const language = room.stream_language === "zh" ? "zh" : "en";
+  const language = room.languages?.find(item=>item.isPrimary)?.code ?? "en";
   const type = isRoom ? "website" : "profile";
   const imageTags = image
     ? `<meta property="og:image" content="${escapeHtml(image)}"><meta name="twitter:image" content="${escapeHtml(image)}">`

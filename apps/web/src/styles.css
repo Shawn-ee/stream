@@ -1547,19 +1547,6 @@ p {
   font-weight: 900;
   box-shadow: 0 16px 40px #03050b66;
 }
-.room-card-category {
-  position: absolute !important;
-  left: 0.8rem;
-  bottom: 0.75rem;
-  margin: 0 !important;
-  border: 1px solid #ffffff26;
-  border-radius: 999px;
-  background: #070a13aa;
-  color: #eef0f8 !important;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.68rem !important;
-  font-weight: 800;
-}
 .room-card-copy {
   display: grid !important;
   align-content: center;

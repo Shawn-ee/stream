@@ -1,5 +1,11 @@
 # Stream MVP Backlog
 
+## Room-classification follow-up
+
+- Deferred: remove deprecated category and free-text classification columns only after external-client inventory and a reviewed production migration.
+- Deferred: administrator tag/catalog management UI, alias curation, automated prohibited-tag moderation, and richer anti-manipulation trending signals.
+- Deferred: analytics delivery for language-filter, tag, trending, following, and community engagement; no external analytics provider is added here.
+
 ## Creator onboarding and review
 
 - Completed locally: short versioned agreement, two explicit declarations, agreement-first onboarding, encrypted private document receipt/replacement, and truthful uploaded/reviewed wording.

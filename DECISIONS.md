@@ -1,5 +1,14 @@
 # Architecture Decisions
 
+## 2026-09-02 — Languages and tags replace room categories
+
+- Every room has exactly one primary language and at most two additional languages from a controlled standard-code catalog.
+- Room language selection uses OR semantics in discovery; codes, not localized names, are stored in URLs and APIs.
+- CONTENT, FORMAT, and MOOD tags classify content. COMMUNITY is controlled and voluntary. SYSTEM and MODERATION tags are internal.
+- Trending and Featured remain system-owned. Creators cannot assign them.
+- Country flags are not stored, inferred, or rendered.
+- Legacy category fields are deprecated compatibility data; new Studio/public contracts do not use them.
+
 ## 2026-09-02 — Document receipt is not identity verification
 
 Holiwyn accepts a private encrypted document only after `creator-agreement-v1` and explicit 18+ confirmation. Upload is `UPLOADED`, administrative inspection may be `REVIEWED`, and neither means verified. No external identity provider or Google OAuth is used. Auto-activation is server-controlled, creates no room, and adds creator capability without removing audience capability.

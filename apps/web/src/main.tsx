@@ -33,6 +33,7 @@ import {
 } from "./components/discovery";
 import { LiveChatPanel, MobileRoomOverlay, RoomCreatorBar } from "./components/room";
 import { CreatorProfileSurface } from "./components/profile";
+import { RoomClassificationFields, type LanguageOption, type TagOption } from "./components/room-classification";
 import { CreatorAvatar } from "./components/avatar";
 import { CreatorOnboarding } from "./components/creator-onboarding";
 import { audienceRoutePath, parseAudienceRoute, type AudienceRoute } from "./audience-route";
@@ -46,6 +47,9 @@ import {
 
 type Role = "audience" | "streamer" | "admin";
 type Language = "en" | "zh";
+type SupportedLanguage={code:string;name_en:string;name_native:string};
+type RoomLanguage={code:string;nameEn:string;nameNative:string;isPrimary:boolean};
+type PublicTag={id:string;slug:string;displayName:string;type:"CONTENT"|"FORMAT"|"MOOD"|"COMMUNITY"};
 type User = {
   id: string;
   handle: string;
@@ -100,7 +104,6 @@ type Room = {
   streamer_id: string;
   streamer_name: string;
   avatar_url?: string | null;
-  category: string;
   bio?: string;
   schedule_text?: string;
   next_stream_at?: string | null;
@@ -115,15 +118,15 @@ type Room = {
   broadcast_status_message?: string;
   broadcast_status_source?: "local" | "cloudflare";
   broadcast_transport?: "obs_hls" | "browser_webrtc";
-  stream_language?: "en" | "zh";
-  stream_tags?: string[];
+  languages: RoomLanguage[];
+  tags: PublicTag[];
   stream_thumbnail_url?: string | null;
   recommendation_reasons?: string[];
   personalization_applied?: boolean;
 };
 type DiscoveryPreferences = {
-  preferred_languages: Language[];
-  preferred_categories: string[];
+  preferred_languages: string[];
+  preferred_tag_slugs: string[];
   prioritize_live: boolean;
   prioritize_following: boolean;
   personalization_enabled: boolean;
@@ -135,7 +138,8 @@ type StreamerProfile = {
   display_name: string;
   avatar_url?: string | null;
   bio: string;
-  category: string;
+  languages: RoomLanguage[];
+  tags: PublicTag[];
   schedule_text: string;
   next_stream_at?: string | null;
   schedule_timezone?: string;
@@ -175,7 +179,6 @@ const copy: Record<Language, Record<string, string>> = {
     age: "I confirm for this local test",
     live: "Live now",
     search: "Search rooms or streamers",
-    allCategories: "All categories",
     followers: "followers",
     recent: "Recently visited",
     notifications: "Notifications",
@@ -261,7 +264,6 @@ const copy: Record<Language, Record<string, string>> = {
     age: "我确认用于本地测试",
     live: "正在直播",
     search: "搜索直播间或主播",
-    allCategories: "全部分类",
     followers: "位关注者",
     recent: "最近访问",
     notifications: "通知",
@@ -444,7 +446,8 @@ function LanguagePicker({
 }
 function DiscoveryPreferencePanel({
   preferences,
-  categories,
+  languages,
+  tags,
   zh,
   saving,
   message,
@@ -453,7 +456,8 @@ function DiscoveryPreferencePanel({
   onReset,
 }: {
   preferences: DiscoveryPreferences;
-  categories: string[];
+  languages: SupportedLanguage[];
+  tags: PublicTag[];
   zh: boolean;
   saving: boolean;
   message: "" | "saved" | "reset" | "error";
@@ -461,17 +465,17 @@ function DiscoveryPreferencePanel({
   onSave: () => void;
   onReset: () => void;
 }) {
-  const toggleLanguage = (item: Language) => onChange({
+  const toggleLanguage = (item: string) => onChange({
     ...preferences,
     preferred_languages: preferences.preferred_languages.includes(item)
       ? preferences.preferred_languages.filter((language) => language !== item)
       : [...preferences.preferred_languages, item],
   });
-  const toggleCategory = (item: string) => onChange({
+  const toggleTag = (item: string) => onChange({
     ...preferences,
-    preferred_categories: preferences.preferred_categories.includes(item)
-      ? preferences.preferred_categories.filter((category) => category !== item)
-      : [...preferences.preferred_categories, item],
+    preferred_tag_slugs: preferences.preferred_tag_slugs.includes(item)
+      ? preferences.preferred_tag_slugs.filter((tag) => tag !== item)
+      : [...preferences.preferred_tag_slugs, item],
   });
   return (
     <details className="discovery-preferences">
@@ -480,13 +484,12 @@ function DiscoveryPreferencePanel({
         <p>{zh ? "选择偏好只会调整排序；上方筛选仍用于当前浏览。" : "Preferences change ordering only; the filters above still control this browsing session."}</p>
         <fieldset className="account-shortcuts">
           <legend>{zh ? "偏好语言" : "Preferred languages"}</legend>
-          <label><input type="checkbox" checked={preferences.preferred_languages.includes("en")} onChange={() => toggleLanguage("en")} /> English</label>
-          <label><input type="checkbox" checked={preferences.preferred_languages.includes("zh")} onChange={() => toggleLanguage("zh")} /> 中文</label>
+          {languages.map(item=><label key={item.code}><input type="checkbox" checked={preferences.preferred_languages.includes(item.code as Language)} onChange={() => toggleLanguage(item.code)} /> {zh?item.name_native:item.name_en}</label>)}
         </fieldset>
         <fieldset className="account-shortcuts">
-          <legend>{zh ? "偏好分类" : "Preferred categories"}</legend>
-          <div className="preference-category-list account-shortcuts">
-            {categories.map((item) => <label key={item}><input type="checkbox" checked={preferences.preferred_categories.includes(item)} onChange={() => toggleCategory(item)} /> {item}</label>)}
+          <legend>{zh ? "偏好标签" : "Preferred tags"}</legend>
+          <div className="preference-tag-list account-shortcuts">
+            {tags.map((item) => <label key={item.id}><input type="checkbox" checked={preferences.preferred_tag_slugs.includes(item.slug)} onChange={() => toggleTag(item.slug)} /> {item.displayName}</label>)}
           </div>
         </fieldset>
         <label><input type="checkbox" checked={preferences.prioritize_live} onChange={(event) => onChange({ ...preferences, prioritize_live: event.target.checked })} /> {zh ? "优先直播中的房间" : "Prioritize live rooms"}</label>
@@ -519,9 +522,12 @@ function App() {
   const [profileRoom, setProfileRoom] = useState<Room | null>(null);
   const [query, setQuery] = useState("");
   const [settledQuery, setSettledQuery] = useState("");
-  const [category, setCategory] = useState("");
-  const [streamLanguage, setStreamLanguage] = useState<"" | "en" | "zh">("");
-  const [categories, setCategories] = useState<string[]>([]);
+  const initialFilters=new URLSearchParams(window.location.search);
+  const [selectedLanguages,setSelectedLanguages]=useState<string[]>(()=>initialFilters.get("languages")?.split(",").filter(Boolean)??[]);
+  const [selectedTag,setSelectedTag]=useState(()=>initialFilters.get("tag")??"");
+  const [supportedLanguages,setSupportedLanguages]=useState<SupportedLanguage[]>([]);
+  const [publicTags,setPublicTags]=useState<PublicTag[]>([]);
+  const [communityTags,setCommunityTags]=useState<PublicTag[]>([]);
   const [discoveryPreferences, setDiscoveryPreferences] = useState<DiscoveryPreferences | null>(null);
   const [preferencesSaving, setPreferencesSaving] = useState(false);
   const [preferencesMessage, setPreferencesMessage] = useState<"" | "saved" | "reset" | "error">("");
@@ -549,6 +555,8 @@ function App() {
   const [mobileDiscoveryView, setMobileDiscoveryView] = useState<MobileDiscoveryView>("for-you");
   const roomsRequestRef = useRef(0);
   const routeRequestRef = useRef(0);
+  const filterHistoryReadyRef = useRef(false);
+  const restoringFilterHistoryRef = useRef(false);
   const authIntentIdRef = useRef(0);
   const t = copy[language];
   const requireAuth = (kind: AuthIntentKind) => {
@@ -625,9 +633,9 @@ function App() {
       setRoom(null); setProfileRoom(null); setAccountOpen(false);
       setCreatorPortalStep("status"); setRouteLoading(false); return;
     }
-    if (route.view === "categories") {
+    if (route.view === "tags") {
       setRoom(null); setProfileRoom(null); setAccountOpen(false); setCreatorPortalStep(null); setRouteLoading(false);
-      window.setTimeout(() => document.querySelector("#popular-categories")?.scrollIntoView({ block: "start" }), 0);
+      window.setTimeout(() => document.querySelector("#popular-tags")?.scrollIntoView({ block: "start" }), 0);
       return;
     }
     if (route.view === "discovery") {
@@ -684,7 +692,7 @@ function App() {
     setRoomsError(false);
     try {
       const data = await request(
-        `/api/rooms?q=${encodeURIComponent(settledQuery)}&category=${encodeURIComponent(category)}&language=${encodeURIComponent(streamLanguage)}`,
+        `/api/rooms?q=${encodeURIComponent(settledQuery)}&languages=${encodeURIComponent(selectedLanguages.join(","))}&tag=${encodeURIComponent(selectedTag)}`,
       );
       if (requestId === roomsRequestRef.current) setRooms(data.rooms);
     } catch {
@@ -717,7 +725,7 @@ function App() {
         method: "PUT",
         body: JSON.stringify({
           preferredLanguages: discoveryPreferences.preferred_languages,
-          preferredCategories: discoveryPreferences.preferred_categories,
+          preferredTags: discoveryPreferences.preferred_tag_slugs,
           prioritizeLive: discoveryPreferences.prioritize_live,
           prioritizeFollowing: discoveryPreferences.prioritize_following,
           personalizationEnabled: discoveryPreferences.personalization_enabled,
@@ -763,9 +771,9 @@ function App() {
       })
       .catch(() => setUser(publicGuest(language)))
       .finally(() => setSessionLoading(false));
-    void request("/api/discovery/categories").then((d) =>
-      setCategories(d.categories),
-    ).catch(() => setCategories([]));
+    void request("/api/discovery/languages").then((d)=>setSupportedLanguages(d.languages)).catch(()=>setSupportedLanguages([]));
+    void request("/api/discovery/tags").then((d)=>setPublicTags(d.tags)).catch(()=>setPublicTags([]));
+    void request("/api/discovery/tags?type=community").then((d)=>setCommunityTags(d.tags)).catch(()=>setCommunityTags([]));
   }, []);
   useEffect(() => {
     if (sessionLoading || user?.role !== "audience" || !user.ageAcknowledged) return;
@@ -773,7 +781,13 @@ function App() {
   }, [sessionLoading, user?.id, user?.role, user?.ageAcknowledged, hydrateAudienceRoute]);
   useEffect(() => {
     if (user?.role !== "audience" || !user.ageAcknowledged) return;
-    const restoreAudienceRoute = () => void hydrateAudienceRoute(window.location.pathname);
+    const restoreAudienceRoute = () => {
+      const params = new URLSearchParams(window.location.search);
+      restoringFilterHistoryRef.current = true;
+      setSelectedLanguages((params.get("languages") ?? "").split(",").filter(Boolean).slice(0, 20));
+      setSelectedTag(params.get("tag") ?? "");
+      void hydrateAudienceRoute(window.location.pathname);
+    };
     window.addEventListener("popstate", restoreAudienceRoute);
     return () => window.removeEventListener("popstate", restoreAudienceRoute);
   }, [user?.role, user?.ageAcknowledged, hydrateAudienceRoute]);
@@ -788,7 +802,22 @@ function App() {
   }, [query]);
   useEffect(() => {
     if (user?.role === "audience" && user.ageAcknowledged) loadRooms();
-  }, [user, settledQuery, category, streamLanguage]);
+  }, [user, settledQuery, selectedLanguages.join(","), selectedTag]);
+  useEffect(()=>{
+    if (!filterHistoryReadyRef.current) {
+      filterHistoryReadyRef.current = true;
+      return;
+    }
+    if (restoringFilterHistoryRef.current) {
+      restoringFilterHistoryRef.current = false;
+      return;
+    }
+    const params=new URLSearchParams(window.location.search);
+    if(selectedLanguages.length)params.set("languages",selectedLanguages.join(","));else params.delete("languages");
+    if(selectedTag)params.set("tag",selectedTag);else params.delete("tag");
+    const next=`${window.location.pathname}${params.size?`?${params}`:""}`;
+    window.history.pushState({...window.history.state,holiwynAudienceRoute:next},"",next);
+  },[selectedLanguages.join(","),selectedTag]);
   useEffect(() => {
     if (user?.role === "audience" && user.ageAcknowledged && user.id !== "public-guest") void loadFollowing();
     else if (user?.id === "public-guest") {
@@ -892,7 +921,7 @@ function App() {
     return () => {
       socket.disconnect();
     };
-  }, [user?.role, user?.ageAcknowledged, settledQuery, category, streamLanguage]);
+  }, [user?.role, user?.ageAcknowledged, settledQuery, selectedLanguages, selectedTag]);
   async function login(e: FormEvent) {
     e.preventDefault();
     setLoginError("");
@@ -1113,10 +1142,10 @@ function App() {
               </button>
               <button type="button" onClick={() => {
                 showDiscovery();
-                window.history.pushState({}, "", "/categories");
-                window.setTimeout(() => document.querySelector("#popular-categories")?.scrollIntoView({ behavior: "smooth" }), 0);
+                window.history.pushState({}, "", "/tags");
+                window.setTimeout(() => document.querySelector("#popular-tags")?.scrollIntoView({ behavior: "smooth" }), 0);
               }}>
-                {language === "en" ? "Categories" : "分类"}
+                {language === "en" ? "Tags" : "标签"}
               </button>
             </nav>
             <label className="audience-global-search">
@@ -1267,9 +1296,10 @@ function App() {
                     rooms={rooms}
                     following={followingRooms}
                     view={mobileDiscoveryView}
-                    category={category}
-                    language={streamLanguage}
-                    categories={categories}
+                    selectedLanguages={selectedLanguages}
+                    selectedTag={selectedTag}
+                    languages={supportedLanguages}
+                    tags={[...publicTags,...communityTags]}
                     roomsLoading={roomsLoading}
                     followingLoading={followingLoading}
                     roomsError={roomsError}
@@ -1280,8 +1310,8 @@ function App() {
                       if (isGuest && view === "following") return requireAuth("following");
                       setMobileDiscoveryView(view);
                     }}
-                    onCategoryChange={setCategory}
-                    onLanguageChange={setStreamLanguage}
+                    onLanguagesChange={setSelectedLanguages}
+                    onTagChange={setSelectedTag}
                     onRetry={() => mobileDiscoveryView === "following" ? void loadFollowing() : void loadRooms()}
                     onOpen={(selected: DiscoveryRoom) => {
                       showRoom(selected as Room);
@@ -1295,15 +1325,11 @@ function App() {
                         <p>{language === "en" ? "Creators broadcasting now and rooms worth discovering." : "正在直播以及值得发现的主播。"}</p>
                       </div>
                       <div className="discovery-filter-row">
-                        <select className="discovery-category-filter" value={category} onChange={(event) => setCategory(event.target.value)} aria-label={t.allCategories}>
-                          <option value="">{t.allCategories}</option>
-                          {categories.map((item) => <option key={item}>{item}</option>)}
+                        <select className="discovery-language-filter" value={selectedTag} onChange={(event)=>setSelectedTag(event.target.value)} aria-label={language==="zh"?"内容标签":"Content tag"}>
+                          <option value="">{language==="zh"?"所有标签":"All tags"}</option>
+                          {[...publicTags,...communityTags].map(item=><option key={item.id} value={item.slug}>{item.displayName}</option>)}
                         </select>
-                        <select className="discovery-language-filter" value={streamLanguage} onChange={(event) => setStreamLanguage(event.target.value as "" | "en" | "zh")} aria-label={language === "zh" ? "直播语言" : "Stream language"}>
-                          <option value="">{language === "zh" ? "所有语言" : "All languages"}</option>
-                          <option value="en">English</option>
-                          <option value="zh">中文</option>
-                        </select>
+                        {selectedLanguages.length||selectedTag?<button type="button" className="secondary" onClick={()=>{setSelectedLanguages([]);setSelectedTag("");}}>{language==="zh"?"清除筛选":"Clear filters"}</button>:null}
                       </div>
                     </div>
                     <div className="live-stream-grid">
@@ -1330,7 +1356,7 @@ function App() {
                       )) : (
                         <div className="live-empty-compact">
                           <span><strong>{language === "en" ? "Nobody is live right now" : "暂时没有主播开播"}</strong><small>{language === "en" ? "Recommended creators are ready below." : "下方仍有推荐主播。"}</small></span>
-                          <button type="button" onClick={() => { setQuery(""); setCategory(""); }}>{language === "en" ? "Browse creators" : "浏览主播"}</button>
+                          <button type="button" onClick={() => { setQuery("");setSelectedLanguages([]);setSelectedTag(""); }}>{language === "en" ? "Browse all live rooms" : "浏览全部直播间"}</button>
                         </div>
                       )}
                     </div>
@@ -1346,16 +1372,19 @@ function App() {
                         </div>
                       </section>
                     ) : null}
-                    {categories.length ? <section className="popular-categories" id="popular-categories" aria-labelledby="popular-categories-title">
+                    <section className="language-discovery" aria-labelledby="language-discovery-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"按语言发现":"Language"}</p><h2 id="language-discovery-title">{language==="zh"?"选择直播语言":"Streams in your languages"}</h2></div></div><div className="language-filter-chips">{supportedLanguages.map(item=><button type="button" key={item.code} className={selectedLanguages.includes(item.code)?"active":""} aria-pressed={selectedLanguages.includes(item.code)} onClick={()=>setSelectedLanguages(selectedLanguages.includes(item.code)?selectedLanguages.filter(code=>code!==item.code):[...selectedLanguages,item.code])}>{language==="zh"?item.name_native:item.name_en}</button>)}</div></section>
+                    {publicTags.length ? <section className="popular-tags" id="popular-tags" aria-labelledby="popular-tags-title">
                       <div className="discovery-section-heading">
-                        <div><p className="eyebrow">{language === "en" ? "Browse by interest" : "按兴趣浏览"}</p><h2 id="popular-categories-title">{language === "en" ? "Popular categories" : "热门分类"}</h2></div>
+                        <div><p className="eyebrow">{language === "en" ? "Browse by interest" : "按兴趣浏览"}</p><h2 id="popular-tags-title">{language === "en" ? "Popular tags" : "热门标签"}</h2></div>
                       </div>
-                      <div className="category-chip-grid">
-                        {categories.slice(0, 8).map((item) => <button type="button" key={item} className={category === item ? "active" : ""} onClick={() => { setCategory(item); document.querySelector("#live-now")?.scrollIntoView({ behavior: "smooth" }); }}>
-                          <span aria-hidden="true">{item.slice(0, 1).toUpperCase()}</span><strong>{item}</strong>
+                      <div className="tag-chip-grid">
+                        {publicTags.slice(0,8).map((item)=><button type="button" key={item.id} className={selectedTag===item.slug?"active":""} onClick={()=>{setSelectedTag(item.slug);document.querySelector("#live-now")?.scrollIntoView({behavior:"smooth"});}}>
+                          <span aria-hidden="true">#</span><strong>{item.displayName}</strong>
                         </button>)}
                       </div>
                     </section> : null}
+                    {rooms.some((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local")?<section className="trending-streams" aria-labelledby="trending-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"热门趋势":"Trending"}</p><h2 id="trending-title">{language==="zh"?"现在热门":"Trending now"}</h2></div></div><div className="live-stream-grid">{rooms.filter((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local").slice(0,4).map((item,index)=><LiveStreamCard key={`trending-${item.slug}`} room={item} index={index} t={t} zh={language==="zh"} onOpen={(selected)=>showRoom(selected as Room)}/>)}</div></section>:null}
+                    {communityTags.length?<section className="community-discovery" aria-labelledby="community-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"自愿选择":"Community"}</p><h2 id="community-title">{language==="zh"?"社区":"Communities"}</h2><p>{language==="zh"?"由平台维护、主播自愿选择。":"Platform-maintained labels creators may select voluntarily."}</p></div></div><div className="language-filter-chips">{communityTags.map(item=><button type="button" key={item.id} className={selectedTag===item.slug?"active":""} onClick={()=>setSelectedTag(selectedTag===item.slug?"":item.slug)}>{item.displayName}</button>)}</div></section>:null}
                     {rooms.some((item) => item.next_stream_at) ? <section className="upcoming-streams" aria-labelledby="upcoming-streams-title">
                       <div className="discovery-section-heading"><div><p className="eyebrow">{language === "en" ? "Plan what to watch" : "安排观看"}</p><h2 id="upcoming-streams-title">{language === "en" ? "Upcoming streams" : "即将开播"}</h2></div></div>
                       <div className="upcoming-stream-list">
@@ -1370,7 +1399,8 @@ function App() {
                 {!isGuest && discoveryPreferences ? (
                   <DiscoveryPreferencePanel
                     preferences={discoveryPreferences}
-                    categories={categories}
+                    languages={supportedLanguages}
+                    tags={publicTags}
                     zh={language === "zh"}
                     saving={preferencesSaving}
                     message={preferencesMessage}
@@ -2534,16 +2564,18 @@ function QuickGoLive({
   broadcastSource,
   transport,
   title,
-  category,
-  streamLanguage,
-  streamTags,
+  primaryLanguage,
+  additionalLanguages,
+  tagIds,
+  languageOptions,
+  tagOptions,
   thumbnailUrl,
   t,
   onChanged,
   onTitleChange,
-  onCategoryChange,
-  onStreamLanguageChange,
-  onStreamTagsChange,
+  onPrimaryLanguageChange,
+  onAdditionalLanguagesChange,
+  onTagIdsChange,
   onSaveMetadata,
   onThumbnailSelected,
   overlay,
@@ -2558,16 +2590,18 @@ function QuickGoLive({
   broadcastSource?: "local" | "cloudflare";
   transport?: "obs_hls" | "browser_webrtc";
   title: string;
-  category: string;
-  streamLanguage: "en" | "zh";
-  streamTags: string;
+  primaryLanguage: string;
+  additionalLanguages: string[];
+  tagIds: string[];
+  languageOptions: LanguageOption[];
+  tagOptions: TagOption[];
   thumbnailUrl?: string | null;
   t: typeof copy.en;
   onChanged: () => void;
   onTitleChange: (title: string) => void;
-  onCategoryChange: (category: string) => void;
-  onStreamLanguageChange: (language: "en" | "zh") => void;
-  onStreamTagsChange: (tags: string) => void;
+  onPrimaryLanguageChange: (language: string) => void;
+  onAdditionalLanguagesChange: (languages: string[]) => void;
+  onTagIdsChange: (ids: string[]) => void;
   onSaveMetadata: () => Promise<void>;
   onThumbnailSelected: (file: File | null) => void;
   overlay?: ReactNode;
@@ -3035,7 +3069,7 @@ function QuickGoLive({
       );
   }
   async function goLive() {
-    if (!stream || !available || !title.trim() || !category.trim()) return;
+    if (!stream || !available || !title.trim() || !primaryLanguage) return;
     enterMobileFullscreen();
     pageHidingRef.current = false;
     setBackgroundNotice("");
@@ -3180,18 +3214,14 @@ function QuickGoLive({
             {zh ? "直播标题" : "Stream title"}
             <input value={title} maxLength={120} onChange={(event) => onTitleChange(event.target.value)} placeholder={zh ? "告诉观众您正在直播什么" : "Tell viewers what you are streaming"} />
           </label>
-          <div className="broadcast-metadata-row">
-            <label>{zh ? "分类" : "Category"}<input value={category} maxLength={60} onChange={(event) => onCategoryChange(event.target.value)} placeholder={zh ? "聊天、音乐、游戏…" : "Chat, music, gaming…"} /></label>
-            <label>{zh ? "直播语言" : "Stream language"}<select value={streamLanguage} onChange={(event) => onStreamLanguageChange(event.target.value as "en" | "zh")}><option value="en">English</option><option value="zh">中文</option></select></label>
-          </div>
-          <label>{zh ? "标签（最多 5 个）" : "Tags (up to 5)"}<input value={streamTags} maxLength={140} onChange={(event) => onStreamTagsChange(event.target.value)} placeholder={zh ? "聊天, 新人" : "chat, new creator"} /></label>
+          <RoomClassificationFields languages={languageOptions} tags={tagOptions} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={zh} onPrimaryLanguageChange={onPrimaryLanguageChange} onAdditionalLanguagesChange={onAdditionalLanguagesChange} onTagIdsChange={onTagIdsChange} />
           <label className="stream-thumbnail-picker"><BroadcastIcon name="upload" />{zh ? "选择直播封面" : "Choose stream thumbnail"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onThumbnailSelected(event.target.files?.[0] ?? null)} /></label>
-          <button type="button" className="secondary broadcast-metadata-save" disabled={!title.trim() || !category.trim()} onClick={() => void onSaveMetadata()}>{zh ? "保存直播信息" : "Save details"}</button>
+          <button type="button" className="secondary broadcast-metadata-save" disabled={!title.trim() || !primaryLanguage} onClick={() => void onSaveMetadata()}>{zh ? "保存直播信息" : "Save details"}</button>
         </div>
         <aside className="broadcast-audience-preview" aria-label={zh ? "观众卡片预览" : "Audience card preview"}>
           <div className="broadcast-audience-preview-media">{thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <span>HOLIWYN</span>}<b>{zh ? "预览" : "PREVIEW"}</b></div>
           <strong>{title || (zh ? "未命名直播" : "Untitled stream")}</strong>
-          <small>{category || (zh ? "未选择分类" : "No category")} · {streamLanguage === "zh" ? "中文" : "English"}</small>
+          <small>{[primaryLanguage, ...additionalLanguages].map((code) => languageOptions.find((item) => item.code === code)?.nameNative ?? code.toUpperCase()).join(" · ")}</small>
         </aside>
       </div>
     </>
@@ -3272,7 +3302,7 @@ function QuickGoLive({
           <div className="quick-live-controls">
             <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
             <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
-            <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim() || !category.trim()}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
+            <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim() || !primaryLanguage}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
           </div>
         </>
       ) : stream && sessionActive ? (
@@ -3812,12 +3842,14 @@ function StreamerStudio({
   const [studio, setStudio] = useState<any>(null);
   const [notice, setNotice] = useState("");
   const [title, setTitle] = useState("");
-  const [streamLanguage, setStreamLanguage] = useState<"en" | "zh">("en");
-  const [streamTags, setStreamTags] = useState("");
+  const [primaryLanguage, setPrimaryLanguage] = useState("en");
+  const [additionalLanguages, setAdditionalLanguages] = useState<string[]>([]);
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [studioLanguages, setStudioLanguages] = useState<LanguageOption[]>([]);
+  const [studioTags, setStudioTags] = useState<TagOption[]>([]);
   const [goal, setGoal] = useState("");
   const [goalTarget, setGoalTarget] = useState(500);
   const [bio, setBio] = useState("");
-  const [category, setCategory] = useState("");
   const [schedule, setSchedule] = useState("");
   const [nextStreamAt, setNextStreamAt] = useState("");
   const [scheduleTimezone, setScheduleTimezone] = useState(
@@ -3895,12 +3927,12 @@ function StreamerStudio({
     void request("/api/streamer/studio").then((d) => {
       setStudio(d);
       setTitle(d.room?.title ?? "");
-      setStreamLanguage(d.room?.stream_language ?? "en");
-      setStreamTags(Array.isArray(d.room?.stream_tags) ? d.room.stream_tags.join(", ") : "");
+      setPrimaryLanguage(d.room?.languages?.find((item: RoomLanguage) => item.isPrimary)?.code ?? "en");
+      setAdditionalLanguages((d.room?.languages ?? []).filter((item: RoomLanguage) => !item.isPrimary).map((item: RoomLanguage) => item.code));
+      setTagIds((d.room?.tags ?? []).map((item: PublicTag) => item.id));
       setGoal(d.room?.goal_text ?? "");
       setGoalTarget(d.room?.goal_target ?? 500);
       setBio(d.room?.bio ?? "");
-      setCategory(d.room?.category ?? "");
       setSchedule(d.room?.schedule_text ?? "");
       if (d.room?.next_stream_at) {
         const date = new Date(d.room.next_stream_at);
@@ -3919,7 +3951,17 @@ function StreamerStudio({
       setTicketCost(d.room?.private_show_ticket_cost ?? 100);
       setPerMinuteCost(d.room?.private_show_per_minute_cost ?? 10);
     });
-  useEffect(refresh, []);
+  useEffect(() => {
+    refresh();
+    void Promise.all([
+      request("/api/discovery/languages"),
+      request("/api/discovery/tags?type=PUBLIC"),
+      request("/api/discovery/tags?type=COMMUNITY"),
+    ]).then(([languageResult, publicResult, communityResult]) => {
+      setStudioLanguages((languageResult.languages ?? []).map((item: SupportedLanguage) => ({ code: item.code, nameEn: item.name_en, nameNative: item.name_native })));
+      setStudioTags([...(publicResult.tags ?? []), ...(communityResult.tags ?? [])].map((item: any) => ({ id: item.id, slug: item.slug, displayName: item.display_name ?? item.displayName, type: item.tag_type ?? item.type })));
+    });
+  }, []);
   useEffect(() => {
     window.history.replaceState(
       { ...window.history.state, holiwynStreamerSection: "live" },
@@ -4053,7 +4095,6 @@ function StreamerStudio({
       method: "PUT",
       body: JSON.stringify({
         bio,
-        category,
         scheduleText: schedule,
         nextStreamAt: nextStreamAt ? new Date(nextStreamAt).toISOString() : null,
         scheduleTimezone,
@@ -4109,10 +4150,9 @@ function StreamerStudio({
     setThumbnailPreviewUrl(URL.createObjectURL(file));
   }
   async function saveBroadcastMetadata() {
-    const tags = streamTags.split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 5);
     await request(`/api/streamer/rooms/${studio.room.slug}`, {
       method: "PUT",
-      body: JSON.stringify({ title, category, streamLanguage, streamTags: tags }),
+      body: JSON.stringify({ title, primaryLanguage, additionalLanguages, tagIds }),
     });
     if (thumbnailFile) {
       setThumbnailSaving(true);
@@ -4154,9 +4194,9 @@ function StreamerStudio({
         <p className="eyebrow">{t.title === "Stream MVP" ? "STREAMER STUDIO" : "主播工作室"}</p>
         <h2>{t.title === "Stream MVP" ? "Create your first stream" : "创建您的首个直播间"}</h2>
         <p>{t.title === "Stream MVP" ? "Your creator account is active. Creating a draft is an explicit action; it will remain private until you publish it." : "您的主播账户已激活。创建草稿需要明确操作，发布前不会出现在公开发现中。"}</p>
-        <form className="onboarding-form" onSubmit={(event) => { event.preventDefault(); void request("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: title || (t.title === "Stream MVP" ? "My first Holiwyn stream" : "我的首场 Holiwyn 直播"), category: category || "Talk", streamLanguage }) }).then(() => refresh()).catch(() => setNotice(t.title === "Stream MVP" ? "The draft room could not be created." : "无法创建直播间草稿。")); }}>
+        <form className="onboarding-form" onSubmit={(event) => { event.preventDefault(); void request("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: title || (t.title === "Stream MVP" ? "My first Holiwyn stream" : "我的首场 Holiwyn 直播"), primaryLanguage, additionalLanguages, tagIds }) }).then(() => refresh()).catch(() => setNotice(t.title === "Stream MVP" ? "The draft room could not be created." : "无法创建直播间草稿。")); }}>
           <label>{t.title === "Stream MVP" ? "Stream title" : "直播标题"}<input required minLength={2} maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-          <div className="onboarding-form-row"><label>{t.title === "Stream MVP" ? "Category" : "分类"}<input value={category} onChange={(event) => setCategory(event.target.value)} /></label><label>{t.title === "Stream MVP" ? "Language" : "语言"}<select value={streamLanguage} onChange={(event) => setStreamLanguage(event.target.value as "en" | "zh")}><option value="en">English</option><option value="zh">中文</option></select></label></div>
+          <RoomClassificationFields languages={studioLanguages} tags={studioTags} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={t.title !== "Stream MVP"} onPrimaryLanguageChange={setPrimaryLanguage} onAdditionalLanguagesChange={setAdditionalLanguages} onTagIdsChange={setTagIds} />
           <button>{t.title === "Stream MVP" ? "Create private draft" : "创建私有草稿"}</button>
         </form>
         {notice ? <p role="alert">{notice}</p> : null}
@@ -4264,16 +4304,18 @@ function StreamerStudio({
             broadcastSource={room.broadcast_status_source}
             transport={room.broadcast_transport}
             title={title}
-            category={category}
-            streamLanguage={streamLanguage}
-            streamTags={streamTags}
+            primaryLanguage={primaryLanguage}
+            additionalLanguages={additionalLanguages}
+            tagIds={tagIds}
+            languageOptions={studioLanguages}
+            tagOptions={studioTags}
             thumbnailUrl={thumbnailPreviewUrl ?? room.stream_thumbnail_url}
             t={t}
             onChanged={refresh}
             onTitleChange={setTitle}
-            onCategoryChange={setCategory}
-            onStreamLanguageChange={setStreamLanguage}
-            onStreamTagsChange={setStreamTags}
+            onPrimaryLanguageChange={setPrimaryLanguage}
+            onAdditionalLanguagesChange={setAdditionalLanguages}
+            onTagIdsChange={setTagIds}
             onSaveMetadata={saveBroadcastMetadata}
             onThumbnailSelected={selectThumbnail}
             overlay={<CreatorRealtimeOverlay slug={room.slug} t={t} />}
@@ -4417,15 +4459,12 @@ function StreamerStudio({
               <h3>{title || (zh ? "未命名直播" : "Untitled stream")}</h3>
               <p>{bio || (zh ? "添加一句简介，告诉观众您的直播内容。" : "Add a short bio so viewers know what you stream.")}</p>
               <div className="streamer-profile-preview-meta">
-                <span>{category || (zh ? "未选择分类" : "No category")}</span>
+                <span>{[primaryLanguage, ...additionalLanguages].map((code) => studioLanguages.find((item) => item.code === code)?.nameNative ?? code.toUpperCase()).join(" · ")}</span>
                 <span>{schedule || (zh ? "尚未添加常规时间" : "No regular schedule yet")}</span>
               </div>
             </aside>
             <div className="streamer-profile-fields">
-              <div className="streamer-profile-field-row">
-                <label>{t.roomTitle}<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} /></label>
-                <label>{zh ? "分类" : "Category"}<input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={60} /></label>
-              </div>
+              <label>{t.roomTitle}<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} /></label>
               <label>{zh ? "简介" : "Bio"}<textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={500} rows={3} /></label>
               <label>{zh ? "常规直播时间说明" : "Regular schedule description"}<input value={schedule} onChange={(e) => setSchedule(e.target.value)} maxLength={160} placeholder={zh ? "例如：每周二、周四晚上 8 点" : "For example: Tuesdays and Thursdays at 8 PM"} /></label>
               <div className="streamer-profile-field-row">
@@ -4572,7 +4611,7 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
         <div className="creator-review-list">
           {applications.filter((item) => item.status === "pending").map((item) => (
             <article key={item.id}>
-              <div><strong>{item.display_name}</strong><span>@{item.handle} · {item.category}</span></div>
+              <div><strong>{item.display_name}</strong><span>@{item.handle}</span></div>
               <p>{item.bio}</p>
               <p className="muted"><strong>{t.title === "Stream MVP" ? "Schedule:" : "计划时间："}</strong> {item.schedule_text}</p>
               <p className="muted"><strong>{t.title === "Stream MVP" ? "Motivation:" : "申请说明："}</strong> {item.motivation}</p>
@@ -4791,7 +4830,8 @@ function PublicCreatorProfileView({
         avatarUrl={profile.avatar_url}
         handle={profile.handle}
         bio={profile.bio}
-        category={profile.category}
+        languages={profile.languages ?? []}
+        tags={profile.tags ?? []}
         followerCount={profile.follower_count}
         scheduleText={profile.schedule_text}
         nextStreamAt={profile.next_stream_at}
@@ -4862,7 +4902,7 @@ function RoomCreatorProfileCard({
       <h3>{profile.display_name}</h3>
       <p>{profile.bio}</p>
       <div>
-        <span>{profile.category}</span>
+        {profile.languages?.length ? <span>{profile.languages.map((item) => item.nameNative || item.nameEn).join(" · ")}</span> : null}
         <span>
           {profile.follower_count} {t.followers}
         </span>
@@ -5378,7 +5418,8 @@ function RoomView({
         avatarUrl={room.avatar_url}
         ariaLabel={t.title === "Stream MVP" ? `${room.streamer_name} stream information` : `${room.streamer_name} 的直播信息`}
         title={room.title}
-        category={room.category}
+        languages={room.languages ?? []}
+        tags={room.tags ?? []}
         state={broadcast.state}
         stateLabel={broadcastLabel(t, broadcast.state)}
         presence={presence}

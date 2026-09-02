@@ -24,8 +24,8 @@ Record the date, tester, build or commit identifier when one exists, browser/ver
 
 ## Audience workflow
 
-- [ ] Discovery loads the seeded creator card with title, category, schedule, follower count, and truthful `live`, `connecting`, `offline`, or `unavailable` state.
-- [ ] Search and category filtering return coherent results and recover when filters are cleared.
+- [ ] Discovery loads seeded creator cards with title, ordered language labels, public tags, schedule, follower count, and truthful `live`, `connecting`, `offline`, or `unavailable` state.
+- [ ] Search plus multi-language and tag filtering return coherent results, persist in the URL, and recover when filters are cleared; no country flags appear.
 - [ ] Entering the room shows the creator profile, schedule, current broadcast state, goal, recent support, chat, gifts, and Support / Actions panel.
 - [ ] Offline, connecting, and unavailable states never display fake playback. Live state displays only the authorized Cloudflare player.
 - [ ] A chat message appears in the room in realtime and a muted viewer receives a visible rejection rather than a false success.
@@ -37,7 +37,7 @@ Record the date, tester, build or commit identifier when one exists, browser/ver
 
 - [ ] Creator Studio opens directly to the Live Session cockpit rather than a dense administration table.
 - [ ] The cockpit shows truthful stream state, last refresh, audience/presence, chat, recent support, test earnings, goal progress, and top supporter.
-- [ ] Room title/category/goal changes persist and appear in the audience experience.
+- [ ] Room title, one primary plus no more than two additional languages, public tags, and goal changes persist and appear in the audience experience.
 - [ ] An action can be created, edited, reordered, activated/deactivated, and then appears or disappears correctly for the audience.
 - [ ] Gift and action support update creator insights in realtime and remain visibly separated.
 - [ ] Creator chat reaches the room; participant mute/unmute changes enforcement without granting broader administration access.

@@ -13,7 +13,8 @@ export function RoomCreatorBar({
   avatarUrl,
   ariaLabel,
   title,
-  category,
+  languages,
+  tags,
   state,
   stateLabel,
   presence,
@@ -42,7 +43,8 @@ export function RoomCreatorBar({
   avatarUrl?: string | null;
   ariaLabel: string;
   title: string;
-  category: string;
+  languages: Array<{ code: string; nameEn: string; nameNative: string; isPrimary: boolean }>;
+  tags: Array<{ id: string; slug: string; displayName: string; type: string }>;
   state: string;
   stateLabel: string;
   presence: number;
@@ -78,7 +80,8 @@ export function RoomCreatorBar({
           <span className={`room-state state-${state}`}>{stateLabel}</span>
         </div>
         <h2>{title}</h2>
-        <p>{category} · {presence} {presenceLabel}</p>
+        <p>{languages.map((item) => item.nameNative || item.nameEn).join(" · ")} · {presence} {presenceLabel}</p>
+        {tags.length ? <div className="room-detail-tags">{tags.map((item) => <span key={item.id}>{item.displayName}</span>)}</div> : null}
       </div>
       <div className="room-creator-actions">
         <button type="button" className="room-follow-button" aria-pressed={following} onClick={onFollow}>

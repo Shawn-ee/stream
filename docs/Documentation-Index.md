@@ -18,6 +18,7 @@ All published project documentation is Markdown so it remains searchable, review
 - [`Deployment-Runbook.md`](Deployment-Runbook.md) — private Docker deployment, migrations, backup/restore, upgrade, rollback, and incident boundaries.
 - [`Account-Recovery-Design.md`](Account-Recovery-Design.md) — inactive recovery architecture, threat controls, data boundaries, and approval gates.
 - [`Creator-Onboarding-Workflow.md`](Creator-Onboarding-Workflow.md) — test application, reasoned review, atomic offline provisioning, and production prerequisites.
+- [`Room-Classification-Architecture.md`](Room-Classification-Architecture.md) — structured room languages, controlled tags, migration/API compatibility, and discovery privacy rules.
 - [`Audience-Retention-Design.md`](Audience-Retention-Design.md) — follow feed, structured schedules, lifecycle notifications, read state, and external-delivery boundary.
 - [`Gift-Experience-Design.md`](Gift-Experience-Design.md) — bounded combos, accessible sound, premium motion, creator acknowledgement, and ledger invariants.
 - Archived, out-of-scope background: [`Production-Moderation-Architecture.md`](Production-Moderation-Architecture.md), [`Compliance-Launch-Gates.md`](Compliance-Launch-Gates.md), and [`Compliance-Source-Register.md`](Compliance-Source-Register.md).

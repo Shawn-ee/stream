@@ -36,13 +36,13 @@ for (const layoutRule of [
   /@media \(max-width: 767px\)/,
   /@media \(max-width: 359px\)[\s\S]*\.audience-product-header \.product-identity > div\s*\{[\s\S]*display:\s*none/,
   /\.following-avatar-row\s*\{[\s\S]*overflow-x:\s*auto/,
-  /\.category-chip-grid\s*\{[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/,
+  /\.tag-chip-grid\s*\{[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/,
   /\.live-card-preview\s*\{[\s\S]*aspect-ratio:\s*16 \/ 9/,
   /\.live-stream-card:focus-visible/,
 ]) assert.match(styles, layoutRule);
 
 assert.match(components, /viewer_count/);
-assert.match(components, /live-card-language/);
+assert.match(components, /room-language-labels/);
 assert.match(app, /discovery-language-filter/);
 assert.equal(packageJson.scripts["verify:desktop-discovery"], "node scripts/verify-desktop-discovery.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:desktop-discovery"));
@@ -50,5 +50,5 @@ assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:desktop
 assert.match(app, /followingRooms\.length \? <FollowingAvatarRow/, "empty Following row must collapse");
 assert.match(app, /<AudienceAccountMenu\b/);
 assert.match(app, /className="live-empty-compact"/);
-assert.match(app, /id="popular-categories"/);
-console.log("Desktop audience header, avatar menu, Following row, live discovery, categories, accessibility, and truthful metadata verified.");
+assert.match(app, /id="popular-tags"/);
+console.log("Desktop audience header, avatar menu, Following row, language and tag discovery, accessibility, and truthful metadata verified.");

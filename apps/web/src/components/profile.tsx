@@ -23,7 +23,8 @@ export function CreatorProfileSurface({
   avatarUrl,
   handle,
   bio,
-  category,
+  languages,
+  tags,
   followerCount,
   scheduleText,
   nextStreamAt,
@@ -42,7 +43,8 @@ export function CreatorProfileSurface({
   avatarUrl?: string | null;
   handle: string;
   bio: string;
-  category: string;
+  languages: Array<{ code: string; nameEn: string; nameNative: string; isPrimary: boolean }>;
+  tags: Array<{ id: string; slug: string; displayName: string; type: string }>;
   followerCount: number;
   scheduleText: string;
   nextStreamAt?: string | null;
@@ -99,7 +101,8 @@ export function CreatorProfileSurface({
           <p className="eyebrow">{zh ? "关于主播" : "ABOUT"}</p>
           <h3>{zh ? "认识" : "Meet"} {displayName}</h3>
           <p>{bio || (zh ? "主播暂未填写简介。" : "This creator has not added a bio yet.")}</p>
-          <span>{category}</span>
+          {languages.length ? <span>{(zh ? "语言" : "Languages")}: {languages.map((item) => item.nameNative || item.nameEn).join(" · ")}</span> : null}
+          {tags.length ? <span>{tags.slice(0, 3).map((item) => item.displayName).join(" · ")}</span> : null}
         </article>
         <article className="creator-profile-schedule">
           <p className="eyebrow">{zh ? "直播日程" : "SCHEDULE"}</p>

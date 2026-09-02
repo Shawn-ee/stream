@@ -21,8 +21,8 @@ const roomsResponse = await fetch(`${base}/api/rooms`, { headers: { cookie } });
 assert.equal(roomsResponse.status, 200);
 const rooms = (await roomsResponse.json()).rooms;
 assert.ok(rooms.length >= 6, "expected a useful multi-creator discovery feed");
-assert.ok(rooms.filter((room) => room.stream_language === "en").length >= 3);
-assert.ok(rooms.filter((room) => room.stream_language === "zh").length >= 2);
+assert.ok(rooms.filter((room) => room.languages.some((item) => item.code === "en")).length >= 3);
+assert.ok(rooms.filter((room) => room.languages.some((item) => item.code === "zh")).length >= 2);
 assert.ok(rooms.every((room) => typeof room.recommendation_score === "number"));
 
 const gifts = await fetch(`${base}/api/gifts`).then((response) => response.json());

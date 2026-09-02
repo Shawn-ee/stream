@@ -42,9 +42,11 @@ await audience("/api/auth/login", {
   },
 });
 await audience("/api/demo/age-acknowledgement", { method: "POST", body: {} });
-const categories = await audience("/api/discovery/categories");
-assert.ok(categories.categories.includes("Featured"));
-const discovery = await audience("/api/rooms?q=Demo&category=Featured");
+const languages = await audience("/api/discovery/languages");
+assert.ok(languages.languages.some((item) => item.code === "en"));
+const tags = await audience("/api/discovery/tags");
+assert.ok(tags.tags.some((item) => item.slug === "music"));
+const discovery = await audience("/api/rooms?q=Local%20Live%20Room&languages=en");
 assert.equal(discovery.rooms.length, 1);
 const room = discovery.rooms[0];
 await streamer("/api/auth/login", {
@@ -187,7 +189,6 @@ const profileUpdate = await streamer("/api/streamer/profile", {
   method: "PUT",
   body: {
     bio: "Expanded verifier profile",
-    category: "Featured",
     scheduleText: "Local schedule",
   },
 });

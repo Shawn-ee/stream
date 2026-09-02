@@ -2,7 +2,7 @@
 
 ## Capability and side-effect boundary
 
-A creator is an audience user with additional server-authorized capabilities. Creator status never removes discovery, viewing, following, audience chat, wallet, notification, category, or public-profile access. `creator_accounts.status`, not `users.role` or a browser boolean, controls Studio and broadcasting.
+A creator is an audience user with additional server-authorized capabilities. Creator status never removes discovery, viewing, following, audience chat, wallet, notifications, language/tag discovery, or public-profile access. `creator_accounts.status`, not `users.role` or a browser boolean, controls Studio and broadcasting.
 
 Opening a menu, GET route, onboarding page, `/studio`, refresh, or browser history creates no creator profile, room, broadcast, wallet entry, follow, or notification. `POST /api/creator/onboarding/start` explicitly starts a private draft; activation finalizes the creator profile but creates no room. Only `POST /api/studio/rooms` creates a private room draft. Publication and broadcasting remain separate commands.
 

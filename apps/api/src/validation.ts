@@ -66,15 +66,13 @@ export const mutationSchemas = {
   creatorOnboardingProfile: {
     type: "object",
     additionalProperties: false,
-    required: ["creatorHandle", "displayName", "bio", "category", "primaryLanguage", "timezone"],
+    required: ["creatorHandle", "displayName", "bio", "primaryLanguage", "timezone"],
     properties: {
       creatorHandle: { type: "string", minLength: 3, maxLength: 30, pattern: "^[a-z0-9_-]+$" },
       displayName: boundedString(50, 2),
       bio: boundedString(500, 20),
-      category: boundedString(60, 2),
-      primaryLanguage: { type: "string", enum: ["en", "zh"] },
+      primaryLanguage: boundedString(2, 2),
       timezone: boundedString(80, 3),
-      contentTags: { type: "array", maxItems: 8, items: boundedString(24, 1) },
     },
   },
   creatorAgreementAcceptance: {
@@ -91,11 +89,12 @@ export const mutationSchemas = {
   studioRoomCreate: {
     type: "object",
     additionalProperties: false,
-    required: ["title"],
+    required: ["title", "primaryLanguage", "additionalLanguages", "tagIds"],
     properties: {
       title: boundedString(120, 2),
-      category: boundedString(60, 2),
-      streamLanguage: { type: "string", enum: ["en", "zh"] },
+      primaryLanguage: boundedString(2, 2),
+      additionalLanguages: { type: "array", maxItems: 2, items: boundedString(2, 2) },
+      tagIds: { type: "array", maxItems: 8, items: boundedString(36, 36) },
     },
   },
   report: {

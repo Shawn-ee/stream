@@ -786,3 +786,5 @@
     max-width: 65%;
   }
 }
+.room-detail-tags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.room-detail-tags span { border-radius: var(--radius-pill); background: var(--color-surface-secondary); color: var(--color-text-secondary); padding: 0.15rem 0.45rem; font-size: 0.72rem; }

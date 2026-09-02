@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [app, api, styles, migration, seed, nginx, packageText] = await Promise.all([
+const [app, classification, api, styles, migration, seed, nginx, packageText] = await Promise.all([
   readFile("apps/web/src/main.tsx", "utf8"),
+  readFile("apps/web/src/components/room-classification.tsx", "utf8"),
   readFile("apps/api/src/index.ts", "utf8"),
   readFile("apps/web/src/broadcast.css", "utf8"),
   readFile("apps/api/src/db/migrations/018_streamer_production_polish.sql", "utf8"),
@@ -16,8 +17,10 @@ for (const branding of ["PRIVATE STAGING", "HOLIWYN", "Creator preview environme
   assert.match(app, new RegExp(branding), `missing staging branding: ${branding}`);
 assert.doesNotMatch(app, />Stream MVP</, "visible product heading must not use the old MVP brand");
 
-for (const metadata of ["Stream title", "Category", "Stream language", "Tags (up to 5)", "Audience card preview", "Choose stream thumbnail"])
+for (const metadata of ["Stream title", "Audience card preview", "Choose stream thumbnail"])
   assert.match(app, new RegExp(metadata.replace(/[()]/g, "\\$&")), `missing pre-live metadata: ${metadata}`);
+for (const metadata of ["Stream languages", "Content tags"])
+  assert.match(classification, new RegExp(metadata), `missing room classification metadata: ${metadata}`);
 assert.match(app, /await onSaveMetadata\(\)/, "metadata must be saved before broadcast starts");
 
 for (const action of ['"delete"', '"mute"', '"timeout"', '"ban"', '"unban"'])

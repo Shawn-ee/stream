@@ -49,6 +49,11 @@ test("schema contains the full local prototype data model", async () => {
       "broadcast_sessions",
       "room_moderation_restrictions",
       "audience_discovery_preferences",
+      "supported_languages",
+      "tags",
+      "room_languages",
+      "room_tags",
+      "legacy_category_migration_report",
       "schema_migrations",
     ]) {
       assert.ok(tables.has(table), `Expected ${table} to exist`);
@@ -159,6 +164,7 @@ test("schema contains the full local prototype data model", async () => {
       "user_id",
       "preferred_languages",
       "preferred_categories",
+      "preferred_tag_slugs",
       "prioritize_live",
       "prioritize_following",
       "personalization_enabled",

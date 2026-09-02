@@ -56,29 +56,29 @@ try {
   const defaults = await call("/api/me/discovery-preferences", audience);
   assert.equal(defaults.status, 200);
   assert.deepEqual(defaults.result.preferences.preferred_languages, []);
-  assert.deepEqual(defaults.result.preferences.preferred_categories, []);
+  assert.deepEqual(defaults.result.preferences.preferred_tag_slugs, []);
   assert.equal(defaults.result.preferences.personalization_enabled, true);
 
   const invalidLanguage = await call("/api/me/discovery-preferences", audience, {
     method: "PUT",
-    body: { preferredLanguages: ["fr"], preferredCategories: [], prioritizeLive: true, prioritizeFollowing: true, personalizationEnabled: true },
+    body: { preferredLanguages: ["xx"], preferredTags: [], prioritizeLive: true, prioritizeFollowing: true, personalizationEnabled: true },
   });
   assert.equal(invalidLanguage.status, 400);
-  const invalidCategory = await call("/api/me/discovery-preferences", audience, {
+  const invalidTag = await call("/api/me/discovery-preferences", audience, {
     method: "PUT",
-    body: { preferredLanguages: [], preferredCategories: ["Not a real category"], prioritizeLive: true, prioritizeFollowing: true, personalizationEnabled: true },
+    body: { preferredLanguages: [], preferredTags: ["not-a-real-tag"], prioritizeLive: true, prioritizeFollowing: true, personalizationEnabled: true },
   });
-  assert.equal(invalidCategory.status, 400);
+  assert.equal(invalidTag.status, 400);
 
   const saved = await call("/api/me/discovery-preferences", audience, {
     method: "PUT",
-    body: { preferredLanguages: ["zh"], preferredCategories: ["Music"], prioritizeLive: true, prioritizeFollowing: false, personalizationEnabled: true },
+    body: { preferredLanguages: ["zh"], preferredTags: ["music"], prioritizeLive: true, prioritizeFollowing: false, personalizationEnabled: true },
   });
   assert.equal(saved.status, 200);
   let rooms = (await call("/api/rooms", audience)).result.rooms;
   assert.equal(rooms[0].slug, "jade-creator");
   assert.ok(rooms[0].recommendation_reasons.includes("preferred_language"));
-  assert.ok(rooms[0].recommendation_reasons.includes("preferred_category"));
+  assert.ok(rooms[0].recommendation_reasons.includes("preferred_tag"));
   assert.equal(rooms[0].personalization_applied, true);
 
   const alex = await client.query("SELECT id FROM live_rooms WHERE slug='alex-creator'");
@@ -94,7 +94,7 @@ try {
   await client.query("INSERT INTO follows (follower_id,streamer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [audienceId, streamerId]);
   await call("/api/me/discovery-preferences", audience, {
     method: "PUT",
-    body: { preferredLanguages: [], preferredCategories: [], prioritizeLive: false, prioritizeFollowing: true, personalizationEnabled: true },
+    body: { preferredLanguages: [], preferredTags: [], prioritizeLive: false, prioritizeFollowing: true, personalizationEnabled: true },
   });
   rooms = (await call("/api/rooms", audience)).result.rooms;
   assert.equal(rooms[0].slug, "demo-streamer");
@@ -104,7 +104,7 @@ try {
 
   await call("/api/me/discovery-preferences", audience, {
     method: "PUT",
-    body: { preferredLanguages: ["zh"], preferredCategories: ["Music"], prioritizeLive: true, prioritizeFollowing: true, personalizationEnabled: false },
+    body: { preferredLanguages: ["zh"], preferredTags: ["music"], prioritizeLive: true, prioritizeFollowing: true, personalizationEnabled: false },
   });
   const unpersonalized = (await call("/api/rooms", audience)).result.rooms;
   const anonymous = (await call("/api/rooms", null)).result.rooms;

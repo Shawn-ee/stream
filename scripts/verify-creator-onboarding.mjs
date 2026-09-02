@@ -45,7 +45,7 @@ try {
   assert.deepEqual(counts.rows[0], { accounts: 1, onboarding: 1, profiles: 0, rooms: 0 });
   assert.equal((await call("/api/streamer/studio")).response.status, 403);
 
-  const profile = await call("/api/creator/onboarding/profile", { method: "PATCH", body: JSON.stringify({ creatorHandle: handle, displayName: "Onboarding Creator", bio: "A complete test creator biography for safe local verification.", category: "Talk", primaryLanguage: "en", timezone: "America/Chicago", contentTags: ["conversation"] }) });
+  const profile = await call("/api/creator/onboarding/profile", { method: "PATCH", body: JSON.stringify({ creatorHandle: handle, displayName: "Onboarding Creator", bio: "A complete test creator biography for safe local verification.", primaryLanguage: "en", timezone: "America/Chicago" }) });
   assert.equal(profile.response.status, 200);
   const beforeAgreement = await call("/api/creator/onboarding");
   assert.ok(beforeAgreement.body.agreement.version);
@@ -68,7 +68,7 @@ try {
   assert.equal((await call("/api/me/following")).response.status, 200, "active creators retain audience capabilities");
   assert.equal((await call("/api/admin/creator-reviews")).response.status,403,"creators cannot access administrator reviews");
 
-  const room = await call("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: "Explicit Draft Room", category: "Talk", streamLanguage: "en" }) });
+  const room = await call("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: "Explicit Draft Room", primaryLanguage: "en", additionalLanguages: [], tagIds: [] }) });
   assert.equal(room.response.status, 201);
   assert.equal(room.body.room.publication_status, "draft");
   for (const path of [

@@ -4,7 +4,8 @@ import { audienceRoutePath, parseAudienceRoute } from "../apps/web/src/audience-
 
 assert.deepEqual(parseAudienceRoute("/"), { view: "discovery" });
 assert.deepEqual(parseAudienceRoute("/discover"), { view: "discovery" });
-assert.deepEqual(parseAudienceRoute("/categories"), { view: "categories" });
+assert.deepEqual(parseAudienceRoute("/tags"), { view: "tags" });
+assert.deepEqual(parseAudienceRoute("/categories"), { view: "tags" });
 assert.deepEqual(parseAudienceRoute("/account/security"), { view: "account", section: "security" });
 assert.deepEqual(parseAudienceRoute("/creator/onboarding/identity"), { view: "creator-onboarding", step: "identity" });
 assert.deepEqual(parseAudienceRoute("/creator/status"), { view: "creator-status" });

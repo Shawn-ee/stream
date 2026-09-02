@@ -9,7 +9,6 @@ export type DiscoveryRoom = {
   streamer_id: string;
   streamer_name: string;
   avatar_url?: string | null;
-  category: string;
   schedule_text?: string;
   next_stream_at?: string | null;
   schedule_timezone?: string;
@@ -19,10 +18,12 @@ export type DiscoveryRoom = {
   broadcast_state?: "live" | "connecting" | "offline" | "unavailable";
   broadcast_status_message?: string;
   broadcast_status_source?: "local" | "cloudflare";
-  stream_language?: "en" | "zh";
-  stream_tags?: string[];
+  languages: {code:string;nameEn:string;nameNative:string;isPrimary:boolean}[];
+  tags: {id:string;slug:string;displayName:string;type:string}[];
   stream_thumbnail_url?: string | null;
 };
+export type DiscoveryLanguage={code:string;name_en:string;name_native:string};
+export type DiscoveryTag={id:string;slug:string;displayName:string;type:string};
 
 type DiscoveryCopy = Record<string, string>;
 export type MobileDiscoveryView = "for-you" | "following" | "live";
@@ -54,6 +55,13 @@ function scheduleLabel(room: DiscoveryRoom, zh: boolean) {
   }
 }
 
+export function RoomLanguageLabels({room,compact=false}:{room:DiscoveryRoom;compact?:boolean}){
+  const languages=(room.languages??[]).slice(0,3);
+  const visible=compact&&languages.length>1?[languages[0]]:languages;
+  const full=languages.map(item=>item.nameEn).join(", ");
+  return <span className="room-language-labels" aria-label={`Languages: ${full}`} title={full}>{visible.map(item=><span key={item.code}>{item.nameNative.length<=4?item.nameNative:item.code.toUpperCase()}</span>)}{compact&&languages.length>1?<span>+{languages.length-1}</span>:null}</span>;
+}
+
 export function LiveStreamCard({
   room,
   index,
@@ -82,13 +90,12 @@ export function LiveStreamCard({
           {isSimulated(room) ? (zh ? "模拟" : "SIMULATED") : stateLabel(state, zh)}
         </span>
         <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="live-card-preview-avatar" />
-        <span className="live-card-category">{room.category}</span>
-        <span className="live-card-language">{room.stream_language === "zh" ? "中文" : "EN"}</span>
+        <RoomLanguageLabels room={room} compact />
         {state === "live" ? <span className="live-card-viewers">{room.viewer_count ?? 0} {zh ? "观看" : "watching"}</span> : null}
         <span className="mobile-live-card-overlay">
           <span className="mobile-live-card-meta">
-            <span>{room.stream_language === "zh" ? "中文" : "English"}</span>
-            <span>{room.category}</span>
+            <span>{room.languages?.map(item=>item.nameNative).join(" · ")}</span>
+            {room.tags?.slice(0,2).map(tag=><span key={tag.id}>#{tag.displayName}</span>)}
             {state === "live" ? <span>{room.viewer_count ?? 0} {zh ? "人正在观看" : "watching"}</span> : null}
           </span>
           <strong>{room.title}</strong>
@@ -106,6 +113,7 @@ export function LiveStreamCard({
           <strong>{room.title}</strong>
           <span className="live-card-creator">{room.streamer_name}</span>
           <small>{room.follower_count ?? 0} {t.followers}{room.is_following ? ` · ${zh ? "已关注" : "Following"}` : ""}</small>
+          {room.tags?.length ? <span className="live-card-tags" aria-label={`${zh ? "标签" : "Tags"}: ${room.tags.map(tag=>tag.displayName).join(", ")}`}>{room.tags.slice(0,3).map(tag=><span key={tag.id}>#{tag.displayName}</span>)}</span> : null}
         </span>
       </span>
     </button>
@@ -136,7 +144,7 @@ export function FeaturedLive({
           {isSimulated(room) ? (zh ? "模拟直播状态" : "SIMULATED STATUS") : state === "live" ? (zh ? "精选直播" : "FEATURED LIVE") : (zh ? "推荐主播" : "FEATURED CREATOR")}
         </span>
         <div>
-          <p>{room.streamer_name} · {room.category}</p>
+          <p>{room.streamer_name}{room.tags?.[0]?` · ${room.tags[0].displayName}`:""}</p>
           <h2 id="featured-live-title">{room.title}</h2>
           <p className="featured-schedule">{scheduleLabel(room, zh)}</p>
         </div>
@@ -152,9 +160,10 @@ export function MobileDiscoveryFeed({
   rooms,
   following,
   view,
-  category,
-  language,
-  categories,
+  selectedLanguages,
+  selectedTag,
+  languages,
+  tags,
   roomsLoading,
   followingLoading,
   roomsError,
@@ -162,17 +171,18 @@ export function MobileDiscoveryFeed({
   t,
   zh,
   onViewChange,
-  onCategoryChange,
-  onLanguageChange,
+  onLanguagesChange,
+  onTagChange,
   onRetry,
   onOpen,
 }: {
   rooms: DiscoveryRoom[];
   following: DiscoveryRoom[];
   view: MobileDiscoveryView;
-  category: string;
-  language: "" | "en" | "zh";
-  categories: string[];
+  selectedLanguages:string[];
+  selectedTag:string;
+  languages:DiscoveryLanguage[];
+  tags:DiscoveryTag[];
   roomsLoading: boolean;
   followingLoading: boolean;
   roomsError: boolean;
@@ -180,8 +190,8 @@ export function MobileDiscoveryFeed({
   t: DiscoveryCopy;
   zh: boolean;
   onViewChange: (view: MobileDiscoveryView) => void;
-  onCategoryChange: (category: string) => void;
-  onLanguageChange: (language: "" | "en" | "zh") => void;
+  onLanguagesChange:(languages:string[])=>void;
+  onTagChange:(tag:string)=>void;
   onRetry: () => void;
   onOpen: (room: DiscoveryRoom) => void;
 }) {
@@ -207,7 +217,9 @@ export function MobileDiscoveryFeed({
     ? (zh ? "从推荐列表进入直播间并关注喜欢的主播。" : "Open a room from For You and follow creators you want to see again.")
     : view === "live"
       ? (zh ? "可以先看看推荐主播，直播开始后状态会自动更新。" : "Explore recommended creators while live status updates automatically.")
-      : (zh ? "请尝试其他搜索，或清除分类与语言筛选。" : "Try another search, or clear the category and language filters.");
+      : selectedLanguages.length
+        ? (zh?"当前语言没有直播间。请清除筛选。":"No live rooms currently use these languages. Clear the filters to explore all rooms.")
+        : selectedTag?(zh?"没有符合此标签的直播间。":"No rooms match this tag."):(zh?"没有符合搜索的主播或直播间。":"No creators or rooms match this search.");
 
   return (
     <section className="mobile-discovery-feed" aria-labelledby="mobile-discovery-title">
@@ -239,24 +251,18 @@ export function MobileDiscoveryFeed({
           aria-controls="mobile-discovery-filter-panel"
           onClick={() => setFiltersOpen((current) => !current)}
         >
-          {zh ? "筛选" : "Filter"}{category || language ? " · 1+" : ""}
+          {zh ? "筛选" : "Filter"}{selectedTag||selectedLanguages.length ? " · 1+" : ""}
         </button>
         {filtersOpen ? <div className="mobile-filter-panel" id="mobile-discovery-filter-panel">
-          <label className="mobile-category-filter">
-            <span className="sr-only">{t.allCategories}</span>
-            <select value={category} onChange={(event) => onCategoryChange(event.target.value)} aria-label={t.allCategories}>
-              <option value="">{t.allCategories}</option>
-              {categories.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
           <label className="mobile-language-filter">
-            <span className="sr-only">{zh ? "直播语言" : "Stream language"}</span>
-            <select value={language} onChange={(event) => onLanguageChange(event.target.value as "" | "en" | "zh")} aria-label={zh ? "直播语言" : "Stream language"}>
-              <option value="">{zh ? "所有语言" : "All languages"}</option>
-              <option value="en">English</option>
-              <option value="zh">中文</option>
+            <span>{zh?"标签":"Tag"}</span>
+            <select value={selectedTag} onChange={(event)=>onTagChange(event.target.value)} aria-label={zh?"内容标签":"Content tag"}>
+              <option value="">{zh?"所有标签":"All tags"}</option>
+              {tags.map(item=><option key={item.id} value={item.slug}>{item.displayName}</option>)}
             </select>
           </label>
+          <fieldset className="mobile-language-multiselect"><legend>{zh?"直播语言":"Stream languages"}</legend>{languages.map(item=><label key={item.code}><input type="checkbox" checked={selectedLanguages.includes(item.code)} onChange={()=>onLanguagesChange(selectedLanguages.includes(item.code)?selectedLanguages.filter(code=>code!==item.code):[...selectedLanguages,item.code])}/>{zh?item.name_native:item.name_en}</label>)}</fieldset>
+          {selectedTag||selectedLanguages.length?<button type="button" className="text-action" onClick={()=>{onLanguagesChange([]);onTagChange("");}}>{zh?"清除筛选":"Clear filters"}</button>:null}
         </div> : null}
       </div>
       <div className="mobile-live-feed-list" aria-live="polite">

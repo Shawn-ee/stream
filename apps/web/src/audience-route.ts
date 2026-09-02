@@ -1,6 +1,6 @@
 export type AudienceRoute =
   | { view: "discovery" }
-  | { view: "categories" }
+  | { view: "tags" }
   | { view: "account"; section: "profile" | "security" | "sessions" | "wallet" }
   | { view: "creator-onboarding"; step: "profile" | "identity" | "agreement" | "review" }
   | { view: "creator-status" }
@@ -14,7 +14,7 @@ const publicSlug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export function parseAudienceRoute(pathname: string): AudienceRoute {
   const normalized = pathname.replace(/\/+$/, "") || "/";
   if (normalized === "/" || normalized === "/discover") return { view: "discovery" };
-  if (normalized === "/categories") return { view: "categories" };
+  if (normalized === "/tags" || normalized === "/categories") return { view: "tags" };
   const account = normalized.match(/^\/account\/(profile|security|sessions|wallet)$/);
   if (account) return { view: "account", section: account[1] as "profile" | "security" | "sessions" | "wallet" };
   const onboarding = normalized.match(/^\/creator\/onboarding\/(profile|identity|agreement|review)$/);
@@ -36,7 +36,7 @@ export function parseAudienceRoute(pathname: string): AudienceRoute {
 
 export function audienceRoutePath(route: Exclude<AudienceRoute, { view: "invalid" }>) {
   if (route.view === "discovery") return "/";
-  if (route.view === "categories") return "/categories";
+  if (route.view === "tags") return "/tags";
   if (route.view === "account") return `/account/${route.section}`;
   if (route.view === "creator-onboarding") return `/creator/onboarding/${route.step}`;
   if (route.view === "creator-status") return "/creator/status";

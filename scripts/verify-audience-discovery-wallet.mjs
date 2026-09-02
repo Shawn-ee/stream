@@ -29,15 +29,15 @@ await new Promise((resolve, reject) => { socket.once("connect", resolve); socket
 try {
   await client.query("UPDATE live_rooms SET status='live',broadcast_state='live' WHERE slug='demo-streamer'");
   await new Promise((resolve) => socket.emit("room:join", "demo-streamer", resolve));
-  const all = await call("/api/rooms?language=", auth);
+  const all = await call("/api/rooms?languages=", auth);
   assert.equal(all.status, 200);
   assert.equal(all.result.rooms[0].slug, "demo-streamer");
   assert.ok(all.result.rooms[0].viewer_count >= 1);
   assert.equal(typeof all.result.rooms[0].recommendation_score, "number");
-  const english = await call("/api/rooms?language=en", auth);
+  const english = await call("/api/rooms?languages=en", auth);
   assert.equal(english.status, 200);
-  assert.ok(english.result.rooms.every((room) => room.stream_language === "en"));
-  assert.equal((await call("/api/rooms?language=fr", auth)).status, 400);
+  assert.ok(english.result.rooms.every((room) => room.languages.some((item) => item.code === "en")));
+  assert.equal((await call("/api/rooms?languages=xx", auth)).status, 400);
 
   const before = await call("/api/wallet", auth);
   const order = await call("/api/wallet/orders", auth, { method: "POST", body: { amount: 100, idempotencyKey: keys[0] } });

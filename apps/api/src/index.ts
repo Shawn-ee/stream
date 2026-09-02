@@ -84,7 +84,39 @@ type DemoUser = {
   locale: "en" | "zh";
   ageAcknowledged: boolean;
 };
+type RoomClassificationInput = {
+  primaryLanguage: string;
+  additionalLanguages: string[];
+  tagIds: string[];
+};
 const identityDocumentViews = new Map<string,{adminId:string;documentId:string;expiresAt:number}>();
+
+async function validateRoomClassification(client: ReturnType<typeof database>, input: RoomClassificationInput) {
+  const languages=[input.primaryLanguage,...input.additionalLanguages];
+  if(!/^[a-z]{2}$/.test(input.primaryLanguage)||input.additionalLanguages.length>2||languages.length>3||new Set(languages).size!==languages.length)
+    return "invalid_room_languages";
+  const supported=await client.query("SELECT language_code FROM supported_languages WHERE enabled=TRUE AND language_code=ANY($1::text[])",[languages]);
+  if(supported.rows.length!==languages.length)return "unsupported_room_language";
+  if(input.tagIds.length>8||new Set(input.tagIds).size!==input.tagIds.length||input.tagIds.some(id=>!/^[0-9a-f-]{36}$/i.test(id)))return "invalid_room_tags";
+  if(input.tagIds.length){
+    const allowed=await client.query("SELECT id FROM tags WHERE id=ANY($1::uuid[]) AND status='ACTIVE' AND creator_selectable=TRUE AND tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY')",[input.tagIds]);
+    if(allowed.rows.length!==input.tagIds.length)return "unauthorized_room_tag";
+  }
+  return null;
+}
+
+async function replaceRoomClassification(client: ReturnType<typeof database>, roomId:string, input:RoomClassificationInput) {
+  const languages=[input.primaryLanguage,...input.additionalLanguages];
+  await client.query("DELETE FROM room_languages WHERE room_id=$1",[roomId]);
+  for(let index=0;index<languages.length;index++)await client.query("INSERT INTO room_languages(room_id,language_code,is_primary,display_order) VALUES($1,$2,$3,$4)",[roomId,languages[index],index===0,index]);
+  await client.query("DELETE FROM room_tags rt USING tags t WHERE rt.tag_id=t.id AND rt.room_id=$1 AND rt.source IN ('CREATOR','PLATFORM') AND t.tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY')",[roomId]);
+  for(let index=0;index<input.tagIds.length;index++)await client.query("INSERT INTO room_tags(room_id,tag_id,source,display_order) VALUES($1,$2,'CREATOR',$3)",[roomId,input.tagIds[index],index]);
+  await client.query("UPDATE live_rooms SET stream_language=$1,stream_tags=(SELECT COALESCE(array_agg(t.display_name ORDER BY rt.display_order),'{}'::text[]) FROM room_tags rt JOIN tags t ON t.id=rt.tag_id WHERE rt.room_id=$2 AND t.status='ACTIVE' AND t.tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY')),updated_at=NOW() WHERE id=$2",[input.primaryLanguage,roomId]);
+}
+
+const roomClassificationSelect = `
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('code',l.language_code,'nameEn',l.name_en,'nameNative',l.name_native,'isPrimary',rl.is_primary) ORDER BY rl.display_order) FROM room_languages rl JOIN supported_languages l ON l.language_code=rl.language_code WHERE rl.room_id=r.id AND l.enabled=TRUE),'[]'::jsonb) AS languages,
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',t.id,'slug',t.normalized_slug,'displayName',t.display_name,'type',t.tag_type) ORDER BY rt.display_order) FROM room_tags rt JOIN tags t ON t.id=rt.tag_id WHERE rt.room_id=r.id AND t.status='ACTIVE' AND t.tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY')),'[]'::jsonb) AS tags`;
 
 async function createDueScheduleReminders(client: ReturnType<typeof database>, userId: string) {
   return client.query<{
@@ -672,7 +704,7 @@ export function buildApi() {
     await client.connect();
     try {
       const account=await client.query("SELECT status,reason_code,activated_at,activation_method,administrative_review_status,updated_at FROM creator_accounts WHERE user_id=$1", [user.id]);
-      const draft=await client.query("SELECT creator_handle,display_name,bio,category,primary_language,timezone,content_tags,profile_completed_at,updated_at FROM creator_onboarding WHERE user_id=$1", [user.id]);
+      const draft=await client.query("SELECT creator_handle,display_name,bio,primary_language,timezone,profile_completed_at,updated_at FROM creator_onboarding WHERE user_id=$1", [user.id]);
       const identity=await client.query("SELECT id,document_type,mime_type,file_size,status,uploaded_at,reviewed_at FROM creator_identity_documents WHERE user_id=$1 AND status<>'SUPERSEDED' ORDER BY uploaded_at DESC LIMIT 1", [user.id]);
       const agreement=await client.query("SELECT v.version,v.title,v.content_text,v.effective_at,(a.id IS NOT NULL) AS accepted,COALESCE(a.age_confirmed,FALSE) AS age_confirmed,COALESCE(a.agreement_confirmed,FALSE) AS agreement_confirmed,a.signer_name,a.accepted_at FROM creator_agreement_versions v LEFT JOIN creator_agreement_acceptances a ON a.agreement_version_id=v.id AND a.user_id=$1 WHERE v.is_current=TRUE LIMIT 1", [user.id]);
       const status = account.rows[0]?.status ?? (user.role === "streamer" ? "ACTIVE" : "AUDIENCE");
@@ -725,14 +757,13 @@ export function buildApi() {
     }
   });
   api.patch<{
-    Body: { creatorHandle: string; displayName: string; bio: string; category: string; primaryLanguage: "en" | "zh"; timezone: string; contentTags?: string[] };
+    Body: { creatorHandle: string; displayName: string; bio: string; primaryLanguage: string; timezone: string };
   }>("/api/creator/onboarding/profile", { schema: { body: mutationSchemas.creatorOnboardingProfile } }, async (request, reply) => {
     const user = await currentUser(request);
     if (!user) return reply.code(401).send({ error: "session_required" });
     const body = request.body;
     try { new Intl.DateTimeFormat("en", { timeZone: body.timezone }).format(); }
     catch { return reply.code(400).send({ error: "invalid_timezone" }); }
-    const tags = [...new Set((body.contentTags ?? []).map((item) => item.trim()).filter(Boolean))];
     const client = database();
     await client.connect();
     try {
@@ -740,9 +771,11 @@ export function buildApi() {
       const account = await client.query<{ status: CreatorStatus }>("SELECT status FROM creator_accounts WHERE user_id=$1 FOR UPDATE", [user.id]);
       if (!account.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "creator_onboarding_not_started" }); }
       if (!["ONBOARDING_PROFILE","ONBOARDING_AGREEMENT"].includes(account.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "creator_profile_locked" }); }
+      const language=await client.query("SELECT 1 FROM supported_languages WHERE language_code=$1 AND enabled=TRUE",[body.primaryLanguage]);
+      if(!language.rows[0]){await client.query("ROLLBACK");return reply.code(400).send({error:"unsupported_room_language"});}
       const conflict = await client.query("SELECT 1 FROM users WHERE LOWER(handle)=LOWER($1) AND id<>$2 UNION ALL SELECT 1 FROM creator_onboarding WHERE LOWER(creator_handle)=LOWER($1) AND user_id<>$2 LIMIT 1", [body.creatorHandle, user.id]);
       if (conflict.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "creator_handle_unavailable" }); }
-      await client.query("UPDATE creator_onboarding SET creator_handle=$1,display_name=$2,bio=$3,category=$4,primary_language=$5,timezone=$6,content_tags=$7,profile_completed_at=NOW(),updated_at=NOW() WHERE user_id=$8", [body.creatorHandle,body.displayName.trim(),body.bio.trim(),body.category.trim(),body.primaryLanguage,body.timezone,tags,user.id]);
+      await client.query("UPDATE creator_onboarding SET creator_handle=$1,display_name=$2,bio=$3,category=NULL,primary_language=$4,timezone=$5,content_tags='{}',profile_completed_at=NOW(),updated_at=NOW() WHERE user_id=$6", [body.creatorHandle,body.displayName.trim(),body.bio.trim(),body.primaryLanguage,body.timezone,user.id]);
       if (account.rows[0].status === "ONBOARDING_PROFILE") {
         await client.query("UPDATE creator_accounts SET status='ONBOARDING_AGREEMENT',updated_at=NOW() WHERE user_id=$1", [user.id]);
         await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'ONBOARDING_PROFILE','ONBOARDING_AGREEMENT','profile_completed',$2)", [crypto.randomUUID(), user.id]);
@@ -818,7 +851,7 @@ export function buildApi() {
       await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'PENDING_REVIEW','APPROVED','automatic_approval',$2)",[crypto.randomUUID(),sessionUser.id]);
       const draft=profile.rows[0];
       await client.query("UPDATE users SET handle=$1,display_name=$2,updated_at=NOW() WHERE id=$3",[draft.creator_handle,draft.display_name,sessionUser.id]);
-      await client.query("INSERT INTO streamer_profiles (user_id,bio,category,schedule_timezone,is_featured) VALUES ($1,$2,$3,$4,FALSE) ON CONFLICT (user_id) DO UPDATE SET bio=EXCLUDED.bio,category=EXCLUDED.category,schedule_timezone=EXCLUDED.schedule_timezone",[sessionUser.id,draft.bio,draft.category,draft.timezone]);
+      await client.query("INSERT INTO streamer_profiles (user_id,bio,schedule_timezone,is_featured) VALUES ($1,$2,$3,FALSE) ON CONFLICT (user_id) DO UPDATE SET bio=EXCLUDED.bio,schedule_timezone=EXCLUDED.schedule_timezone",[sessionUser.id,draft.bio,draft.timezone]);
       await client.query("UPDATE creator_accounts SET status='ACTIVE',activation_method='AUTOMATIC',activated_at=NOW(),updated_at=NOW() WHERE user_id=$1",[sessionUser.id]);
       await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'APPROVED','ACTIVE','activation_completed',$2)",[crypto.randomUUID(),sessionUser.id]);
       await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type) VALUES ($1,$2,$2,'creator_automatic_approval_completed')",[crypto.randomUUID(),sessionUser.id]);
@@ -1217,7 +1250,7 @@ export function buildApi() {
   });
   const defaultDiscoveryPreferences = {
     preferred_languages: [] as string[],
-    preferred_categories: [] as string[],
+    preferred_tag_slugs: [] as string[],
     prioritize_live: true,
     prioritize_following: true,
     personalization_enabled: true,
@@ -1229,7 +1262,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled,updated_at FROM audience_discovery_preferences WHERE user_id=$1",
+        "SELECT preferred_languages,preferred_tag_slugs,prioritize_live,prioritize_following,personalization_enabled,updated_at FROM audience_discovery_preferences WHERE user_id=$1",
         [viewer.id],
       );
       return { preferences: result.rows[0] ?? { ...defaultDiscoveryPreferences, updated_at: null } };
@@ -1240,7 +1273,7 @@ export function buildApi() {
   api.put<{
     Body: {
       preferredLanguages?: unknown;
-      preferredCategories?: unknown;
+      preferredTags?: unknown;
       prioritizeLive?: unknown;
       prioritizeFollowing?: unknown;
       personalizationEnabled?: unknown;
@@ -1250,49 +1283,51 @@ export function buildApi() {
     if (!viewer) return;
     const body = request.body ?? {};
     const preferredLanguages = body.preferredLanguages;
-    const preferredCategories = body.preferredCategories;
+    const preferredTags = body.preferredTags;
     if (
       !Array.isArray(preferredLanguages) ||
-      preferredLanguages.length > 2 ||
-      preferredLanguages.some((item) => item !== "en" && item !== "zh") ||
+      preferredLanguages.length > 3 ||
+      preferredLanguages.some((item) => typeof item!=="string"||!/^[a-z]{2}$/.test(item)) ||
       new Set(preferredLanguages).size !== preferredLanguages.length
     ) return reply.code(400).send({ error: "invalid_preferred_languages" });
     if (
-      !Array.isArray(preferredCategories) ||
-      preferredCategories.length > 10 ||
-      preferredCategories.some((item) => typeof item !== "string" || !item.trim() || item.trim().length > 60) ||
-      new Set(preferredCategories.map((item) => String(item).trim())).size !== preferredCategories.length
-    ) return reply.code(400).send({ error: "invalid_preferred_categories" });
+      !Array.isArray(preferredTags) ||
+      preferredTags.length > 20 ||
+      preferredTags.some((item) => typeof item !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item)) ||
+      new Set(preferredTags).size !== preferredTags.length
+    ) return reply.code(400).send({ error: "invalid_preferred_tags" });
     if (
       typeof body.prioritizeLive !== "boolean" ||
       typeof body.prioritizeFollowing !== "boolean" ||
       typeof body.personalizationEnabled !== "boolean"
     ) return reply.code(400).send({ error: "invalid_discovery_preferences" });
-    const normalizedCategories = preferredCategories.map((item) => String(item).trim());
+    const normalizedTags = preferredTags.map((item) => String(item));
     const client = database();
     await client.connect();
     try {
-      if (normalizedCategories.length) {
-        const valid = await client.query<{ category: string }>(
-          "SELECT DISTINCT category FROM streamer_profiles WHERE category=ANY($1::text[])",
-          [normalizedCategories],
+      const validLanguages=await client.query("SELECT language_code FROM supported_languages WHERE enabled=TRUE AND language_code=ANY($1::text[])",[preferredLanguages]);
+      if(validLanguages.rows.length!==preferredLanguages.length)return reply.code(400).send({error:"unsupported_preferred_language"});
+      if (normalizedTags.length) {
+        const valid = await client.query<{ normalized_slug: string }>(
+          "SELECT normalized_slug FROM tags WHERE normalized_slug=ANY($1::text[]) AND status='ACTIVE' AND tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY')",
+          [normalizedTags],
         );
-        if (valid.rows.length !== normalizedCategories.length)
-          return reply.code(400).send({ error: "unknown_preferred_category" });
+        if (valid.rows.length !== normalizedTags.length)
+          return reply.code(400).send({ error: "unknown_preferred_tag" });
       }
       const result = await client.query(
         `INSERT INTO audience_discovery_preferences
-           (user_id,preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled,updated_at)
+           (user_id,preferred_languages,preferred_tag_slugs,prioritize_live,prioritize_following,personalization_enabled,updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,NOW())
          ON CONFLICT (user_id) DO UPDATE SET
            preferred_languages=EXCLUDED.preferred_languages,
-           preferred_categories=EXCLUDED.preferred_categories,
+           preferred_tag_slugs=EXCLUDED.preferred_tag_slugs,
            prioritize_live=EXCLUDED.prioritize_live,
            prioritize_following=EXCLUDED.prioritize_following,
            personalization_enabled=EXCLUDED.personalization_enabled,
            updated_at=NOW()
-         RETURNING preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled,updated_at`,
-        [viewer.id, preferredLanguages, normalizedCategories, body.prioritizeLive, body.prioritizeFollowing, body.personalizationEnabled],
+         RETURNING preferred_languages,preferred_tag_slugs,prioritize_live,prioritize_following,personalization_enabled,updated_at`,
+        [viewer.id, preferredLanguages, normalizedTags, body.prioritizeLive, body.prioritizeFollowing, body.personalizationEnabled],
       );
       return { preferences: result.rows[0] };
     } finally {
@@ -1311,7 +1346,7 @@ export function buildApi() {
       await client.end();
     }
   });
-  api.get<{ Querystring: { q?: string; category?: string; language?: string } }>(
+  api.get<{ Querystring: { q?: string; languages?: string; tag?: string } }>(
     "/api/rooms",
     async (request, reply) => {
       const viewer = await currentUser(request);
@@ -1319,21 +1354,24 @@ export function buildApi() {
       await client.connect();
       try {
         const query = request.query.q?.trim() ?? "";
-        const category = request.query.category?.trim() ?? "";
-        const language = request.query.language?.trim() ?? "";
-        if (language && language !== "en" && language !== "zh")
-          return reply.code(400).send({ error: "invalid_stream_language" });
-        const preferencesResult = viewer?.role === "audience"
+        const languages = (request.query.languages??"").split(",").map(code=>code.trim()).filter(Boolean);
+        const tag = request.query.tag?.trim() ?? "";
+        if (languages.length>20||new Set(languages).size!==languages.length||languages.some(code=>!/^[a-z]{2}$/.test(code)))
+          return reply.code(400).send({ error: "invalid_stream_languages" });
+        const enabledLanguages=await client.query("SELECT language_code FROM supported_languages WHERE enabled=TRUE AND language_code=ANY($1::text[])",[languages]);
+        if(enabledLanguages.rows.length!==languages.length)return reply.code(400).send({error:"unsupported_stream_language"});
+        if(tag&&!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(tag))return reply.code(400).send({error:"invalid_tag_filter"});
+        const preferencesResult = viewer && viewer.role !== "admin"
           ? await client.query<{
               preferred_languages: string[];
-              preferred_categories: string[];
+              preferred_tag_slugs: string[];
               prioritize_live: boolean;
               prioritize_following: boolean;
               personalization_enabled: boolean;
-            }>("SELECT preferred_languages,preferred_categories,prioritize_live,prioritize_following,personalization_enabled FROM audience_discovery_preferences WHERE user_id=$1", [viewer.id])
+            }>("SELECT preferred_languages,preferred_tag_slugs,prioritize_live,prioritize_following,personalization_enabled FROM audience_discovery_preferences WHERE user_id=$1", [viewer.id])
           : { rows: [] };
         const preferences = preferencesResult.rows[0] ?? defaultDiscoveryPreferences;
-        const personalizationApplied = Boolean(viewer?.role === "audience" && preferences.personalization_enabled);
+        const personalizationApplied = Boolean(viewer && viewer.role !== "admin" && preferences.personalization_enabled);
         const result = await client.query<{
           slug: string;
           title: string;
@@ -1346,8 +1384,8 @@ export function buildApi() {
           last_visited_at: Date | null;
           [key: string]: unknown;
         }>(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.goal_text, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id, u.display_name AS streamer_name, p.avatar_url, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count, (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at, ($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following, (SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count, (SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%' OR u.handle ILIKE '%' || $1 || '%' OR p.category ILIKE '%' || $1 || '%' OR $1=ANY(r.stream_tags)) AND ($2='' OR p.category=$2) AND ($3='' OR r.stream_language=$3) LIMIT 100`,
-          [query, category, language, viewer?.id ?? null],
+          `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.goal_text,r.stream_thumbnail_url,u.id AS streamer_id,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},COALESCE((SELECT array_agg(rl.language_code ORDER BY rl.display_order) FROM room_languages rl WHERE rl.room_id=r.id),'{}'::text[]) AS language_codes,COALESCE((SELECT array_agg(t.normalized_slug ORDER BY rt.display_order) FROM room_tags rt JOIN tags t ON t.id=rt.tag_id WHERE rt.room_id=r.id AND t.status='ACTIVE' AND t.tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY')),'{}'::text[]) AS tag_slugs,(SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count,(SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at,($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following,(SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count,(SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN streamer_profiles p ON p.user_id=u.id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND ($1='' OR r.title ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%' OR u.handle ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM room_tags search_rt JOIN tags search_t ON search_t.id=search_rt.tag_id WHERE search_rt.room_id=r.id AND search_t.status='ACTIVE' AND search_t.tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY') AND (search_t.display_name ILIKE '%'||$1||'%' OR search_t.normalized_slug ILIKE '%'||$1||'%')) OR EXISTS(SELECT 1 FROM room_languages search_rl JOIN supported_languages search_l ON search_l.language_code=search_rl.language_code WHERE search_rl.room_id=r.id AND (search_l.language_code=$1 OR search_l.name_en ILIKE '%'||$1||'%' OR search_l.name_native ILIKE '%'||$1||'%'))) AND (cardinality($2::text[])=0 OR EXISTS(SELECT 1 FROM room_languages filter_rl WHERE filter_rl.room_id=r.id AND filter_rl.language_code=ANY($2::text[]))) AND ($3='' OR EXISTS(SELECT 1 FROM room_tags filter_rt JOIN tags filter_t ON filter_t.id=filter_rt.tag_id WHERE filter_rt.room_id=r.id AND filter_t.normalized_slug=$3 AND filter_t.status='ACTIVE' AND filter_t.tag_type IN ('CONTENT','FORMAT','MOOD','COMMUNITY'))) LIMIT 100`,
+          [query, languages, tag, viewer?.id ?? null],
         );
         const rooms = await Promise.all(result.rows.map(async (room) => {
           const presence = realtime ? await roomPresence(room.slug) : { count: 0, users: [] };
@@ -1361,8 +1399,8 @@ export function buildApi() {
           const recommendationScore =
             (live ? (personalizationApplied && !preferences.prioritize_live ? 250_000 : 1_000_000) : 0) +
             (personalizationApplied && preferences.prioritize_following && room.is_following ? 400_000 : 0) +
-            (personalizationApplied && preferences.preferred_languages.includes(String(room.stream_language)) ? 180_000 : 0) +
-            (personalizationApplied && preferences.preferred_categories.includes(String(room.category)) ? 140_000 : 0) +
+            (personalizationApplied && (room.language_codes as string[]).some(code=>preferences.preferred_languages.includes(code)) ? 180_000 : 0) +
+            (personalizationApplied && (room.tag_slugs as string[]).some(slug=>preferences.preferred_tag_slugs.includes(slug)) ? 140_000 : 0) +
             (personalizationApplied ? Math.min(5, Number(room.recent_visit_count)) * 12_000 : 0) +
             (personalizationApplied && room.last_visited_at && Date.now() - new Date(room.last_visited_at).getTime() < 60 * 60 * 1000 ? -30_000 : 0) +
             viewerCount * 10_000 +
@@ -1371,11 +1409,11 @@ export function buildApi() {
           const recommendationReasons = personalizationApplied ? [
             live ? "live" : null,
             preferences.prioritize_following && room.is_following ? "following" : null,
-            preferences.preferred_languages.includes(String(room.stream_language)) ? "preferred_language" : null,
-            preferences.preferred_categories.includes(String(room.category)) ? "preferred_category" : null,
+            (room.language_codes as string[]).some(code=>preferences.preferred_languages.includes(code)) ? "preferred_language" : null,
+            (room.tag_slugs as string[]).some(slug=>preferences.preferred_tag_slugs.includes(slug)) ? "preferred_tag" : null,
             Number(room.recent_visit_count) > 0 ? "recently_watched" : null,
           ].filter(Boolean) : [];
-          const { recent_visit_count: _recentVisitCount, last_visited_at: _lastVisitedAt, ...publicRoom } = room;
+          const { recent_visit_count: _recentVisitCount,last_visited_at:_lastVisitedAt,language_codes:_languageCodes,tag_slugs:_tagSlugs,...publicRoom }=room;
           return { ...publicRoom, viewer_count: viewerCount, recommendation_score: recommendationScore, recommendation_reasons: recommendationReasons, personalization_applied: personalizationApplied };
         }));
         rooms.sort((left, right) =>
@@ -1389,18 +1427,26 @@ export function buildApi() {
       }
     },
   );
-  api.get("/api/discovery/categories", async () => {
+  api.get("/api/discovery/languages", async () => {
     const client = database();
     await client.connect();
     try {
-      const result = await client.query(
-        "SELECT DISTINCT p.category FROM streamer_profiles p JOIN creator_accounts ca ON ca.user_id=p.user_id AND ca.status='ACTIVE' JOIN live_rooms r ON r.streamer_id=p.user_id AND r.publication_status='published' ORDER BY p.category LIMIT 100",
-      );
-      return { categories: result.rows.map((row) => row.category) };
+      const result=await client.query("SELECT language_code AS code,name_en,name_native FROM supported_languages WHERE enabled=TRUE ORDER BY display_order,language_code");
+      return {languages:result.rows};
     } finally {
       await client.end();
     }
   });
+  api.get<{Querystring:{type?:string}}>("/api/discovery/tags",async(request,reply)=>{
+    const type=request.query.type?.toUpperCase()??"PUBLIC";
+    if(!["PUBLIC","COMMUNITY"].includes(type))return reply.code(400).send({error:"invalid_tag_type"});
+    const client=database();await client.connect();try{
+      const kinds=type==="COMMUNITY"?["COMMUNITY"]:["CONTENT","FORMAT","MOOD"];
+      const result=await client.query("SELECT t.id,t.normalized_slug AS slug,t.display_name AS \"displayName\",t.tag_type AS type,COUNT(DISTINCT r.id) FILTER(WHERE r.publication_status='published' AND r.updated_at>NOW()-INTERVAL '30 days')::int AS \"recentRoomCount\",COALESCE(SUM(visits.recent),0)::int AS \"recentEngagement\" FROM tags t LEFT JOIN room_tags rt ON rt.tag_id=t.id LEFT JOIN live_rooms r ON r.id=rt.room_id LEFT JOIN creator_accounts ca ON ca.user_id=r.streamer_id LEFT JOIN LATERAL(SELECT COUNT(*)::int AS recent FROM room_visits v WHERE v.room_id=r.id AND v.visited_at>NOW()-INTERVAL '7 days')visits ON TRUE WHERE t.status='ACTIVE' AND t.tag_type=ANY($1::text[]) AND (r.id IS NULL OR (ca.status='ACTIVE' AND r.publication_status='published')) GROUP BY t.id ORDER BY \"recentRoomCount\" DESC,\"recentEngagement\" DESC,t.display_name LIMIT 100",[kinds]);
+      return {tags:result.rows};
+    }finally{await client.end();}
+  });
+  api.get("/api/discovery/categories",async(_request,reply)=>reply.code(410).send({error:"categories_removed",replacement:"/api/discovery/tags"}));
   api.get<{ Params: { streamerId: string } }>(
     "/api/streamers/:streamerId",
     async (request, reply) => {
@@ -1408,7 +1454,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT u.id,u.handle,u.display_name,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state,r.broadcast_status_source FROM users u JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id AND r.publication_status='published' WHERE u.id=$1",
+          `SELECT u.id,u.handle,u.display_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state,r.broadcast_status_source FROM users u JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id AND r.publication_status='published' WHERE u.id=$1`,
           [request.params.streamerId],
         );
         if (!result.rows[0])
@@ -1487,7 +1533,7 @@ export function buildApi() {
       const result = await client.query(
         `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_source,
                 u.id AS streamer_id,u.display_name AS streamer_name,
-                p.avatar_url,p.category,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,
+                p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},
                 f.created_at AS followed_at,f.reminder_enabled
          FROM follows f
          JOIN users u ON u.id=f.streamer_id
@@ -1717,7 +1763,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.broadcast_transport, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id,u.display_name AS streamer_name, p.avatar_url,p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1 AND r.publication_status='published'`,
+          `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.stream_thumbnail_url,u.id AS streamer_id,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1 AND r.publication_status='published'`,
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -1737,7 +1783,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT r.slug,r.title,r.broadcast_state,r.broadcast_status_source,r.stream_language,r.stream_thumbnail_url,u.display_name AS streamer_name,u.handle,p.avatar_url,p.category,p.bio FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1 AND r.publication_status='published'",
+          `SELECT r.slug,r.title,r.broadcast_state,r.broadcast_status_source,r.stream_thumbnail_url,u.display_name AS streamer_name,u.handle,p.avatar_url,p.bio,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1 AND r.publication_status='published'`,
           [slug],
         );
         if (!result.rows[0]) return reply.code(404).send({ error: "preview_not_found" });
@@ -3655,7 +3701,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT r.slug,r.title,r.status,r.publication_status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,r.stream_language,r.stream_tags,r.stream_thumbnail_url,r.chat_slow_mode_seconds,r.blocked_terms,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
+        `SELECT r.slug,r.title,r.status,r.publication_status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,r.stream_thumbnail_url,r.chat_slow_mode_seconds,r.blocked_terms,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1`,
         [user.id],
       );
       return {
@@ -3671,7 +3717,7 @@ export function buildApi() {
       await client.end();
     }
   });
-  api.post<{Body:{title:string;category?:string;streamLanguage?:"en"|"zh"}}>(
+  api.post<{Body:RoomClassificationInput&{title:string}}>(
     "/api/studio/rooms",
     {schema:{body:mutationSchemas.studioRoomCreate}},
     async(request,reply)=>{
@@ -3679,14 +3725,17 @@ export function buildApi() {
       if(!creator)return;
       const client=database();await client.connect();
       try{await client.query("BEGIN");
+        const classificationError=await validateRoomClassification(client,request.body);
+        if(classificationError){await client.query("ROLLBACK");return reply.code(400).send({error:classificationError});}
         const existing=await client.query("SELECT slug,publication_status FROM live_rooms WHERE streamer_id=$1",[creator.id]);
         if(existing.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_room_exists",room:existing.rows[0]});}
-        const profile=await client.query("SELECT category FROM streamer_profiles WHERE user_id=$1",[creator.id]);
+        const profile=await client.query("SELECT 1 FROM streamer_profiles WHERE user_id=$1",[creator.id]);
         if(!profile.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_profile_missing"});}
-        const created=await client.query("INSERT INTO live_rooms (id,streamer_id,slug,title,status,publication_status,stream_language,cloudflare_live_input_id) VALUES ($1,$2,$3,$4,'offline','draft',$5,$6) RETURNING slug,title,publication_status,broadcast_state",[crypto.randomUUID(),creator.id,creator.handle,request.body.title.trim(),request.body.streamLanguage??creator.locale,config.cloudflare.liveInputId??null]);
-        if(request.body.category)await client.query("UPDATE streamer_profiles SET category=$1 WHERE user_id=$2",[request.body.category.trim(),creator.id]);
+        const roomId=crypto.randomUUID();
+        const created=await client.query("INSERT INTO live_rooms (id,streamer_id,slug,title,status,publication_status,stream_language,cloudflare_live_input_id) VALUES ($1,$2,$3,$4,'offline','draft',$5,$6) RETURNING slug,title,publication_status,broadcast_state",[roomId,creator.id,creator.handle,request.body.title.trim(),request.body.primaryLanguage,config.cloudflare.liveInputId??null]);
+        await replaceRoomClassification(client,roomId,request.body);
         await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type,metadata) VALUES ($1,$2,$2,'room_created',jsonb_build_object('slug',$3::text,'publicationStatus','draft'))",[crypto.randomUUID(),creator.id,created.rows[0].slug]);
-        await client.query("COMMIT");return reply.code(201).send({room:created.rows[0]});
+        await client.query("COMMIT");return reply.code(201).send({room:{...created.rows[0],languages:[request.body.primaryLanguage,...request.body.additionalLanguages],tagIds:request.body.tagIds}});
       }catch(error){await client.query("ROLLBACK");if((error as {code?:string}).code==="23505")return reply.code(409).send({error:"creator_room_exists"});throw error;}finally{await client.end();}
     }
   );
@@ -3848,7 +3897,6 @@ export function buildApi() {
   api.put<{
     Body: {
       bio?: string;
-      category?: string;
       scheduleText?: string;
       nextStreamAt?: string | null;
       scheduleTimezone?: string;
@@ -3860,7 +3908,6 @@ export function buildApi() {
         DemoUser | undefined;
       if (!streamer) return;
       const bio = request.body?.bio?.trim();
-      const category = request.body?.category?.trim();
       const schedule = request.body?.scheduleText?.trim();
       const nextStreamSupplied = request.body?.nextStreamAt !== undefined;
       const nextStreamAt = request.body?.nextStreamAt;
@@ -3868,9 +3915,8 @@ export function buildApi() {
       const nextStreamTimestamp =
         typeof nextStreamAt === "string" ? Date.parse(nextStreamAt) : null;
       if (
-        (!bio && !category && !schedule && !nextStreamSupplied && !scheduleTimezone) ||
+        (!bio && !schedule && !nextStreamSupplied && !scheduleTimezone) ||
         (bio && bio.length > 500) ||
-        (category && category.length > 60) ||
         (schedule && schedule.length > 160) ||
         (scheduleTimezone && !validTimeZone(scheduleTimezone)) ||
         (typeof nextStreamAt === "string" &&
@@ -3889,15 +3935,13 @@ export function buildApi() {
         );
         const update = await client.query(
           `UPDATE streamer_profiles
-           SET bio=COALESCE($1,bio),category=COALESCE($2,category),
-               schedule_text=COALESCE($3,schedule_text),
-               next_stream_at=CASE WHEN $4 THEN $5::timestamptz ELSE next_stream_at END,
-               schedule_timezone=COALESCE($6,schedule_timezone)
-           WHERE user_id=$7
-           RETURNING bio,category,schedule_text,next_stream_at,schedule_timezone`,
+           SET bio=COALESCE($1,bio),schedule_text=COALESCE($2,schedule_text),
+               next_stream_at=CASE WHEN $3 THEN $4::timestamptz ELSE next_stream_at END,
+               schedule_timezone=COALESCE($5,schedule_timezone)
+           WHERE user_id=$6
+           RETURNING bio,schedule_text,next_stream_at,schedule_timezone`,
           [
             bio ?? null,
-            category ?? null,
             schedule ?? null,
             nextStreamSupplied,
             typeof nextStreamAt === "string"
@@ -3969,9 +4013,9 @@ export function buildApi() {
       title?: string;
       goalText?: string;
       goalTarget?: number;
-      category?: string;
-      streamLanguage?: "en" | "zh";
-      streamTags?: string[];
+      primaryLanguage?: string;
+      additionalLanguages?: string[];
+      tagIds?: string[];
     };
   }>("/api/streamer/rooms/:slug", async (request, reply) => {
     const streamer = (await requireRole(request, reply, "streamer")) as
@@ -3980,16 +4024,15 @@ export function buildApi() {
     const title = request.body?.title?.trim();
     const goal = request.body?.goalText?.trim();
     const goalTarget = request.body?.goalTarget;
-    const category = request.body?.category?.trim();
-    const streamLanguage = request.body?.streamLanguage;
-    const streamTags = request.body?.streamTags?.map((item) => item.trim()).filter(Boolean);
+    const legacyBody=request.body as unknown as Record<string,unknown>;
+    if("category" in legacyBody||"streamLanguage" in legacyBody||"streamTags" in legacyBody)return reply.code(400).send({error:"legacy_room_classification_removed"});
+    const classificationSpecified=request.body?.primaryLanguage!==undefined||request.body?.additionalLanguages!==undefined||request.body?.tagIds!==undefined;
+    const classification=classificationSpecified?{primaryLanguage:request.body.primaryLanguage??"",additionalLanguages:request.body.additionalLanguages??[],tagIds:request.body.tagIds??[]}:null;
     if (
-      (!title && !goal && goalTarget === undefined && !category && !streamLanguage && streamTags === undefined) ||
+      (!title && !goal && goalTarget === undefined && !classification) ||
       (title && title.length > 120) ||
       (goal && goal.length > 300) ||
-      (category && category.length > 60) ||
-      (streamLanguage && !["en", "zh"].includes(streamLanguage)) ||
-      (streamTags && (streamTags.length > 5 || streamTags.some((item) => item.length > 24))) ||
+      (classification&&(!Array.isArray(classification.additionalLanguages)||!Array.isArray(classification.tagIds))) ||
       (goalTarget !== undefined &&
         (!Number.isInteger(goalTarget) ||
           goalTarget < 1 ||
@@ -4000,14 +4043,13 @@ export function buildApi() {
     await client.connect();
     try {
       await client.query("BEGIN");
+      if(classification){const classificationError=await validateRoomClassification(client,classification);if(classificationError){await client.query("ROLLBACK");return reply.code(400).send({error:classificationError});}}
       const update = await client.query(
-        "UPDATE live_rooms SET title=COALESCE($1,title),goal_text=COALESCE($2,goal_text),goal_target=COALESCE($3,goal_target),stream_language=COALESCE($4,stream_language),stream_tags=COALESCE($5,stream_tags),updated_at=NOW() WHERE slug=$6 AND streamer_id=$7 RETURNING title,goal_text,goal_target,goal_progress,stream_language,stream_tags,stream_thumbnail_url",
+        "UPDATE live_rooms SET title=COALESCE($1,title),goal_text=COALESCE($2,goal_text),goal_target=COALESCE($3,goal_target),updated_at=NOW() WHERE slug=$4 AND streamer_id=$5 RETURNING id,title,goal_text,goal_target,goal_progress,stream_thumbnail_url",
         [
           title ?? null,
           goal ?? null,
           goalTarget ?? null,
-          streamLanguage ?? null,
-          streamTags ?? null,
           request.params.slug,
           streamer.id,
         ],
@@ -4016,10 +4058,10 @@ export function buildApi() {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "streamer_room_not_found" });
       }
-      if (category)
-        await client.query("UPDATE streamer_profiles SET category=$1 WHERE user_id=$2", [category, streamer.id]);
+      if(classification)await replaceRoomClassification(client,update.rows[0].id,classification);
+      const complete=await client.query(`SELECT r.title,r.goal_text,r.goal_target,r.goal_progress,r.stream_thumbnail_url,${roomClassificationSelect} FROM live_rooms r WHERE r.id=$1`,[update.rows[0].id]);
       await client.query("COMMIT");
-      return { room: update.rows[0] };
+      return { room: complete.rows[0] };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -4169,7 +4211,7 @@ export function buildApi() {
   api.get<{Params:{creatorId:string}}>("/api/admin/creator-reviews/:creatorId",async(request,reply)=>{
     const admin=await requireAdminPermission(request,reply,"creator_review.read");if(!admin)return;
     const client=database();await client.connect();try{
-      const summary=await client.query("SELECT u.id AS user_id,u.handle AS account_handle,u.display_name,u.created_at AS account_created_at,u.is_banned,c.status AS creator_status,c.reason_code,c.activation_method,c.activated_at,c.administrative_review_status,o.creator_handle,o.display_name AS creator_name,o.bio,o.category,o.primary_language,o.timezone,o.content_tags,o.profile_completed_at,ag.age_confirmed,ag.agreement_confirmed,ag.accepted_at,ag.audit_event_id,ag.agreement_version,d.id AS document_id,d.document_type,d.mime_type,d.file_size,d.status AS document_status,d.uploaded_at,d.reviewed_at,d.reviewed_by,d.review_reason_code FROM users u JOIN creator_accounts c ON c.user_id=u.id LEFT JOIN creator_onboarding o ON o.user_id=u.id LEFT JOIN LATERAL (SELECT a.age_confirmed,a.agreement_confirmed,a.accepted_at,a.audit_event_id,v.version AS agreement_version FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=u.id AND v.is_current=TRUE ORDER BY a.accepted_at DESC LIMIT 1)ag ON TRUE LEFT JOIN LATERAL(SELECT * FROM creator_identity_documents x WHERE x.user_id=u.id AND x.status<>'SUPERSEDED' ORDER BY x.uploaded_at DESC LIMIT 1)d ON TRUE WHERE u.id=$1",[request.params.creatorId]);
+      const summary=await client.query("SELECT u.id AS user_id,u.handle AS account_handle,u.display_name,u.created_at AS account_created_at,u.is_banned,c.status AS creator_status,c.reason_code,c.activation_method,c.activated_at,c.administrative_review_status,o.creator_handle,o.display_name AS creator_name,o.bio,o.primary_language,o.timezone,o.profile_completed_at,ag.age_confirmed,ag.agreement_confirmed,ag.accepted_at,ag.audit_event_id,ag.agreement_version,d.id AS document_id,d.document_type,d.mime_type,d.file_size,d.status AS document_status,d.uploaded_at,d.reviewed_at,d.reviewed_by,d.review_reason_code FROM users u JOIN creator_accounts c ON c.user_id=u.id LEFT JOIN creator_onboarding o ON o.user_id=u.id LEFT JOIN LATERAL (SELECT a.age_confirmed,a.agreement_confirmed,a.accepted_at,a.audit_event_id,v.version AS agreement_version FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=u.id AND v.is_current=TRUE ORDER BY a.accepted_at DESC LIMIT 1)ag ON TRUE LEFT JOIN LATERAL(SELECT * FROM creator_identity_documents x WHERE x.user_id=u.id AND x.status<>'SUPERSEDED' ORDER BY x.uploaded_at DESC LIMIT 1)d ON TRUE WHERE u.id=$1",[request.params.creatorId]);
       const history=await client.query("SELECT from_status,to_status,reason_code,actor_id,created_at FROM creator_status_history WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100",[request.params.creatorId]);
       const decisions=await client.query("SELECT action,reason_code,user_facing_reason,reviewer_id,created_at FROM creator_review_decisions WHERE creator_user_id=$1 ORDER BY created_at DESC LIMIT 100",[request.params.creatorId]);
       const resources=await client.query("SELECT r.slug,r.title,r.publication_status,r.broadcast_state,r.created_at FROM live_rooms r WHERE r.streamer_id=$1 ORDER BY r.created_at DESC LIMIT 50",[request.params.creatorId]);

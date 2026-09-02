@@ -208,6 +208,30 @@ try {
       [fixture.roomId, fixture.userId, fixture.slug, fixture.title, fixture.language],
     );
   }
+  await client.query("BEGIN");
+  await client.query(
+    "DELETE FROM room_languages WHERE room_id IN (SELECT id FROM live_rooms WHERE streamer_id = ANY($1::uuid[]))",
+    [accounts.map((account) => account[0])],
+  );
+  await client.query(
+    "INSERT INTO room_languages(room_id,language_code,is_primary,display_order) SELECT id,stream_language,TRUE,0 FROM live_rooms WHERE streamer_id = ANY($1::uuid[])",
+    [accounts.map((account) => account[0])],
+  );
+  await client.query("COMMIT");
+  await client.query(
+    "DELETE FROM room_tags WHERE room_id IN (SELECT id FROM live_rooms WHERE streamer_id = ANY($1::uuid[]))",
+    [accounts.map((account) => account[0])],
+  );
+  await client.query(`
+    INSERT INTO room_tags(room_id,tag_id,source,display_order)
+    SELECT r.id,t.id,'PLATFORM',0
+    FROM live_rooms r
+    JOIN streamer_profiles p ON p.user_id=r.streamer_id
+    JOIN legacy_category_migration_report report ON report.legacy_category=p.category AND report.resolution='MAPPED_TO_TAG'
+    JOIN tags t ON t.normalized_slug=report.mapped_tag_slug
+    WHERE r.streamer_id = ANY($1::uuid[])
+    ON CONFLICT (room_id,tag_id) DO NOTHING
+  `, [accounts.map((account) => account[0])]);
   console.log(
     "Seeded demo audience, administrator, and six creator discovery accounts.",
   );

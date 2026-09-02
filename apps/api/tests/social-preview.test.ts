@@ -7,11 +7,11 @@ const room = {
   title: "A room & friends",
   streamer_name: "Demo <Streamer>",
   handle: "demo-streamer",
-  category: "Talk",
+  languages: [{ code: "en", nameEn: "English", nameNative: "English", isPrimary: true }],
+  tags: [{ id: "1", slug: "conversation", displayName: "Conversation", type: "CONTENT" }],
   bio: 'A safe "profile"',
   broadcast_state: "live",
   broadcast_status_source: "cloudflare",
-  stream_language: "en",
   avatar_url: "/api/media/avatars/avatar-safe.webp",
   stream_thumbnail_url: "/api/media/stream-thumbnails/stream-thumbnail-safe.webp",
 };

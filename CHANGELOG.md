@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-02 — Structured room languages and controlled tags
+
+- Removed Category from creator onboarding, Studio room setup/editing, public room/profile responses, cards, room details, search controls, and discovery navigation.
+- Added supported-language, normalized tag, room-language, room-tag, migration-report, and tag-preference schema with server-enforced one-primary/three-total language rules and eight-public-tag limit.
+- Added URL-backed multi-language/tag discovery, language/tag-aware search and recommendations, Popular tags, Trending, Following, and optional Community surfaces.
+- Added compact accessible text language badges with no flags, controlled Studio selectors, safe legacy category conversion, seed support, focused verification, and preserved draft/authorization/no-auto-room behavior.
+
 ## 2026-09-02 — Creator onboarding and administrator review
 
 - Reordered onboarding to profile → agreement/18+ → private document upload → review → activation and removed mock-verification claims/provider dependency.

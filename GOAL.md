@@ -1,5 +1,9 @@
 # Stream Platform Product Goal
 
+## Current milestone — structured room languages and controlled tags
+
+Replace user-facing room categories with one primary plus up to two additional standard language codes and controlled content/community tags. Keep discovery URL-driven, public APIs privacy-safe, Studio writes explicit, drafts private, creator authorization unchanged, and navigation side-effect free. Exit requires migrations 027/028, focused integration coverage, the full staging gate, production build, and responsive browser QA.
+
 ## Current milestone — creator agreement, private document receipt, and admin review
 
 Implement `creator-agreement-v1`, explicit 18+ and rules acceptance, encrypted private identity-document receipt (not automated verification), transactional automatic/manual activation, creators-as-audience capabilities, Studio **Discover Live**, and permissioned administrator review. Preserve migration 024, server authorization, explicit room creation, and the eliminated navigation side effect. Google OAuth is out of scope.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented for the private, test-only product. It does not collect identity documents, KYC data, contracts, tax details, or payout accounts and does not create or configure Cloudflare resources.
+Historical creator-application workflow retained for migration context. The current server-authoritative onboarding and administrator-review design is documented in `Creator-Onboarding-State-Architecture.md`. Creator onboarding does not classify rooms and never creates a room through navigation.
 
 ## Applicant flow
 

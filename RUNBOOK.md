@@ -1,5 +1,9 @@
 # Local Runbook
 
+## Room classification verification
+
+After applying migrations 027 and 028, run `npm run db:seed`, `npm run verify:room-classification`, and `npm run verify:staging`. Inspect `legacy_category_migration_report` before any future compatibility-column removal. Confirm every room has one primary language at display order zero and no more than three total languages. Confirm `/api/discovery/categories` returns the documented retirement response and `/api/discovery/languages` plus `/api/discovery/tags` are healthy. Never repair missing language data by inferring from a creator's name, avatar, location, or identity.
+
 ## Creator documents and review
 
 Production must set `IDENTITY_DOCUMENT_STORAGE_PATH` to a private persistent directory and `IDENTITY_DOCUMENT_ENCRYPTION_KEY` to a base64 32-byte key. Back up encrypted files separately from the key. Verify permission-denied cases, one-time view expiry, audit events, and immediate Studio denial after suspension. Never place document paths, URLs, numbers, or raw bytes in logs or tickets.
