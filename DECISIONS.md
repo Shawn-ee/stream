@@ -403,3 +403,9 @@ The active product goal ends at a deployable bilingual test-only streaming platf
 - Streamer sign-out during an active browser/local session must first receive a successful server-side end result. Production OBS ingest cannot be stopped by the website, so an active OBS broadcast returns a conflict and instructs the creator to stop OBS first.
 - Administrator moderation requires an explicitly selected non-admin account, a server-validated 2–500 character reason, and a final confirmation. No hidden fixed demo target, fixed reason, or administrator target is allowed.
 - The raw CSS ceiling remains 135 KiB. The combined compressed JS+CSS ceiling is narrowly calibrated from 147 to 149 KiB for these first-party safety flows; no dependency was added.
+
+## 2026-09-02 - Audience navigation is contextual, not a permanent rail
+
+- The audience homepage reserves horizontal space for live content; Following belongs in a compact creator row and the account avatar menu rather than a permanent sidebar or standalone global-nav item.
+- Guest authentication keeps explicit Sign in and Create account actions. Signed-in account, settings, creator application, and sign-out actions are grouped behind one accessible avatar menu; Wallet remains a direct high-frequency action.
+- Live status and homepage ranking continue to use existing authoritative room data. Category and schedule surfaces are views of existing fields, not synthetic recommendations or new backend truth.

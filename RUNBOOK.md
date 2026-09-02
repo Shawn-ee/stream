@@ -481,3 +481,6 @@ npm run verify:six-phase-audit
 These optional static checks preserve historical document integrity only. They are not included in `npm run verify:staging`, are not active milestones, and must not be used to start legal or payment work.
 
 Do not create a Stripe or alternate-processor resource, webhook, product, price, connected account, KYC record, checkout, real token, bank record, or payout from this runbook. Reintroducing that work requires a separate newly scoped owner request.
+## Audience homepage responsive smoke test
+
+After frontend discovery changes, verify both a guest and `demo-audience` at 1440×900 and 390×844. Confirm there is no permanent desktop sidebar or horizontal overflow; the guest header shows Sign in and Create account; the signed-in avatar menu closes on Escape and exposes Following/account/settings/creator application/sign out; the Following row remains visible when empty; and the mobile Filter button reveals category and language controls without hiding the active feed.

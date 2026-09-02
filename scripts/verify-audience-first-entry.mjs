@@ -10,7 +10,8 @@ const authSurface = app.slice(
   app.indexOf('<form className="login-form"'),
 );
 assert.doesNotMatch(authSurface, /demo-(?:audience|streamer|admin)/, "public sign-in must not expose role shortcuts");
-assert.match(app, /user\.role === "audience" && user\.ageAcknowledged && !isGuest[\s\S]{0,300}Become a creator/);
+assert.match(app, /<AudienceAccountMenu[\s\S]{0,900}onBecomeCreator=/);
+assert.match(navigation, /Become a creator/);
 assert.match(app, /id="creator-program" className="account-recovery account-creator-program"/);
 assert.match(app, /user\.role === "audience" \? <div id="creator-program"/);
 assert.doesNotMatch(app, /!isGuest \? <div id="creator-program"><CreatorApplication/, "creator application must not interrupt discovery");

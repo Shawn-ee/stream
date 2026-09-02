@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { LiveStreamCardSkeleton } from "./ui";
 import { CreatorAvatar } from "./avatar";
 
@@ -184,6 +185,7 @@ export function MobileDiscoveryFeed({
   onRetry: () => void;
   onOpen: (room: DiscoveryRoom) => void;
 }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const tabs: { id: MobileDiscoveryView; en: string; zh: string }[] = [
     { id: "for-you", en: "For You", zh: "推荐" },
     { id: "following", en: "Following", zh: "关注" },
@@ -230,21 +232,32 @@ export function MobileDiscoveryFeed({
             </button>
           ))}
         </div>
-        <label className="mobile-category-filter">
-          <span className="sr-only">{t.allCategories}</span>
-          <select value={category} onChange={(event) => onCategoryChange(event.target.value)} aria-label={t.allCategories}>
-            <option value="">{t.allCategories}</option>
-            {categories.map((item) => <option key={item}>{item}</option>)}
-          </select>
-        </label>
-        <label className="mobile-language-filter">
-          <span className="sr-only">{zh ? "直播语言" : "Stream language"}</span>
-          <select value={language} onChange={(event) => onLanguageChange(event.target.value as "" | "en" | "zh")} aria-label={zh ? "直播语言" : "Stream language"}>
-            <option value="">{zh ? "所有语言" : "All languages"}</option>
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-          </select>
-        </label>
+        <button
+          type="button"
+          className="mobile-filter-toggle secondary"
+          aria-expanded={filtersOpen}
+          aria-controls="mobile-discovery-filter-panel"
+          onClick={() => setFiltersOpen((current) => !current)}
+        >
+          {zh ? "筛选" : "Filter"}{category || language ? " · 1+" : ""}
+        </button>
+        {filtersOpen ? <div className="mobile-filter-panel" id="mobile-discovery-filter-panel">
+          <label className="mobile-category-filter">
+            <span className="sr-only">{t.allCategories}</span>
+            <select value={category} onChange={(event) => onCategoryChange(event.target.value)} aria-label={t.allCategories}>
+              <option value="">{t.allCategories}</option>
+              {categories.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <label className="mobile-language-filter">
+            <span className="sr-only">{zh ? "直播语言" : "Stream language"}</span>
+            <select value={language} onChange={(event) => onLanguageChange(event.target.value as "" | "en" | "zh")} aria-label={zh ? "直播语言" : "Stream language"}>
+              <option value="">{zh ? "所有语言" : "All languages"}</option>
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+            </select>
+          </label>
+        </div> : null}
       </div>
       <div className="mobile-live-feed-list" aria-live="polite">
         {loading ? (
@@ -268,6 +281,49 @@ export function MobileDiscoveryFeed({
             ) : null}
           </div>
         )}
+      </div>
+    </section>
+  );
+}
+
+export function FollowingAvatarRow({
+  creators,
+  zh,
+  onOpen,
+  onViewAll,
+}: {
+  creators: DiscoveryRoom[];
+  zh: boolean;
+  onOpen: (room: DiscoveryRoom) => void;
+  onViewAll: () => void;
+}) {
+  const ordered = [...creators].sort((a, b) => {
+    const aLive = roomState(a) === "live" && !isSimulated(a);
+    const bLive = roomState(b) === "live" && !isSimulated(b);
+    return Number(bLive) - Number(aLive);
+  });
+  return (
+    <section className="following-avatar-section" aria-labelledby="following-avatar-title">
+      <div className="compact-section-heading">
+        <h2 id="following-avatar-title">{zh ? "正在关注" : "Following"}</h2>
+        <button type="button" className="text-action" onClick={onViewAll}>{zh ? "查看全部" : "View all"}</button>
+      </div>
+      <div className="following-avatar-row">
+        {ordered.length ? ordered.slice(0, 12).map((room) => {
+          const live = roomState(room) === "live" && !isSimulated(room);
+          return (
+            <button type="button" className={`following-avatar-item ${live ? "is-live" : "is-offline"}`} key={room.streamer_id} onClick={() => onOpen(room)}>
+              <span className="following-avatar-wrap">
+                <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="following-avatar" />
+                {live ? <span className="following-live-badge">LIVE</span> : null}
+              </span>
+              <span>{room.streamer_name}</span>
+            </button>
+          );
+        }) : <button type="button" className="following-avatar-empty" onClick={onViewAll}>
+          <span aria-hidden="true">+</span>
+          <span>{zh ? "关注主播后会显示在这里" : "Follow creators to see them here"}</span>
+        </button>}
       </div>
     </section>
   );

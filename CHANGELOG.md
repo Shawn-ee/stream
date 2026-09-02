@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-02 - Audience homepage navigation and discovery hierarchy (local)
+
+- Replaced the permanent audience creator sidebar with a compact horizontal Following row that keeps live creators first, distinguishes offline creators, and provides a stable empty state for new accounts.
+- Simplified desktop navigation to Discover, Categories, search, language, Wallet, and an accessible avatar menu containing Following, account/profile, settings, creator application, and sign out. Guests now receive distinct Sign in and Create account actions.
+- Reordered discovery around Live now, creators to follow, popular categories, and upcoming streams using only existing room/category/schedule data. Mobile retains the content-first feed while category/language controls now live behind one Filter button.
+- Preserved room ranking, streaming, authentication, wallet, follow, schedule, and creator backend behavior. The complete Cloudflare-free staging gate, final seed reset, and 1440×900 plus 390×844 browser smoke tests pass with no horizontal overflow. No commit or deployment occurred.
+
 ## 2026-09-01 - Audience-first entry and approval-gated creator access (local)
 
 - Removed public demo-role shortcuts and every signed-out creator/broadcast entry; the sign-in form now asks only for account credentials while the API remains the authority for audience, streamer, or administrator role.

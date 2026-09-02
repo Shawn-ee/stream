@@ -1,4 +1,65 @@
+import { useEffect, useRef } from "react";
+
 export type MobileTab = "home" | "discover" | "go-live" | "inbox" | "me";
+
+export function AudienceAccountMenu({
+  open,
+  initials,
+  displayName,
+  zh,
+  onToggle,
+  onClose,
+  onFollowing,
+  onAccount,
+  onSettings,
+  onBecomeCreator,
+  onLogout,
+}: {
+  open: boolean;
+  initials: string;
+  displayName: string;
+  zh: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onFollowing: () => void;
+  onAccount: () => void;
+  onSettings: () => void;
+  onBecomeCreator: () => void;
+  onLogout: () => void;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) onClose();
+    };
+    const closeEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeEscape);
+    };
+  }, [open, onClose]);
+  const choose = (action: () => void) => () => { onClose(); action(); };
+  return (
+    <div className="audience-account-menu" ref={rootRef}>
+      <button type="button" className="audience-avatar-button" aria-haspopup="menu" aria-expanded={open} aria-label={zh ? "打开账户菜单" : "Open account menu"} onClick={onToggle}>
+        <span aria-hidden="true">{initials}</span>
+      </button>
+      {open ? <div className="audience-account-popover" role="menu" aria-label={zh ? "账户选项" : "Account options"}>
+        <header><strong>{displayName}</strong><small>{zh ? "观众账户" : "Audience account"}</small></header>
+        <button type="button" role="menuitem" onClick={choose(onFollowing)}>{zh ? "关注" : "Following"}</button>
+        <button type="button" role="menuitem" onClick={choose(onAccount)}>{zh ? "账户与个人资料" : "Account & profile"}</button>
+        <button type="button" role="menuitem" onClick={choose(onSettings)}>{zh ? "设置" : "Settings"}</button>
+        <button type="button" role="menuitem" className="menu-creator-action" onClick={choose(onBecomeCreator)}>{zh ? "申请成为主播" : "Become a creator"}</button>
+        <button type="button" role="menuitem" className="menu-signout" onClick={choose(onLogout)}>{zh ? "退出登录" : "Sign out"}</button>
+      </div> : null}
+    </div>
+  );
+}
 
 export function MobileHeaderActions({
   searchOpen,

@@ -2,6 +2,8 @@
 
 ## Active frontend modernization
 
+- Audience Homepage Navigation and Discovery Hierarchy completed locally: no permanent audience sidebar; compact Following row and empty state; audience avatar menu; distinct guest authentication actions; Live now, recommendations, categories, and upcoming hierarchy; and a single mobile Filter control. Focused checks and desktop/mobile browser acceptance pass. No commit or deployment occurred.
+
 - Audience-First Entry and Approval-Gated Creator Access completed locally: the public sign-in surface has no role/demo shortcuts, guests have no creator entry, authenticated audiences apply from Account & security, mobile uses **Create / 创作** instead of implying immediate broadcasting, and only server-approved streamer roles render broadcaster tools. Focused checks, the creator approval/provisioning verifier, and three-role local browser acceptance pass. No commit or deployment occurred.
 
 - P0 Truthful Discovery, Authoritative Broadcast Ending, and Safe Administration is completed and accepted locally: migration `023` persists local/Cloudflare source; live-only discovery and metadata, authoritative reranking, simulation-safe playback and health copy, server-owned browser/local ending, Cloudflare OBS fail-closed behavior, and selected-non-admin/reasoned/confirmed moderation all pass the complete Cloudflare-free staging gate and three-role browser acceptance. Docker/PostgreSQL was recovered without reset or volume deletion and demo data was reseeded. No commit, deployment, Cloudflare media, or soak test occurred.

@@ -25,8 +25,7 @@ import "./broadcast.css";
 import "./profile.css";
 import { BottomSheet, EmptyState, LiveStreamCardSkeleton, Modal } from "./components/ui";
 import {
-  DesktopDiscoveryRail,
-  FeaturedLive,
+  FollowingAvatarRow,
   LiveStreamCard,
   MobileDiscoveryFeed,
   type DiscoveryRoom,
@@ -38,6 +37,7 @@ import { CreatorAvatar } from "./components/avatar";
 import { audienceRoutePath, parseAudienceRoute, type AudienceRoute } from "./audience-route";
 import { shareAudienceTarget, syncAudienceMetadata, type AudienceShareTarget, type ShareKind, type ShareOutcome } from "./audience-share";
 import {
+  AudienceAccountMenu,
   MobileBottomNav,
   MobileHeaderActions,
   type MobileTab,
@@ -513,7 +513,6 @@ function App() {
   const [followingRooms, setFollowingRooms] = useState<Room[]>([]);
   const [followingLoading, setFollowingLoading] = useState(true);
   const [followingError, setFollowingError] = useState(false);
-  const [discoveryRailCollapsed, setDiscoveryRailCollapsed] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [profileRoom, setProfileRoom] = useState<Room | null>(null);
   const [query, setQuery] = useState("");
@@ -535,6 +534,8 @@ function App() {
   const [routeLoading, setRouteLoading] = useState(() => parseAudienceRoute(window.location.pathname).view !== "discovery");
   const [routeError, setRouteError] = useState<"not-found" | "unavailable" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [followingDirectoryOpen, setFollowingDirectoryOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("home");
   const [mobileDiscoveryView, setMobileDiscoveryView] = useState<MobileDiscoveryView>("for-you");
@@ -566,6 +567,7 @@ function App() {
     setRouteError(null);
     setRoom(null);
     setProfileRoom(null);
+    setAccountMenuOpen(false);
     writeAudienceHistory({ view: "discovery" }, mode);
     window.scrollTo({ top: 0 });
   };
@@ -1003,6 +1005,13 @@ function App() {
     );
   if (!user) return null;
   const isGuest = user.id === "public-guest";
+  const audienceInitials = user.displayName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const openFollowingDirectory = () => {
+    setAccountOpen(false);
+    setFollowingDirectoryOpen(true);
+    showDiscovery();
+    window.setTimeout(() => document.querySelector("#following-feed")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
   return (
     <main className={`app role-${user.role}${room ? " room-open" : profileRoom ? " profile-open" : ""}`}>
       <header className={`product-header ${user.role === "audience" && user.ageAcknowledged ? "audience-product-header" : ""}`}>
@@ -1023,7 +1032,7 @@ function App() {
             searchOpen={mobileSearchOpen}
             searchLabel={language === "en" ? "Search creators" : "搜索主播"}
             accountLabel={language === "en" ? "Open account" : "打开账户"}
-            initials={user.displayName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+            initials={audienceInitials}
             onSearch={() => setMobileSearchOpen((current) => !current)}
             onAccount={() => {
               if (isGuest) {
@@ -1053,14 +1062,10 @@ function App() {
                 {language === "en" ? "Discover" : "发现"}
               </button>
               <button type="button" onClick={() => {
-                if (isGuest) {
-                  requireAuth("following");
-                  return;
-                }
                 showDiscovery();
-                window.setTimeout(() => document.querySelector("#following-feed")?.scrollIntoView({ behavior: "smooth" }), 0);
+                window.setTimeout(() => document.querySelector("#popular-categories")?.scrollIntoView({ behavior: "smooth" }), 0);
               }}>
-                {language === "en" ? "Following" : "关注"}
+                {language === "en" ? "Categories" : "分类"}
               </button>
             </nav>
             <label className="audience-global-search">
@@ -1071,19 +1076,25 @@ function App() {
         )}
         <div className="product-account">
           <LanguagePicker language={language} onChange={setLanguage} />
-          {user.role === "audience" && user.ageAcknowledged && !isGuest ? <button className="secondary header-creator-link" onClick={() => { setAccountOpen(true); window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>{language === "en" ? "Become a creator" : "申请成为主播"}</button> : null}
-          {user.role === "audience" && user.ageAcknowledged ? <button className="secondary header-wallet-link" onClick={() => { if (isGuest) return requireAuth("wallet"); setAccountOpen(true); window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>{language === "en" ? "Wallet" : "钱包"}</button> : null}
-          {user.role === "audience" && <span className="header-account-label">{isGuest ? (language === "en" ? "Browsing as guest" : "访客浏览") : user.displayName}</span>}
-          <button
-            className="secondary"
-            onClick={() => isGuest ? requireAuth("account") : setAccountOpen((current) => !current)}
-            aria-pressed={accountOpen}
-          >
-            {isGuest ? (language === "en" ? "Sign in" : "登录") : (language === "en" ? "Account" : "账户")}
-          </button>
-          {!isGuest ? <button className="secondary" onClick={() => void logout()}>
-            {t.end}
-          </button> : null}
+          {user.role === "audience" && user.ageAcknowledged ? <>
+            <button className="secondary header-wallet-link" onClick={() => { if (isGuest) return requireAuth("wallet"); setAccountOpen(true); window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>{language === "en" ? "Wallet" : "钱包"}</button>
+            {isGuest ? <div className="audience-auth-actions">
+              <button className="secondary" onClick={() => requireAuth("account")}>{language === "en" ? "Sign in" : "登录"}</button>
+              <button onClick={() => { setAuthMode("register"); setLoginError(""); setAuthGate({ id: ++authIntentIdRef.current, kind: "account" }); }}>{language === "en" ? "Create account" : "创建账户"}</button>
+            </div> : <AudienceAccountMenu
+              open={accountMenuOpen}
+              initials={audienceInitials}
+              displayName={user.displayName}
+              zh={language === "zh"}
+              onToggle={() => setAccountMenuOpen((current) => !current)}
+              onClose={() => setAccountMenuOpen(false)}
+              onFollowing={openFollowingDirectory}
+              onAccount={() => { setAccountOpen(true); window.scrollTo({ top: 0 }); }}
+              onSettings={() => { setAccountOpen(true); window.scrollTo({ top: 0 }); }}
+              onBecomeCreator={() => { setAccountOpen(true); window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}
+              onLogout={() => void logout()}
+            />}
+          </> : <button className="secondary" onClick={() => void logout()}>{t.end}</button>}
         </div>
       </header>
       {!isGuest && accountOpen ? (
@@ -1172,41 +1183,13 @@ function App() {
         ) : (
           <section className="workspace audience-discovery" id="discover">
             <div className="discovery-shell">
-              <DesktopDiscoveryRail
-                rooms={rooms}
-                following={followingRooms}
-                collapsed={discoveryRailCollapsed}
-                zh={language === "zh"}
-                onToggle={() => setDiscoveryRailCollapsed((current) => !current)}
-                onOpen={(item: DiscoveryRoom) => {
-                  showRoom(item as Room);
-                }}
-              />
               <div className="discovery-content">
-                {!isGuest && discoveryPreferences ? (
-                  <DiscoveryPreferencePanel
-                    preferences={discoveryPreferences}
-                    categories={categories}
-                    zh={language === "zh"}
-                    saving={preferencesSaving}
-                    message={preferencesMessage}
-                    onChange={(preferences) => { setDiscoveryPreferences(preferences); setPreferencesMessage(""); }}
-                    onSave={() => void saveDiscoveryPreferences()}
-                    onReset={() => void resetDiscoveryPreferences()}
-                  />
-                ) : null}
-                {!roomsLoading && rooms.some((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local") ? (
-                  <FeaturedLive
-                    room={rooms.find((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local")!}
-                    zh={language === "zh"}
-                    onOpen={(item: DiscoveryRoom) => {
-                      showRoom(item as Room);
-                    }}
-                    onProfile={(item: DiscoveryRoom) => {
-                      showProfile(item as Room);
-                    }}
-                  />
-                ) : null}
+                {!isGuest ? <FollowingAvatarRow
+                  creators={followingRooms}
+                  zh={language === "zh"}
+                  onOpen={(item) => showRoom(item as Room)}
+                  onViewAll={openFollowingDirectory}
+                /> : null}
                 <div className="discovery-feed-anchor" id="live-now">
                   <MobileDiscoveryFeed
                     rooms={rooms}
@@ -1293,9 +1276,40 @@ function App() {
                         </div>
                       </section>
                     ) : null}
+                    {categories.length ? <section className="popular-categories" id="popular-categories" aria-labelledby="popular-categories-title">
+                      <div className="discovery-section-heading">
+                        <div><p className="eyebrow">{language === "en" ? "Browse by interest" : "按兴趣浏览"}</p><h2 id="popular-categories-title">{language === "en" ? "Popular categories" : "热门分类"}</h2></div>
+                      </div>
+                      <div className="category-chip-grid">
+                        {categories.slice(0, 8).map((item) => <button type="button" key={item} className={category === item ? "active" : ""} onClick={() => { setCategory(item); document.querySelector("#live-now")?.scrollIntoView({ behavior: "smooth" }); }}>
+                          <span aria-hidden="true">{item.slice(0, 1).toUpperCase()}</span><strong>{item}</strong>
+                        </button>)}
+                      </div>
+                    </section> : null}
+                    {rooms.some((item) => item.next_stream_at) ? <section className="upcoming-streams" aria-labelledby="upcoming-streams-title">
+                      <div className="discovery-section-heading"><div><p className="eyebrow">{language === "en" ? "Plan what to watch" : "安排观看"}</p><h2 id="upcoming-streams-title">{language === "en" ? "Upcoming streams" : "即将开播"}</h2></div></div>
+                      <div className="upcoming-stream-list">
+                        {rooms.filter((item) => item.next_stream_at).sort((a, b) => new Date(a.next_stream_at!).getTime() - new Date(b.next_stream_at!).getTime()).slice(0, 4).map((item) => <button type="button" key={item.slug} onClick={() => showProfile(item)}>
+                          <CreatorAvatar name={item.streamer_name} url={item.avatar_url} className="upcoming-stream-avatar" />
+                          <span><strong>{item.streamer_name}</strong><small>{new Date(item.next_stream_at!).toLocaleString(language === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" })}</small></span>
+                        </button>)}
+                      </div>
+                    </section> : null}
                   </div>
                 </div>
-                {!isGuest ? <FollowingFeed
+                {!isGuest && discoveryPreferences ? (
+                  <DiscoveryPreferencePanel
+                    preferences={discoveryPreferences}
+                    categories={categories}
+                    zh={language === "zh"}
+                    saving={preferencesSaving}
+                    message={preferencesMessage}
+                    onChange={(preferences) => { setDiscoveryPreferences(preferences); setPreferencesMessage(""); }}
+                    onSave={() => void saveDiscoveryPreferences()}
+                    onReset={() => void resetDiscoveryPreferences()}
+                  />
+                ) : null}
+                {!isGuest && followingDirectoryOpen ? <FollowingFeed
                   t={t}
                   creators={followingRooms}
                   loading={followingLoading}
