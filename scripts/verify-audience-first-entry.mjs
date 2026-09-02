@@ -10,11 +10,13 @@ const authSurface = app.slice(
   app.indexOf('<form className="login-form"'),
 );
 assert.doesNotMatch(authSurface, /demo-(?:audience|streamer|admin)/, "public sign-in must not expose role shortcuts");
-assert.match(app, /<AudienceAccountMenu[\s\S]{0,900}onBecomeCreator=/);
-assert.match(navigation, /Become a creator/);
-assert.match(app, /id="creator-program" className="account-recovery account-creator-program"/);
-assert.match(app, /user\.role === "audience" \? <div id="creator-program"/);
-assert.doesNotMatch(app, /!isGuest \? <div id="creator-program"><CreatorApplication/, "creator application must not interrupt discovery");
+assert.match(app, /isGuest \? <button[\s\S]{0,180}"Log in"/);
+assert.match(app, /window\.location\.pathname === "\/broadcast"/);
+assert.match(app, /window\.history\.pushState\([\s\S]{0,160}"\/broadcast"\)/);
+for (const item of ["View profile", "Following", "Wallet", "Broadcast dashboard", "Settings", "Language · English", "Sign out"])
+  assert.match(navigation, new RegExp(item));
+assert.doesNotMatch(navigation, /Become a creator/);
+assert.doesNotMatch(app, /id="creator-program"/, "unfinished creator application must not be exposed");
 
 assert.match(navigation, /showCreatorEntry: boolean/);
 assert.match(navigation, /item\.id !== "go-live" \|\| showCreatorEntry/);
@@ -29,4 +31,7 @@ assert.match(loginRoute, /authenticateCredentials\(handle, password\)/);
 assert.match(app, /user\.role === "admin"[\s\S]*<AdminPanel/);
 assert.match(app, /<StreamerStudio[\s\S]*onLogout/);
 
-console.log("Audience-first public entry, server-resolved roles, authenticated creator application, and approved-role routing verified.");
+assert.match(api, /"\/api\/broadcast\/access\/activate"/);
+assert.match(api, /config\.broadcastAccessMode === "approval_required"/);
+assert.match(api, /role === "streamer" && user\.role === "audience" && config\.broadcastAccessMode === "open"/);
+console.log("Minimal public header, consolidated account menu, server-resolved roles, and enforced open broadcast access verified.");

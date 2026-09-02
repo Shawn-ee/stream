@@ -724,6 +724,14 @@ function App() {
       .then((d) => {
         setUser(d.user ?? publicGuest(language));
         if (d.user?.locale) setLanguage(d.user.locale);
+        if (window.location.pathname === "/broadcast") {
+          const intent = { id: ++authIntentIdRef.current, kind: "go-live" as const };
+          if (d.user) setResumeIntent(intent);
+          else {
+            setAuthMode("login");
+            setAuthGate(intent);
+          }
+        }
       })
       .catch(() => setUser(publicGuest(language)))
       .finally(() => setSessionLoading(false));
@@ -932,6 +940,30 @@ function App() {
     setMobileSearchOpen(false);
     setMobileTab("home");
   }
+  async function openBroadcastDashboard() {
+    if (user?.id === "public-guest") {
+      requireAuth("go-live");
+      return;
+    }
+    setResumeNotice("");
+    if (window.location.pathname !== "/broadcast")
+      window.history.pushState({ ...window.history.state, holiwynBroadcast: true }, "", "/broadcast");
+    try {
+      const result = await request("/api/broadcast/access/activate", {
+        method: "POST",
+        body: "{}",
+      });
+      setAccountOpen(false);
+      setAccountMenuOpen(false);
+      setUser(result.user);
+    } catch (error) {
+      setResumeNotice(
+        error instanceof Error && error.message === "403"
+          ? language === "en" ? "Broadcast access requires approval." : "直播权限需要审核。"
+          : language === "en" ? "Broadcast access is temporarily unavailable." : "直播入口暂时不可用。",
+      );
+    }
+  }
   function navigateMobile(tab: MobileTab) {
     if (user?.id === "public-guest" && !["home", "discover"].includes(tab)) {
       requireAuth(tab as AuthIntentKind);
@@ -939,9 +971,7 @@ function App() {
     }
     setMobileTab(tab);
     if (tab === "go-live") {
-      setAccountOpen(true);
-      setMobileSearchOpen(false);
-      window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      void openBroadcastDashboard();
       return;
     }
     if (tab === "me") {
@@ -976,8 +1006,7 @@ function App() {
       setAccountOpen(true);
       window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     } else if (["broadcast", "go-live"].includes(resumeIntent.kind)) {
-      setAccountOpen(true);
-      window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      void openBroadcastDashboard();
     } else if (resumeIntent.kind === "inbox") {
       setMobileTab("inbox");
       window.setTimeout(() => document.querySelector("#audience-library")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
@@ -1031,19 +1060,7 @@ function App() {
           <MobileHeaderActions
             searchOpen={mobileSearchOpen}
             searchLabel={language === "en" ? "Search creators" : "搜索主播"}
-            accountLabel={language === "en" ? "Open account" : "打开账户"}
-            initials={audienceInitials}
             onSearch={() => setMobileSearchOpen((current) => !current)}
-            onAccount={() => {
-              if (isGuest) {
-                requireAuth("account");
-                return;
-              }
-              setMobileTab("me");
-              setAccountOpen(true);
-              setMobileSearchOpen(false);
-              window.scrollTo({ top: 0 });
-            }}
           />
         )}
         {user.role === "audience" && user.ageAcknowledged && (
@@ -1075,26 +1092,26 @@ function App() {
           </div>
         )}
         <div className="product-account">
-          <LanguagePicker language={language} onChange={setLanguage} />
           {user.role === "audience" && user.ageAcknowledged ? <>
-            <button className="secondary header-wallet-link" onClick={() => { if (isGuest) return requireAuth("wallet"); setAccountOpen(true); window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>{language === "en" ? "Wallet" : "钱包"}</button>
-            {isGuest ? <div className="audience-auth-actions">
-              <button className="secondary" onClick={() => requireAuth("account")}>{language === "en" ? "Sign in" : "登录"}</button>
-              <button onClick={() => { setAuthMode("register"); setLoginError(""); setAuthGate({ id: ++authIntentIdRef.current, kind: "account" }); }}>{language === "en" ? "Create account" : "创建账户"}</button>
-            </div> : <AudienceAccountMenu
+            {isGuest ? <button className="header-login" onClick={() => requireAuth("account")}>{language === "en" ? "Log in" : "登录"}</button> : <>
+              <button className="header-go-live" onClick={() => void openBroadcastDashboard()}>{language === "en" ? "Go live" : "开播"}</button>
+              <AudienceAccountMenu
               open={accountMenuOpen}
               initials={audienceInitials}
               displayName={user.displayName}
+              handle={user.handle}
               zh={language === "zh"}
               onToggle={() => setAccountMenuOpen((current) => !current)}
               onClose={() => setAccountMenuOpen(false)}
               onFollowing={openFollowingDirectory}
               onAccount={() => { setAccountOpen(true); window.scrollTo({ top: 0 }); }}
+              onWallet={() => { setAccountOpen(true); window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}
+              onBroadcast={() => void openBroadcastDashboard()}
               onSettings={() => { setAccountOpen(true); window.scrollTo({ top: 0 }); }}
-              onBecomeCreator={() => { setAccountOpen(true); window.setTimeout(() => document.querySelector("#creator-program")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}
+              onLanguageChange={() => setLanguage(language === "en" ? "zh" : "en")}
               onLogout={() => void logout()}
-            />}
-          </> : <button className="secondary" onClick={() => void logout()}>{t.end}</button>}
+            /></>}
+          </> : <><LanguagePicker language={language} onChange={setLanguage} /><button className="secondary" onClick={() => void logout()}>{t.end}</button></>}
         </div>
       </header>
       {!isGuest && accountOpen ? (
@@ -1184,7 +1201,7 @@ function App() {
           <section className="workspace audience-discovery" id="discover">
             <div className="discovery-shell">
               <div className="discovery-content">
-                {!isGuest ? <FollowingAvatarRow
+                {!isGuest && followingRooms.length ? <FollowingAvatarRow
                   creators={followingRooms}
                   zh={language === "zh"}
                   onOpen={(item) => showRoom(item as Room)}
@@ -1256,12 +1273,10 @@ function App() {
                           }}
                         />
                       )) : (
-                        <EmptyState
-                          icon="⌕"
-                          title={language === "en" ? "Nobody is live right now" : "暂时没有主播开播"}
-                          description={language === "en" ? "Explore recommended creators below while live status updates automatically." : "您可以先浏览下方推荐主播，直播状态会自动更新。"}
-                          action={<button type="button" onClick={() => { setQuery(""); setCategory(""); }}>{language === "en" ? "Explore all creators" : "浏览全部主播"}</button>}
-                        />
+                        <div className="live-empty-compact">
+                          <span><strong>{language === "en" ? "Nobody is live right now" : "暂时没有主播开播"}</strong><small>{language === "en" ? "Recommended creators are ready below." : "下方仍有推荐主播。"}</small></span>
+                          <button type="button" onClick={() => { setQuery(""); setCategory(""); }}>{language === "en" ? "Browse creators" : "浏览主播"}</button>
+                        </div>
                       )}
                     </div>
                     {!roomsLoading && rooms.some((item) => (item.broadcast_state ?? item.status) !== "live" || item.broadcast_status_source === "local") ? (
@@ -1358,7 +1373,7 @@ function App() {
       ) : null}
       <Modal
         open={isGuest && Boolean(authGate)}
-        title={authMode === "login" ? (language === "en" ? "Sign in to Holiwyn" : "登录 Holiwyn") : (language === "en" ? "Create an audience account" : "创建观众账户")}
+        title={language === "en" ? "Log in or join Holiwyn" : "登录或加入 Holiwyn"}
         description={language === "en"
           ? authGate?.kind === "follow" && authIntentPolicy.follow === "execute"
             ? "Watching is public. Sign in to complete the follow you requested."
@@ -1523,7 +1538,6 @@ function AccountCenter({
           ))}
         </section>
         {user.role === "audience" ? <AudienceRWallet zh={zh} /> : null}
-        {user.role === "audience" ? <div id="creator-program" className="account-recovery account-creator-program"><CreatorApplication t={copy[language]} /></div> : null}
         <section className="account-recovery">
           <h3>{zh ? "账户恢复" : "Account recovery"}</h3>
           <p>{zh ? "恢复功能尚未启用。当前版本不会收集电子邮箱、发送恢复邮件或使用外部身份服务。" : "Recovery is not enabled yet. This version does not collect email, send reset links, or use an external identity provider."}</p>
@@ -1731,110 +1745,6 @@ function FollowingFeed({
           </article>
         ))}
       </div>
-    </section>
-  );
-}
-type CreatorApplicationRecord = {
-  id: string;
-  category: string;
-  bio: string;
-  schedule_text: string;
-  motivation: string;
-  status: "pending" | "approved" | "rejected" | "withdrawn";
-  review_reason?: string | null;
-  created_at: string;
-};
-function CreatorApplication({ t }: { t: typeof copy.en }) {
-  const zh = t.title !== "Stream MVP";
-  const [application, setApplication] =
-    useState<CreatorApplicationRecord | null>(null);
-  const [category, setCategory] = useState("");
-  const [bio, setBio] = useState("");
-  const [scheduleText, setScheduleText] = useState("");
-  const [motivation, setMotivation] = useState("");
-  const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-  const load = () =>
-    request("/api/creator-applications/me").then((data) =>
-      setApplication(data.application),
-    );
-  useEffect(() => {
-    void load();
-  }, []);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setNotice("");
-    try {
-      await request("/api/creator-applications", {
-        method: "POST",
-        body: JSON.stringify({ category, bio, scheduleText, motivation }),
-      });
-      setNotice(zh ? "申请已提交，等待管理员审核。" : "Application submitted for admin review.");
-      await load();
-    } catch {
-      setNotice(zh ? "申请未能提交，请检查内容后重试。" : "The application could not be submitted. Check the form and try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function withdraw() {
-    if (!application) return;
-    setBusy(true);
-    try {
-      await request(`/api/creator-applications/${application.id}`, {
-        method: "DELETE",
-      });
-      setNotice(zh ? "申请已撤回。" : "Application withdrawn.");
-      await load();
-    } finally {
-      setBusy(false);
-    }
-  }
-  const canApply =
-    !application || ["rejected", "withdrawn"].includes(application.status);
-  return (
-    <section className="creator-application-card" aria-labelledby="creator-application-title">
-      <div>
-        <p className="eyebrow">{zh ? "创作者计划" : "Creator program"}</p>
-        <h3 id="creator-application-title">{zh ? "申请成为主播" : "Apply to become a creator"}</h3>
-        <p className="muted">
-          {zh
-            ? "告诉我们你计划直播什么。当前测试流程不收集身份证件、KYC 信息或付款账户。"
-            : "Tell us what you plan to stream. This test workflow does not collect identity documents, KYC data, or payout accounts."}
-        </p>
-      </div>
-      {application && !canApply ? (
-        <div className={`application-status status-${application.status}`}>
-          <strong>
-            {application.status === "pending"
-              ? zh ? "等待审核" : "Review pending"
-              : zh ? "申请已批准，请重新登录" : "Approved — sign in again"}
-          </strong>
-          <span>{application.category} · {application.schedule_text}</span>
-          {application.review_reason ? <p>{application.review_reason}</p> : null}
-          {application.status === "pending" ? (
-            <button className="secondary" disabled={busy} onClick={() => void withdraw()}>
-              {zh ? "撤回申请" : "Withdraw application"}
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <form className="creator-application-form" onSubmit={(event) => void submit(event)}>
-          {application?.status === "rejected" ? (
-            <p className="application-review-note">
-              <strong>{zh ? "上次审核意见：" : "Previous review: "}</strong>
-              {application.review_reason}
-            </p>
-          ) : null}
-          <label>{zh ? "直播分类" : "Stream category"}<input value={category} onChange={(event) => setCategory(event.target.value)} minLength={2} maxLength={60} required /></label>
-          <label>{zh ? "公开简介" : "Public bio"}<textarea value={bio} onChange={(event) => setBio(event.target.value)} minLength={20} maxLength={500} required /></label>
-          <label>{zh ? "计划直播时间" : "Planned schedule"}<input value={scheduleText} onChange={(event) => setScheduleText(event.target.value)} minLength={4} maxLength={160} required /></label>
-          <label>{zh ? "为什么想成为主播" : "Why you want to create"}<textarea value={motivation} onChange={(event) => setMotivation(event.target.value)} minLength={20} maxLength={800} required /></label>
-          <button disabled={busy}>{busy ? (zh ? "正在提交…" : "Submitting…") : (zh ? "提交申请" : "Submit application")}</button>
-        </form>
-      )}
-      {notice ? <p className="form-notice">{notice}</p> : null}
     </section>
   );
 }

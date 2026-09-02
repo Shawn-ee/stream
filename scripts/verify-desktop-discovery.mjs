@@ -22,7 +22,7 @@ for (const accessibleSurface of [
 
 assert.match(app, /className="audience-global-search"/);
 assert.match(app, /id="following-feed"/);
-assert.match(app, /id="creator-program"/);
+assert.doesNotMatch(app, /<DesktopDiscoveryRail\b/);
 assert.match(app, /setFollowingRooms/);
 assert.match(app, /discovery:broadcast/);
 assert.match(app, /<LiveStreamCardSkeleton count=\{6\}/);
@@ -47,7 +47,8 @@ assert.match(app, /discovery-language-filter/);
 assert.equal(packageJson.scripts["verify:desktop-discovery"], "node scripts/verify-desktop-discovery.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:desktop-discovery"));
 
-assert.doesNotMatch(app, /<DesktopDiscoveryRail\b/, "audience homepage must not render a permanent sidebar");
+assert.match(app, /followingRooms\.length \? <FollowingAvatarRow/, "empty Following row must collapse");
 assert.match(app, /<AudienceAccountMenu\b/);
+assert.match(app, /className="live-empty-compact"/);
 assert.match(app, /id="popular-categories"/);
 console.log("Desktop audience header, avatar menu, Following row, live discovery, categories, accessibility, and truthful metadata verified.");

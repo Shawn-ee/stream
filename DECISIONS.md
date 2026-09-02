@@ -1,5 +1,12 @@
 # Architecture Decisions
 
+## 2026-09-02 - Audience navigation is minimal; broadcast eligibility is centrally enforced
+
+- Anonymous navigation exposes only discovery/search and one authentication entry. Registration is a mode inside that same modal, not a competing header action. Google and email options remain absent until a real verified provider is integrated.
+- Authenticated audience navigation exposes only **Go live** and avatar. Every account-owned destination is grouped in the avatar menu; mobile reuses the same information architecture as a fixed-width sheet.
+- `BROADCAST_ACCESS_MODE` defaults to `open`. Activation is a CSRF-protected server transaction that locks the user, rejects banned/admin accounts, and provisions one creator profile and room. Existing streamer-only endpoints accept the audience account only after verifying those owned resources, so broadcasting does not remove its audience capabilities.
+- `approval_required` denies activation unless the account has already been approved/provisioned. The existing application/admin APIs remain as dormant foundation, but their incomplete audience UI is not exposed in open mode.
+
 ## 2026-09-01 - Public entry is audience-first and creator access is server-approved
 
 - Holiwyn exposes one neutral sign-in/create-account flow. The browser never asks a visitor to choose audience, streamer, or administrator and never declares its own role; the authenticated server record remains authoritative.

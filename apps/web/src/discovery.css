@@ -72,10 +72,9 @@
   display: none;
 }
 
-.audience-auth-actions {
-  display: flex;
-  gap: var(--space-2);
-}
+.header-go-live,
+.header-login,
+.live-empty-compact button { border-color: transparent; background: var(--color-brand-primary); color: white; }
 
 .audience-account-menu {
   position: relative;
@@ -116,6 +115,7 @@
 }
 
 .audience-account-popover small { color: var(--color-text-muted); }
+.audience-account-popover hr { width: 100%; margin: var(--space-1) 0; border: 0; border-top: 1px solid var(--color-divider); }
 .audience-account-popover button {
   justify-content: flex-start;
   border: 0;
@@ -144,7 +144,6 @@
 .desktop-discovery-feed,
 .following-feed,
 .shelves,
-#creator-program,
 .creator-profile-recommendations {
   contain-intrinsic-size: auto 28rem;
   content-visibility: auto;
@@ -165,8 +164,9 @@
 .following-avatar-item.is-live .following-avatar-wrap { border-color: var(--color-live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-live) 16%, transparent); }
 .following-avatar { width: 3.5rem; height: 3.5rem; border-radius: 50%; }
 .following-live-badge { position: absolute; right: 50%; bottom: -0.3rem; translate: 50%; border-radius: 999px; background: var(--color-live); color: white; padding: .12rem .35rem; font-size: .55rem; font-weight: 950; }
-.following-avatar-empty { display: flex; width: auto; min-height: 4rem; align-items: center; gap: var(--space-3); border: 1px dashed var(--color-border); background: transparent; color: var(--color-text-secondary); }
-.following-avatar-empty > span:first-child { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border-radius: 50%; background: var(--color-surface-secondary); color: var(--color-brand-hover); font-size: 1.2rem; }
+.live-empty-compact { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface-secondary); padding: var(--space-4); }
+.live-empty-compact span { display: grid; gap: var(--space-1); }
+.live-empty-compact small { color: var(--color-text-secondary); }
 
 .live-card-status i {
   width: 0.45rem;
@@ -204,6 +204,8 @@
 .discovery-language-filter {
   min-width: 9rem;
 }
+
+.discovery-filter-row select { border: 1px solid var(--color-border); background: var(--color-surface-secondary); color: var(--color-text-primary); padding-inline: var(--space-3); }
 
 .live-stream-grid {
   display: grid;

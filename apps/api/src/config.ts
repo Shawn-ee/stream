@@ -14,6 +14,9 @@ export const config = {
   metricsToken:
     process.env.METRICS_TOKEN ?? "local-metrics-token-not-for-production",
   localDemoPassword: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
+  broadcastAccessMode: (process.env.BROADCAST_ACCESS_MODE === "approval_required"
+    ? "approval_required"
+    : "open") as "open" | "approval_required",
   cloudflare: {
     enabled: process.env.CLOUDFLARE_STREAM_ENABLED === "true",
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID,

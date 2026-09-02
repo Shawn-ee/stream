@@ -6,25 +6,31 @@ export function AudienceAccountMenu({
   open,
   initials,
   displayName,
+  handle,
   zh,
   onToggle,
   onClose,
   onFollowing,
   onAccount,
+  onWallet,
+  onBroadcast,
   onSettings,
-  onBecomeCreator,
+  onLanguageChange,
   onLogout,
 }: {
   open: boolean;
   initials: string;
   displayName: string;
+  handle: string;
   zh: boolean;
   onToggle: () => void;
   onClose: () => void;
   onFollowing: () => void;
   onAccount: () => void;
+  onWallet: () => void;
+  onBroadcast: () => void;
   onSettings: () => void;
-  onBecomeCreator: () => void;
+  onLanguageChange: () => void;
   onLogout: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -50,11 +56,15 @@ export function AudienceAccountMenu({
         <span aria-hidden="true">{initials}</span>
       </button>
       {open ? <div className="audience-account-popover" role="menu" aria-label={zh ? "账户选项" : "Account options"}>
-        <header><strong>{displayName}</strong><small>{zh ? "观众账户" : "Audience account"}</small></header>
+        <header><strong>{displayName}</strong><small>@{handle}</small></header>
+        <button type="button" role="menuitem" onClick={choose(onAccount)}>{zh ? "查看个人资料" : "View profile"}</button>
         <button type="button" role="menuitem" onClick={choose(onFollowing)}>{zh ? "关注" : "Following"}</button>
-        <button type="button" role="menuitem" onClick={choose(onAccount)}>{zh ? "账户与个人资料" : "Account & profile"}</button>
+        <button type="button" role="menuitem" onClick={choose(onWallet)}>{zh ? "钱包" : "Wallet"}</button>
+        <hr />
+        <button type="button" role="menuitem" className="menu-creator-action" onClick={choose(onBroadcast)}>{zh ? "直播控制台" : "Broadcast dashboard"}</button>
         <button type="button" role="menuitem" onClick={choose(onSettings)}>{zh ? "设置" : "Settings"}</button>
-        <button type="button" role="menuitem" className="menu-creator-action" onClick={choose(onBecomeCreator)}>{zh ? "申请成为主播" : "Become a creator"}</button>
+        <button type="button" role="menuitem" onClick={choose(onLanguageChange)}>{zh ? "Language · 中文" : "Language · English"}</button>
+        <hr />
         <button type="button" role="menuitem" className="menu-signout" onClick={choose(onLogout)}>{zh ? "退出登录" : "Sign out"}</button>
       </div> : null}
     </div>
@@ -63,26 +73,17 @@ export function AudienceAccountMenu({
 
 export function MobileHeaderActions({
   searchOpen,
-  accountLabel,
   searchLabel,
-  initials,
   onSearch,
-  onAccount,
 }: {
   searchOpen: boolean;
-  accountLabel: string;
   searchLabel: string;
-  initials: string;
   onSearch: () => void;
-  onAccount: () => void;
 }) {
   return (
     <div className="mobile-header-actions">
       <button type="button" aria-label={searchLabel} aria-expanded={searchOpen} onClick={onSearch}>
         <span aria-hidden="true">⌕</span>
-      </button>
-      <button type="button" className="mobile-account-button" aria-label={accountLabel} onClick={onAccount}>
-        <span aria-hidden="true">{initials}</span>
       </button>
     </div>
   );

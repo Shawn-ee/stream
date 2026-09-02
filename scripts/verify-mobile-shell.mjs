@@ -24,18 +24,18 @@ assert.match(components, /aria-label=\{zh \? "移动导航" : "Mobile navigation
 
 assert.match(app, /function navigateMobile\(tab: MobileTab\)/);
 assert.match(app, /tab === "discover"[\s\S]*"#live-now"/);
-assert.match(app, /tab === "go-live"[\s\S]*"#creator-program"/);
+assert.match(app, /tab === "go-live"[\s\S]*openBroadcastDashboard/);
 assert.match(app, /"#audience-library"/);
 assert.match(app, /scrollIntoView\(\{ block: "start" \}\)/);
 assert.match(app, /className=\{`audience-header-center \$\{mobileSearchOpen \? "mobile-search-open" : ""\}`\}/);
-assert.match(app, /className="secondary mobile-account-signout"/);
+assert.match(app, /<AudienceAccountMenu\b/);
 assert.match(app, /id="live-now"/);
 
 for (const rule of [
   /@media \(max-width: 767px\)/,
   /html\s*\{\s*scroll-behavior:\s*auto/,
   /padding-bottom:\s*calc\(5\.5rem \+ env\(safe-area-inset-bottom\)\)/,
-  /\.audience-product-header \.product-account\s*\{[\s\S]*display:\s*none/,
+  /\.audience-product-header \.product-account\s*\{[\s\S]*display:\s*flex/,
   /\.audience-header-center\.mobile-search-open\s*\{[\s\S]*display:\s*flex/,
   /\.mobile-bottom-nav\s*\{[\s\S]*position:\s*fixed/,
   /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/,
@@ -44,7 +44,7 @@ for (const rule of [
   /env\(safe-area-inset-bottom\)/,
   /min-height:\s*3\.25rem/,
   /\.mobile-bottom-nav \.mobile-go-live > span/,
-  /\.mobile-account-signout\s*\{[\s\S]*display:\s*inline-flex/,
+  /\.audience-account-popover\s*\{[\s\S]*position:\s*fixed/,
 ]) assert.match(styles, rule);
 
 assert.doesNotMatch(components, /fetch\(|request\(|socket|io\(/, "navigation must not duplicate application logic");

@@ -525,8 +525,22 @@ export function buildApi() {
   ) {
     const user = await currentUser(request);
     if (!user) return reply.code(401).send({ error: "session_required" });
-    if (user.role !== role)
+    if (user.role !== role) {
+      if (role === "streamer" && user.role === "audience" && config.broadcastAccessMode === "open") {
+        const client = database();
+        await client.connect();
+        try {
+          const provisioned = await client.query(
+            "SELECT 1 FROM streamer_profiles p JOIN live_rooms r ON r.streamer_id=p.user_id WHERE p.user_id=$1",
+            [user.id],
+          );
+          if (provisioned.rows[0]) return { ...user, role: "streamer" as const };
+        } finally {
+          await client.end();
+        }
+      }
       return reply.code(403).send({ error: "role_required", role });
+    }
     return user;
   }
   api.get("/health", async () => ({
@@ -606,6 +620,71 @@ export function buildApi() {
   api.get("/api/auth/session", async (request) => ({
     user: await currentUser(request),
   }));
+  api.get("/api/broadcast/access", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    return {
+      mode: config.broadcastAccessMode,
+      allowed: user.role === "streamer" || (user.role === "audience" && config.broadcastAccessMode === "open"),
+      status: user.role === "streamer" ? "approved" : "not_applied",
+    };
+  });
+  api.post("/api/broadcast/access/activate", async (request, reply) => {
+    const sessionUser = await currentUser(request);
+    if (!sessionUser) return reply.code(401).send({ error: "session_required" });
+    if (sessionUser.role === "admin") return reply.code(403).send({ error: "broadcast_role_not_eligible" });
+    if (sessionUser.role === "streamer") return { mode: config.broadcastAccessMode, user: sessionUser };
+    if (config.broadcastAccessMode === "approval_required")
+      return reply.code(403).send({ error: "broadcast_approval_required" });
+
+    const client = database();
+    await client.connect();
+    try {
+      await client.query("BEGIN");
+      const locked = await client.query<{
+        id: string; handle: string; display_name: string; role: Role; locale: "en" | "zh";
+        test_age_acknowledged_at: Date | null; is_banned: boolean;
+      }>(
+        "SELECT id,handle,display_name,role,locale,test_age_acknowledged_at,is_banned FROM users WHERE id=$1 FOR UPDATE",
+        [sessionUser.id],
+      );
+      const user = locked.rows[0];
+      if (!user || user.is_banned) {
+        await client.query("ROLLBACK");
+        return reply.code(403).send({ error: "broadcast_access_suspended" });
+      }
+      if (user.role === "audience") {
+        const roomTitle = user.locale === "zh" ? `${user.display_name} 的直播间` : `${user.display_name}'s Live Room`;
+        await client.query(
+          "INSERT INTO streamer_profiles (user_id,bio,category,is_featured) VALUES ($1,'','General',FALSE) ON CONFLICT (user_id) DO NOTHING",
+          [user.id],
+        );
+        await client.query(
+          "INSERT INTO live_rooms (id,streamer_id,slug,title,status) VALUES ($1,$2,$3,$4,'offline') ON CONFLICT (streamer_id) DO NOTHING",
+          [crypto.randomUUID(), user.id, user.handle, roomTitle],
+        );
+      }
+      await client.query("COMMIT");
+      return {
+        mode: config.broadcastAccessMode,
+        user: {
+          id: user.id,
+          handle: user.handle,
+          displayName: user.display_name,
+          role: "streamer" as const,
+          locale: user.locale,
+          ageAcknowledged: Boolean(user.test_age_acknowledged_at),
+        },
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if ((error as { code?: string }).code === "23505")
+        return reply.code(409).send({ error: "broadcast_provisioning_conflict" });
+      throw error;
+    } finally {
+      await client.end();
+    }
+  });
   api.get<{ Params: { filename: string } }>(
     "/api/media/avatars/:filename",
     async (request, reply) => {

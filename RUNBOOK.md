@@ -1,5 +1,13 @@
 # Local Runbook
 
+## Audience navigation and broadcast-access verification
+
+Run `npm run db:seed`, `npm run verify:audience-first-entry`, `npm run verify:desktop-discovery`, `npm run verify:mobile-shell`, `npm run verify:broadcast-access`, and `npm run verify:staging`. Reseed after any focused API run.
+
+Signed out, confirm the header contains HOLIWYN, discovery/search, and one **Log in** button. The modal may show only providers actually configured; the current local build uses the existing handle/password sign-in and registration modes because Google OAuth and verified email are not configured. Signed in, confirm the right side contains only **Go live** and avatar. Open the avatar menu with keyboard/mouse, verify every personal destination, then confirm Escape and outside click close it.
+
+At 1440×900 confirm four cards fit across the recommendation row; at 820×1180 confirm two columns; at 390×844 confirm one card, one Filter control, a mobile account sheet, and no horizontal overflow. In open mode, `verify:broadcast-access` proves a new audience account cannot bypass CSRF, is provisioned atomically, retains its audience role, and only then reaches the protected streamer studio. To rehearse future gating, set `BROADCAST_ACCESS_MODE=approval_required` only in a separate local process and confirm unapproved activation returns 403. Do not use this runbook to start media, contact Cloudflare, deploy, create real accounts, or change production roles.
+
 ## Audience-first entry verification
 
 Run `npm run db:seed`, `npm run verify:audience-first-entry`, `npm run verify:creator-applications`, and `npm run verify:staging`. In a signed-out desktop and mobile session, confirm discovery/viewing remains available, the sign-in modal contains only Sign in/Create account plus handle/password fields, and no Go Live, Create, creator application, Streamer, or Administrator shortcut is visible.

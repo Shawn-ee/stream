@@ -2621,7 +2621,6 @@ p {
 .account-sessions article small {
   color: #aab4cc;
 }
-.creator-application-card,
 .admin-creator-review {
   margin-top: 1rem;
   border: 1px solid #2b3655;
@@ -2629,25 +2628,16 @@ p {
   background: linear-gradient(135deg, #151b2e 0%, #181d36 100%);
   padding: 1.15rem;
 }
-.creator-application-card > div:first-child,
 .admin-section-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
-.creator-application-card h3,
 .admin-creator-review h3,
 .admin-creator-review p {
   margin-top: 0.25rem;
 }
-.creator-application-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
-  margin-top: 1rem;
-}
-.creator-application-form label,
 .creator-review-list label {
   display: grid;
   gap: 0.35rem;
@@ -2655,30 +2645,10 @@ p {
   font-size: 0.8rem;
   font-weight: 700;
 }
-.creator-application-form label:nth-of-type(2),
-.creator-application-form label:nth-of-type(4),
-.creator-application-form button,
-.application-review-note {
-  grid-column: 1 / -1;
-}
-.creator-application-form textarea,
 .creator-review-list textarea {
   min-height: 5.5rem;
   resize: vertical;
 }
-.application-status {
-  display: grid;
-  gap: 0.45rem;
-  margin-top: 1rem;
-  border: 1px solid #7c5cfc;
-  border-radius: 0.8rem;
-  background: #202a44;
-  padding: 0.9rem;
-}
-.application-status button {
-  justify-self: start;
-}
-.application-review-note,
 .form-notice {
   border-radius: 0.65rem;
   background: #202a44;
@@ -2708,11 +2678,6 @@ p {
   .account-center-heading,
   .account-session-heading { align-items: flex-start; flex-direction: column; }
   .account-sessions article { align-items: flex-start; flex-direction: column; }
-  .creator-application-form { grid-template-columns: 1fr; }
-  .creator-application-form label,
-  .creator-application-form button,
-  .application-review-note { grid-column: 1; }
-  .creator-application-card > div:first-child,
   .admin-section-heading,
   .creator-review-list article > div:first-child { flex-direction: column; }
 }

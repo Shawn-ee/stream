@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-02 - Audience-first header, account menu, and open broadcast access (local)
+
+- Reduced the signed-out audience header to HOLIWYN, discovery/search, and one purple **Log in** action. Registration remains inside the consolidated authentication modal; unsupported Google/email providers are not simulated.
+- Reduced the signed-in header to **Go live** and the avatar. Profile, Following, Wallet, Broadcast dashboard, Settings, language, and sign out now live in one keyboard-accessible desktop/mobile account menu.
+- Collapsed empty Following content, replaced the oversized no-live panel with a compact recovery row, and retained the content-first live/recommended/category/upcoming hierarchy with one mobile Filter control.
+- Added server-authoritative `BROADCAST_ACCESS_MODE=open|approval_required` configuration. Open mode atomically provisions a profile/room and grants an effective, server-checked broadcasting capability without removing audience access; approval mode fails closed.
+- Removed the unfinished audience creator-application presentation while preserving its administrator/backend workflow for future approval mode. Added focused static and API verification; the complete staging gate, 1440×900, 820×1180, and 390×844 browser checks, bundle ceiling, and final demo reset pass. No deployment or external provider action occurred.
+
 ## 2026-09-02 - Audience homepage navigation and discovery hierarchy (local)
 
 - Replaced the permanent audience creator sidebar with a compact horizontal Following row that keeps live creators first, distinguishes offline creators, and provides a stable empty state for new accounts.
