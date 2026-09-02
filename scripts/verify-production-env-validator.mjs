@@ -18,6 +18,8 @@ function baseEnvironment() {
     WEB_ORIGIN: "https://private-stage.example",
     NODE_ENV: "production",
     SESSION_TTL_HOURS: "12",
+    CREATOR_ONBOARDING_ENABLED: "true",
+    CREATOR_AUTO_APPROVAL: "false",
     LOCAL_DEMO_PASSWORD: "synthetic-account-password-24-characters",
     TRUST_PROXY: "true",
     REQUEST_BODY_LIMIT_BYTES: "65536",
@@ -26,6 +28,7 @@ function baseEnvironment() {
     METRICS_TOKEN: "metrics-token-32-characters-minimum-value",
     APP_PORT: "8080",
     PRIVATE_SSH_TUNNEL: "false",
+    AVATAR_STORAGE_PATH: "/app/work/avatars",
     IDENTITY_DOCUMENT_STORAGE_PATH: "/app/work/private-identity-documents",
     IDENTITY_DOCUMENT_ENCRYPTION_KEY: "bG9jYWwtaWRlbnRpdHktZG9jdW1lbnQta2V5LTMyISE=",
     CLOUDFLARE_STREAM_ENABLED: "false",
@@ -87,6 +90,8 @@ rejected({ POSTGRES_PASSWORD: "short" }, /POSTGRES_PASSWORD is too short/);
 rejected({ DATABASE_URL: "postgresql://stream_mvp:wrong@postgres:5432/stream_mvp" }, /DATABASE_URL password/);
 rejected({ METRICS_TOKEN: "replace-with-token-value-that-is-long" }, /placeholder/);
 rejected({ WEB_ORIGIN: "http://private-stage.example" }, /must use HTTPS/);
+rejected({ CREATOR_AUTO_APPROVAL: "sometimes" }, /must be true or false/);
+rejected({ AVATAR_STORAGE_PATH: "relative/avatars" }, /must be absolute/);
 rejected({ PRIVATE_SSH_TUNNEL: "true", WEB_ORIGIN: "http://private-stage.example:8080" }, /must be localhost/);
 rejected({ CLOUDFLARE_API_TOKEN: "unused-secret-must-not-remain" }, /must be blank/);
 rejected({ UNKNOWN_SECRET: "value" }, /unknown production variable/);

@@ -11,6 +11,8 @@ export const productionEnvironmentNames = [
   "WEB_ORIGIN",
   "NODE_ENV",
   "SESSION_TTL_HOURS",
+  "CREATOR_ONBOARDING_ENABLED",
+  "CREATOR_AUTO_APPROVAL",
   "LOCAL_DEMO_PASSWORD",
   "TRUST_PROXY",
   "REQUEST_BODY_LIMIT_BYTES",
@@ -19,6 +21,7 @@ export const productionEnvironmentNames = [
   "METRICS_TOKEN",
   "APP_PORT",
   "PRIVATE_SSH_TUNNEL",
+  "AVATAR_STORAGE_PATH",
   "IDENTITY_DOCUMENT_STORAGE_PATH",
   "IDENTITY_DOCUMENT_ENCRYPTION_KEY",
   "CLOUDFLARE_STREAM_ENABLED",
@@ -102,6 +105,9 @@ export function validateProductionEnvironment(environment) {
   const multiplier = Number(required(environment, "RATE_LIMIT_MULTIPLIER"));
   assert.ok(Number.isFinite(multiplier) && multiplier > 0 && multiplier <= 10, "RATE_LIMIT_MULTIPLIER is outside the allowed range");
   assert.equal(boolean(environment, "TRUST_PROXY"), true, "TRUST_PROXY must be true behind the gateway");
+  boolean(environment, "CREATOR_ONBOARDING_ENABLED");
+  boolean(environment, "CREATOR_AUTO_APPROVAL");
+  assert.ok(required(environment,"AVATAR_STORAGE_PATH").startsWith("/"),"AVATAR_STORAGE_PATH must be absolute");
   assert.ok(required(environment,"IDENTITY_DOCUMENT_STORAGE_PATH").startsWith("/"),"IDENTITY_DOCUMENT_STORAGE_PATH must be absolute");
   const identityKey=Buffer.from(required(environment,"IDENTITY_DOCUMENT_ENCRYPTION_KEY"),"base64");
   assert.equal(identityKey.length,32,"IDENTITY_DOCUMENT_ENCRYPTION_KEY must decode to 32 bytes");
