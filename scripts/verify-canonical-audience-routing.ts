@@ -3,12 +3,21 @@ import { readFile } from "node:fs/promises";
 import { audienceRoutePath, parseAudienceRoute } from "../apps/web/src/audience-route.ts";
 
 assert.deepEqual(parseAudienceRoute("/"), { view: "discovery" });
+assert.deepEqual(parseAudienceRoute("/discover"), { view: "discovery" });
+assert.deepEqual(parseAudienceRoute("/categories"), { view: "categories" });
+assert.deepEqual(parseAudienceRoute("/account/security"), { view: "account", section: "security" });
+assert.deepEqual(parseAudienceRoute("/creator/onboarding/identity"), { view: "creator-onboarding", step: "identity" });
+assert.deepEqual(parseAudienceRoute("/creator/status"), { view: "creator-status" });
+assert.deepEqual(parseAudienceRoute("/studio"), { view: "studio" });
 assert.deepEqual(parseAudienceRoute("/room/demo-streamer"), { view: "room", slug: "demo-streamer" });
+assert.deepEqual(parseAudienceRoute("/rooms/demo-streamer"), { view: "room", slug: "demo-streamer" });
 assert.deepEqual(parseAudienceRoute("/room/DEMO-STREAMER/"), { view: "room", slug: "demo-streamer" });
 assert.deepEqual(parseAudienceRoute("/creator/night-creator"), { view: "creator", slug: "night-creator" });
-for (const invalid of ["/rooms/demo", "/room", "/room/a/b", "/room/%2F", "/creator/bad_slug", "/admin"])
+for (const invalid of ["/room", "/room/a/b", "/room/%2F", "/creator/bad_slug", "/admin", "/account/nope"])
   assert.deepEqual(parseAudienceRoute(invalid), { view: "invalid" }, `expected invalid route: ${invalid}`);
 assert.equal(audienceRoutePath({ view: "discovery" }), "/");
+assert.equal(audienceRoutePath({ view: "account", section: "wallet" }), "/account/wallet");
+assert.equal(audienceRoutePath({ view: "creator-onboarding", step: "agreement" }), "/creator/onboarding/agreement");
 assert.equal(audienceRoutePath({ view: "room", slug: "demo-streamer" }), "/room/demo-streamer");
 assert.equal(audienceRoutePath({ view: "creator", slug: "night-creator" }), "/creator/night-creator");
 

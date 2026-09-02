@@ -9,14 +9,15 @@ export const config = {
   trustProxy: process.env.TRUST_PROXY === "true",
   requestBodyLimitBytes: Number(process.env.REQUEST_BODY_LIMIT_BYTES ?? 65536),
   avatarStoragePath: process.env.AVATAR_STORAGE_PATH ?? "work/avatars",
+  identityDocumentStoragePath: process.env.IDENTITY_DOCUMENT_STORAGE_PATH ?? "work/private-identity-documents",
+  identityDocumentEncryptionKey: process.env.IDENTITY_DOCUMENT_ENCRYPTION_KEY ?? "bG9jYWwtaWRlbnRpdHktZG9jdW1lbnQta2V5LTMyISE=",
   rateLimitMultiplier: Number(process.env.RATE_LIMIT_MULTIPLIER ?? 1),
   databasePoolMax: Number(process.env.DATABASE_POOL_MAX ?? 20),
   metricsToken:
     process.env.METRICS_TOKEN ?? "local-metrics-token-not-for-production",
   localDemoPassword: process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!",
-  broadcastAccessMode: (process.env.BROADCAST_ACCESS_MODE === "approval_required"
-    ? "approval_required"
-    : "open") as "open" | "approval_required",
+  creatorOnboardingEnabled: process.env.CREATOR_ONBOARDING_ENABLED !== "false",
+  creatorAutoApproval: (process.env.CREATOR_AUTO_APPROVAL ?? (process.env.NODE_ENV === "production" ? "false" : "true")) === "true",
   cloudflare: {
     enabled: process.env.CLOUDFLARE_STREAM_ENABLED === "true",
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
@@ -88,6 +89,10 @@ if (
   config.localDemoPassword === "Local-demo-2026!"
 )
   throw new Error("LOCAL_DEMO_PASSWORD must be replaced in production.");
+if (config.nodeEnv === "production" && (!process.env.IDENTITY_DOCUMENT_STORAGE_PATH || !process.env.IDENTITY_DOCUMENT_ENCRYPTION_KEY))
+  throw new Error("Secure private identity-document storage is required in production.");
+if (Buffer.from(config.identityDocumentEncryptionKey, "base64").length !== 32)
+  throw new Error("IDENTITY_DOCUMENT_ENCRYPTION_KEY must be a base64-encoded 32-byte key.");
 
 export function required(value: string | undefined, name: string): string {
   if (!value) throw new Error(`${name} is required.`);

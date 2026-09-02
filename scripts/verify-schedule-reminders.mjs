@@ -57,7 +57,7 @@ try {
   let following = (await call("/api/me/following", audience)).result.creators;
   assert.equal(following[0].reminder_enabled, true);
 
-  assert.equal((await call(`/api/streamers/${streamerId}/reminder`, streamer, { method: "PATCH", body: { enabled: false } })).status, 403);
+  assert.equal((await call(`/api/streamers/${streamerId}/reminder`, streamer, { method: "PATCH", body: { enabled: false } })).status, 404);
   assert.equal((await call(`/api/streamers/${streamerId}/reminder`, audience, { method: "PATCH", body: { enabled: "no" } })).status, 400);
   assert.equal((await call(`/api/streamers/${crypto.randomUUID()}/reminder`, audience, { method: "PATCH", body: { enabled: true } })).status, 404);
 

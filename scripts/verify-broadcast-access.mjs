@@ -20,21 +20,22 @@ try {
   assert.ok(csrf);
   const access = await fetch(`${base}/api/broadcast/access`, { headers: { cookie } });
   assert.equal(access.status, 200);
-  assert.deepEqual(await access.json(), { mode: "open", allowed: true, status: "not_applied" });
+  assert.deepEqual(await access.json(), { allowed: false, status: "AUDIENCE", onboardingEnabled: true });
   assert.equal((await fetch(`${base}/api/broadcast/access/activate`, { method: "POST", headers: { cookie } })).status, 403);
-  const activation = await fetch(`${base}/api/broadcast/access/activate`, {
+  assert.equal((await fetch(`${base}/api/broadcast/access/activate`, { method: "POST", headers: { cookie, "x-csrf-token": csrf } })).status, 404);
+  assert.equal((await fetch(`${base}/api/creator/onboarding/start`, { method: "POST", headers: { cookie } })).status, 403);
+  const start = await fetch(`${base}/api/creator/onboarding/start`, {
     method: "POST",
     headers: { cookie, "content-type": "application/json", "x-csrf-token": csrf },
     body: "{}",
   });
-  assert.equal(activation.status, 200);
-  assert.equal((await activation.json()).user.role, "streamer");
-  assert.equal((await fetch(`${base}/api/streamer/studio`, { headers: { cookie } })).status, 200);
-  const row = await client.query("SELECT u.role FROM users u JOIN streamer_profiles p ON p.user_id=u.id JOIN live_rooms r ON r.streamer_id=u.id WHERE u.handle=$1", [handle]);
-  assert.equal(row.rows[0]?.role, "audience", "broadcast access must not remove audience capabilities");
+  assert.equal(start.status, 201);
+  assert.equal((await fetch(`${base}/api/streamer/studio`, { headers: { cookie } })).status, 403);
+  const row = await client.query("SELECT u.role,(SELECT COUNT(*) FROM streamer_profiles p WHERE p.user_id=u.id)::int AS profiles,(SELECT COUNT(*) FROM live_rooms r WHERE r.streamer_id=u.id)::int AS rooms FROM users u WHERE u.handle=$1", [handle]);
+  assert.deepEqual(row.rows[0], { role: "audience", profiles: 0, rooms: 0 }, "starting onboarding must not provision creator resources");
 } finally {
   await client.query("DELETE FROM users WHERE handle=$1", [handle]);
   await client.end();
 }
 
-console.log("Open-mode broadcast eligibility, CSRF, atomic provisioning, and protected streamer access verified.");
+console.log("Creator onboarding entry, CSRF, no implicit provisioning, and protected streamer access verified.");

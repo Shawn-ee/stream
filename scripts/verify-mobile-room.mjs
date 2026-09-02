@@ -24,7 +24,7 @@ assert.match(app, /className="desktop-room-chat"/);
 assert.match(app, /className="room-gift-tray desktop-room-gifts"/);
 assert.match(app, /className="mobile-room-recommendations"/);
 assert.match(app, /recommendations=\{rooms\.filter\(\(item\) => item\.slug !== room\.slug\)\}/);
-assert.match(app, /hidden=\{Boolean\(room \|\| profileRoom\)\}/);
+assert.match(app, /hidden=\{Boolean\(room \|\| profileRoom \|\| creatorPortalStep \|\| accountOpen\)\}/);
 
 for (const control of [/onChat/, /onGift/, /onFollow/, /onBack/, /onReport/]) {
   assert.match(roomComponents, control);

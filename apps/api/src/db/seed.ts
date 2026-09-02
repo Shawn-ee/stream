@@ -49,6 +49,20 @@ try {
       [id, handle, displayName, role, demoPassword.hash, demoPassword.salt],
     );
   }
+  await client.query("DELETE FROM admin_permissions WHERE user_id=$1",[accounts[2][0]]);
+  await client.query("INSERT INTO admin_permissions(user_id,permission) VALUES ($1,'creator_review.read'),($1,'creator_review.decide'),($1,'creator_document.view'),($1,'creator_access.suspend')",[accounts[2][0]]);
+  await client.query(
+    "DELETE FROM creator_onboarding WHERE user_id = ANY($1::uuid[])",
+    [accounts.map((account) => account[0])],
+  );
+  await client.query(
+    "DELETE FROM creator_accounts WHERE user_id = ANY($1::uuid[])",
+    [accounts.map((account) => account[0])],
+  );
+  await client.query(
+    "INSERT INTO creator_accounts (user_id,status,activated_at,activation_method) SELECT id,'ACTIVE',NOW(),'AUTOMATIC' FROM users WHERE id=ANY($1::uuid[]) AND role='streamer'",
+    [accounts.map((account) => account[0])],
+  );
   await client.query(
     "DELETE FROM auth_sessions WHERE user_id = ANY($1::uuid[])",
     [accounts.map((account) => account[0])],
@@ -103,7 +117,7 @@ try {
     ],
   );
   await client.query(
-    "UPDATE live_rooms SET private_show_enabled = FALSE, goal_text = 'Test goal: enjoy the stream.', stream_language='en', stream_tags='{}'::text[], stream_thumbnail_url=NULL, chat_slow_mode_seconds=0, blocked_terms='{}'::text[], status=CASE WHEN $1='live' THEN 'live'::room_status ELSE 'offline'::room_status END, broadcast_state=$1::broadcast_lifecycle_state, broadcast_checked_at=NOW(), broadcast_status_message=$2 WHERE id = '20000000-0000-4000-8000-000000000001'",
+    "UPDATE live_rooms SET publication_status='published',private_show_enabled = FALSE, goal_text = 'Test goal: enjoy the stream.', stream_language='en', stream_tags='{}'::text[], stream_thumbnail_url=NULL, chat_slow_mode_seconds=0, blocked_terms='{}'::text[], status=CASE WHEN $1='live' THEN 'live'::room_status ELSE 'offline'::room_status END, broadcast_state=$1::broadcast_lifecycle_state, broadcast_checked_at=NOW(), broadcast_status_message=$2 WHERE id = '20000000-0000-4000-8000-000000000001'",
     [
       config.localBroadcastStatus,
       `Simulation only: ${config.localBroadcastStatus}. No media is being published by this control.`,

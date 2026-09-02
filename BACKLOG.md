@@ -1,5 +1,16 @@
 # Stream MVP Backlog
 
+## Creator onboarding and review
+
+- Completed locally: short versioned agreement, two explicit declarations, agreement-first onboarding, encrypted private document receipt/replacement, and truthful uploaded/reviewed wording.
+- Completed locally: activation method/review status, creator audience access, Studio Discover Live, and protected Creator Reviews queue/detail/actions with audited one-time viewing.
+- Deferred: external verification, malware scanning, automated retention, agreement renewal, and Google OAuth.
+
+## Creator onboarding and Studio authorization
+
+- Completed locally: explicit creator account state, resumable profile/identity/agreement/review steps, server-side Studio guards, transactional automatic approval, explicit private draft-room creation/publication, public draft isolation, suspicious legacy-resource review view, and routed account/onboarding/Studio destinations. Focused integration, the complete staging gate, protected-route desktop/mobile browser acceptance, and final reset pass.
+- Production follow-up: select a real identity provider; implement webhook verification and expiry; require renewed agreement acceptance for existing active creators; add manual approval/rejection administration; let active creators use both audience account surfaces and Studio cleanly; add Google OAuth as its own reviewed authentication milestone.
+
 ## Active frontend modernization
 
 - Audience Homepage Navigation and Discovery Hierarchy completed locally: no permanent audience sidebar; compact Following row and empty state; audience avatar menu; distinct guest authentication actions; Live now, recommendations, categories, and upcoming hierarchy; and a single mobile Filter control. Focused checks and desktop/mobile browser acceptance pass. No commit or deployment occurred.

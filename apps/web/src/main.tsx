@@ -34,6 +34,7 @@ import {
 import { LiveChatPanel, MobileRoomOverlay, RoomCreatorBar } from "./components/room";
 import { CreatorProfileSurface } from "./components/profile";
 import { CreatorAvatar } from "./components/avatar";
+import { CreatorOnboarding } from "./components/creator-onboarding";
 import { audienceRoutePath, parseAudienceRoute, type AudienceRoute } from "./audience-route";
 import { shareAudienceTarget, syncAudienceMetadata, type AudienceShareTarget, type ShareKind, type ShareOutcome } from "./audience-share";
 import {
@@ -52,6 +53,7 @@ type User = {
   role: Role;
   locale: Language;
   ageAcknowledged: boolean;
+  creatorStatus?: string;
 };
 type AuthIntentKind =
   | "account"
@@ -534,7 +536,13 @@ function App() {
   const [routeLoading, setRouteLoading] = useState(() => parseAudienceRoute(window.location.pathname).view !== "discovery");
   const [routeError, setRouteError] = useState<"not-found" | "unavailable" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountSection, setAccountSection] = useState<"profile" | "security" | "sessions" | "wallet">("profile");
+  const [creatorPortalStep, setCreatorPortalStep] = useState<"profile" | "identity" | "agreement" | "review" | "status" | null>(() => {
+    const initial = parseAudienceRoute(window.location.pathname);
+    return initial.view === "creator-onboarding" ? initial.step : initial.view === "creator-status" ? "status" : null;
+  });
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [studioOpen, setStudioOpen] = useState(() => window.location.pathname === "/studio" || window.location.pathname === "/broadcast");
   const [followingDirectoryOpen, setFollowingDirectoryOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("home");
@@ -568,6 +576,8 @@ function App() {
     setRoom(null);
     setProfileRoom(null);
     setAccountMenuOpen(false);
+    setAccountOpen(false);
+    setCreatorPortalStep(null);
     writeAudienceHistory({ view: "discovery" }, mode);
     window.scrollTo({ top: 0 });
   };
@@ -603,6 +613,23 @@ function App() {
     setAccountOpen(false);
     setMobileSearchOpen(false);
     setRouteError(null);
+    if (route.view === "account") {
+      setRoom(null); setProfileRoom(null); setCreatorPortalStep(null);
+      setAccountSection(route.section); setAccountOpen(true); setRouteLoading(false); return;
+    }
+    if (route.view === "creator-onboarding") {
+      setRoom(null); setProfileRoom(null); setAccountOpen(false);
+      setCreatorPortalStep(route.step); setRouteLoading(false); return;
+    }
+    if (route.view === "creator-status" || route.view === "studio") {
+      setRoom(null); setProfileRoom(null); setAccountOpen(false);
+      setCreatorPortalStep("status"); setRouteLoading(false); return;
+    }
+    if (route.view === "categories") {
+      setRoom(null); setProfileRoom(null); setAccountOpen(false); setCreatorPortalStep(null); setRouteLoading(false);
+      window.setTimeout(() => document.querySelector("#popular-categories")?.scrollIntoView({ block: "start" }), 0);
+      return;
+    }
     if (route.view === "discovery") {
       setRoom(null);
       setProfileRoom(null);
@@ -724,7 +751,8 @@ function App() {
       .then((d) => {
         setUser(d.user ?? publicGuest(language));
         if (d.user?.locale) setLanguage(d.user.locale);
-        if (window.location.pathname === "/broadcast") {
+        const initialRoute = parseAudienceRoute(window.location.pathname);
+        if (["creator-onboarding", "creator-status", "studio"].includes(initialRoute.view)) {
           const intent = { id: ++authIntentIdRef.current, kind: "go-live" as const };
           if (d.user) setResumeIntent(intent);
           else {
@@ -946,21 +974,25 @@ function App() {
       return;
     }
     setResumeNotice("");
-    if (window.location.pathname !== "/broadcast")
-      window.history.pushState({ ...window.history.state, holiwynBroadcast: true }, "", "/broadcast");
     try {
-      const result = await request("/api/broadcast/access/activate", {
-        method: "POST",
-        body: "{}",
-      });
+      const result = await request("/api/broadcast/access");
       setAccountOpen(false);
       setAccountMenuOpen(false);
-      setUser(result.user);
+      if (result.allowed) {
+        window.history.pushState({ ...window.history.state, holiwynCreatorRoute: "/studio" }, "", "/studio");
+        setCreatorPortalStep(null);
+        setStudioOpen(true);
+        return;
+      }
+      const step = result.status === "ONBOARDING_IDENTITY" ? "identity" : result.status === "ONBOARDING_AGREEMENT" ? "agreement" : result.status === "READY_FOR_REVIEW" ? "review" : ["PENDING_REVIEW","REJECTED","SUSPENDED"].includes(result.status) ? "status" : "profile";
+      setCreatorPortalStep(step);
+      const path = step === "status" ? "/creator/status" : `/creator/onboarding/${step}`;
+      window.history.pushState({ ...window.history.state, holiwynCreatorRoute: path }, "", path);
     } catch (error) {
       setResumeNotice(
         error instanceof Error && error.message === "403"
-          ? language === "en" ? "Broadcast access requires approval." : "直播权限需要审核。"
-          : language === "en" ? "Broadcast access is temporarily unavailable." : "直播入口暂时不可用。",
+          ? language === "en" ? "Creator access is not available for this account." : "此账户暂时无法使用主播功能。"
+          : language === "en" ? "Creator onboarding is temporarily unavailable." : "主播入驻暂时不可用。",
       );
     }
   }
@@ -992,7 +1024,7 @@ function App() {
     document.querySelector(targetSelector)?.scrollIntoView({ block: "start" });
   }
   useEffect(() => {
-    if (!resumeIntent || !user || user.id === "public-guest" || !user.ageAcknowledged) return;
+    if (!resumeIntent || !user || user.id === "public-guest") return;
     if (user.role !== "audience") {
       setResumeIntent(null);
       return;
@@ -1034,6 +1066,7 @@ function App() {
     );
   if (!user) return null;
   const isGuest = user.id === "public-guest";
+  const audienceExperience = (user.role === "audience" || user.role === "streamer") && !studioOpen;
   const audienceInitials = user.displayName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const openFollowingDirectory = () => {
     setAccountOpen(false);
@@ -1043,7 +1076,7 @@ function App() {
   };
   return (
     <main className={`app role-${user.role}${room ? " room-open" : profileRoom ? " profile-open" : ""}`}>
-      <header className={`product-header ${user.role === "audience" && user.ageAcknowledged ? "audience-product-header" : ""}`}>
+      <header className={`product-header ${audienceExperience && user.ageAcknowledged ? "audience-product-header" : ""}`}>
         <div className="product-identity">
           <span className="product-mark" aria-hidden="true">
             H
@@ -1056,14 +1089,14 @@ function App() {
           </p>
           </div>
         </div>
-        {user.role === "audience" && user.ageAcknowledged && (
+        {audienceExperience && user.ageAcknowledged && (
           <MobileHeaderActions
             searchOpen={mobileSearchOpen}
             searchLabel={language === "en" ? "Search creators" : "搜索主播"}
             onSearch={() => setMobileSearchOpen((current) => !current)}
           />
         )}
-        {user.role === "audience" && user.ageAcknowledged && (
+        {audienceExperience && user.ageAcknowledged && (
           <div className={`audience-header-center ${mobileSearchOpen ? "mobile-search-open" : ""}`}>
             <nav
               className="audience-main-nav"
@@ -1080,6 +1113,7 @@ function App() {
               </button>
               <button type="button" onClick={() => {
                 showDiscovery();
+                window.history.pushState({}, "", "/categories");
                 window.setTimeout(() => document.querySelector("#popular-categories")?.scrollIntoView({ behavior: "smooth" }), 0);
               }}>
                 {language === "en" ? "Categories" : "分类"}
@@ -1092,9 +1126,8 @@ function App() {
           </div>
         )}
         <div className="product-account">
-          {user.role === "audience" && user.ageAcknowledged ? <>
+          {audienceExperience && user.ageAcknowledged ? <>
             {isGuest ? <button className="header-login" onClick={() => requireAuth("account")}>{language === "en" ? "Log in" : "登录"}</button> : <>
-              <button className="header-go-live" onClick={() => void openBroadcastDashboard()}>{language === "en" ? "Go live" : "开播"}</button>
               <AudienceAccountMenu
               open={accountMenuOpen}
               initials={audienceInitials}
@@ -1104,18 +1137,38 @@ function App() {
               onToggle={() => setAccountMenuOpen((current) => !current)}
               onClose={() => setAccountMenuOpen(false)}
               onFollowing={openFollowingDirectory}
-              onAccount={() => { setAccountOpen(true); window.scrollTo({ top: 0 }); }}
-              onWallet={() => { setAccountOpen(true); window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}
+              onAccount={() => { setAccountSection("profile");setAccountOpen(true);setCreatorPortalStep(null);window.history.pushState({},"","/account/profile");window.scrollTo({ top: 0 }); }}
+              onWallet={() => { setAccountSection("wallet");setAccountOpen(true);setCreatorPortalStep(null);window.history.pushState({},"","/account/wallet");window.scrollTo({ top: 0 }); }}
               onBroadcast={() => void openBroadcastDashboard()}
-              onSettings={() => { setAccountOpen(true); window.scrollTo({ top: 0 }); }}
+              creatorActive={user.creatorStatus === "ACTIVE" || user.role === "streamer"}
+              onSettings={() => { setAccountSection("security");setAccountOpen(true);setCreatorPortalStep(null);window.history.pushState({},"","/account/security");window.scrollTo({ top: 0 }); }}
               onLanguageChange={() => setLanguage(language === "en" ? "zh" : "en")}
               onLogout={() => void logout()}
             /></>}
           </> : <><LanguagePicker language={language} onChange={setLanguage} /><button className="secondary" onClick={() => void logout()}>{t.end}</button></>}
         </div>
       </header>
-      {!isGuest && accountOpen ? (
-        <AccountCenter
+       {!isGuest && creatorPortalStep ? (
+         <CreatorOnboarding
+           language={language}
+           step={creatorPortalStep === "status" ? "review" : creatorPortalStep}
+           api={request}
+           onNavigate={(next) => {
+             setCreatorPortalStep(next);
+             const path = next === "status" ? "/creator/status" : `/creator/onboarding/${next}`;
+             window.history.pushState({}, "", path);
+             window.scrollTo({ top: 0 });
+           }}
+           onActivated={(activated) => {
+             setUser(activated);
+             setCreatorPortalStep(null);
+             setStudioOpen(true);
+             window.history.replaceState({}, "", "/studio");
+           }}
+           onBack={() => showDiscovery()}
+         />
+       ) : !isGuest && accountOpen ? (
+         <AccountCenter
           user={user}
           language={language}
           onUpdated={(updated) => {
@@ -1124,6 +1177,8 @@ function App() {
           }}
           onClose={() => setAccountOpen(false)}
           onLogout={() => void logout()}
+          section={accountSection}
+          onSectionChange={(section) => { setAccountSection(section); window.history.pushState({},"",`/account/${section}`); }}
         />
       ) : !isGuest && !user.ageAcknowledged ? (
         <section className="age-gate">
@@ -1131,7 +1186,7 @@ function App() {
           <p>{t.ageText}</p>
           <button onClick={() => void acknowledge()}>{t.age}</button>
         </section>
-      ) : user.role === "audience" ? (
+      ) : audienceExperience ? (
         routeLoading ? (
           <section className="workspace route-status" aria-busy="true">
             <LiveStreamCardSkeleton count={1} label={language === "en" ? "Opening this Holiwyn page" : "正在打开 Holiwyn 页面"} />
@@ -1360,14 +1415,15 @@ function App() {
           language={language}
           onLanguageChange={setLanguage}
           onLogout={() => void logout()}
+          onDiscover={() => { setStudioOpen(false); showDiscovery("push"); }}
         />
       )}
-      {user.role === "audience" && user.ageAcknowledged ? (
+      {audienceExperience && user.ageAcknowledged ? (
         <MobileBottomNav
           active={accountOpen ? "me" : mobileTab}
           zh={language === "zh"}
-          hidden={Boolean(room || profileRoom)}
-          showCreatorEntry={!isGuest}
+          hidden={Boolean(room || profileRoom || creatorPortalStep || accountOpen)}
+          showCreatorEntry={false}
           onNavigate={navigateMobile}
         />
       ) : null}
@@ -1415,12 +1471,16 @@ function AccountCenter({
   onUpdated,
   onClose,
   onLogout,
+  section,
+  onSectionChange,
 }: {
   user: User;
   language: Language;
   onUpdated: (user: User) => void;
   onClose: () => void;
   onLogout: () => void;
+  section: "profile" | "security" | "sessions" | "wallet";
+  onSectionChange: (section: "profile" | "security" | "sessions" | "wallet") => void;
 }) {
   const zh = language === "zh";
   const [displayName, setDisplayName] = useState(user.displayName);
@@ -1508,8 +1568,11 @@ function AccountCenter({
         </div>
       </div>
       {notice && <p className="account-notice" role="status">{notice}</p>}
+      <nav className="account-section-nav" aria-label={zh ? "账户设置" : "Account settings"}>
+        {(["profile","security","sessions","wallet"] as const).map((item) => <button key={item} type="button" className={section === item ? "active" : "secondary"} aria-current={section === item ? "page" : undefined} onClick={() => onSectionChange(item)}>{item === "profile" ? (zh ? "资料" : "Profile") : item === "security" ? (zh ? "安全" : "Security") : item === "sessions" ? (zh ? "登录设备" : "Sessions") : (zh ? "钱包" : "Wallet")}</button>)}
+      </nav>
       <div className="account-center-grid">
-        <section>
+        <section hidden={section !== "profile"}>
           <h3>{zh ? "账户资料" : "Account profile"}</h3>
           <form className="account-form" onSubmit={(event) => void saveProfile(event)}>
             <label>{zh ? "显示名称" : "Display name"}<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} required /></label>
@@ -1518,7 +1581,7 @@ function AccountCenter({
           </form>
           <p className="form-help">{zh ? "账户名目前不可更改，以保持直播间、账本和审核记录的一致性。" : "Handles remain fixed so room ownership, ledgers, and moderation records stay consistent."}</p>
         </section>
-        <section>
+        <section hidden={section !== "security"}>
           <h3>{zh ? "更改密码" : "Change password"}</h3>
           <form className="account-form" onSubmit={(event) => void changePassword(event)}>
             <label>{zh ? "当前密码" : "Current password"}<input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} minLength={8} required /></label>
@@ -1528,7 +1591,7 @@ function AccountCenter({
             <button>{zh ? "更新密码" : "Update password"}</button>
           </form>
         </section>
-        <section className="account-sessions">
+        <section className="account-sessions" hidden={section !== "sessions"}>
           <div className="account-session-heading"><h3>{zh ? "登录设备" : "Signed-in devices"}</h3><button className="secondary" onClick={() => void revokeOthers()}>{zh ? "退出其他设备" : "Sign out other devices"}</button></div>
           {sessions.map((session) => (
             <article key={session.id}>
@@ -1537,8 +1600,8 @@ function AccountCenter({
             </article>
           ))}
         </section>
-        {user.role === "audience" ? <AudienceRWallet zh={zh} /> : null}
-        <section className="account-recovery">
+        {user.role === "audience" && section === "wallet" ? <AudienceRWallet zh={zh} /> : null}
+        <section className="account-recovery" hidden={section !== "security"}>
           <h3>{zh ? "账户恢复" : "Account recovery"}</h3>
           <p>{zh ? "恢复功能尚未启用。当前版本不会收集电子邮箱、发送恢复邮件或使用外部身份服务。" : "Recovery is not enabled yet. This version does not collect email, send reset links, or use an external identity provider."}</p>
           <p className="form-help">{zh ? "计划方案：验证邮箱、短时一次性链接、所有会话撤销、速率限制和安全事件记录；启用前需要隐私政策、邮件服务和所有者批准。" : "Planned design: verified email, short-lived single-use links, full session revocation, rate limits, and security-event records. Activation requires a privacy policy, mail service, and owner approval."}</p>
@@ -3738,11 +3801,13 @@ function StreamerStudio({
   language,
   onLanguageChange,
   onLogout,
+  onDiscover,
 }: {
   t: typeof copy.en;
   language: Language;
   onLanguageChange: (language: Language) => void;
   onLogout: () => void;
+  onDiscover: () => void;
 }) {
   const [studio, setStudio] = useState<any>(null);
   const [notice, setNotice] = useState("");
@@ -3765,6 +3830,7 @@ function StreamerStudio({
   const [viewerCount, setViewerCount] = useState(0);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [logoutConfirmationOpen, setLogoutConfirmationOpen] = useState(false);
+  const [discoverConfirmationOpen, setDiscoverConfirmationOpen] = useState(false);
   const [endingForLogout, setEndingForLogout] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
@@ -4084,9 +4150,16 @@ function StreamerStudio({
   const zh = t.title !== "Stream MVP";
   if (!room)
     return (
-      <section className="workspace creator-studio">
-        <h2>{t.studio}</h2>
-        <p>{t.noRoom}</p>
+      <section className="workspace creator-studio creator-room-empty">
+        <p className="eyebrow">{t.title === "Stream MVP" ? "STREAMER STUDIO" : "主播工作室"}</p>
+        <h2>{t.title === "Stream MVP" ? "Create your first stream" : "创建您的首个直播间"}</h2>
+        <p>{t.title === "Stream MVP" ? "Your creator account is active. Creating a draft is an explicit action; it will remain private until you publish it." : "您的主播账户已激活。创建草稿需要明确操作，发布前不会出现在公开发现中。"}</p>
+        <form className="onboarding-form" onSubmit={(event) => { event.preventDefault(); void request("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: title || (t.title === "Stream MVP" ? "My first Holiwyn stream" : "我的首场 Holiwyn 直播"), category: category || "Talk", streamLanguage }) }).then(() => refresh()).catch(() => setNotice(t.title === "Stream MVP" ? "The draft room could not be created." : "无法创建直播间草稿。")); }}>
+          <label>{t.title === "Stream MVP" ? "Stream title" : "直播标题"}<input required minLength={2} maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+          <div className="onboarding-form-row"><label>{t.title === "Stream MVP" ? "Category" : "分类"}<input value={category} onChange={(event) => setCategory(event.target.value)} /></label><label>{t.title === "Stream MVP" ? "Language" : "语言"}<select value={streamLanguage} onChange={(event) => setStreamLanguage(event.target.value as "en" | "zh")}><option value="en">English</option><option value="zh">中文</option></select></label></div>
+          <button>{t.title === "Stream MVP" ? "Create private draft" : "创建私有草稿"}</button>
+        </form>
+        {notice ? <p role="alert">{notice}</p> : null}
       </section>
     );
   const broadcastState = room.broadcast_state ?? "offline";
@@ -4134,6 +4207,7 @@ function StreamerStudio({
                 <span><strong>{studio.user?.displayName}</strong><small>@{studio.user?.handle}</small></span>
               </header>
               <nav className="creator-menu-sections" aria-label={zh ? "创作者页面" : "Creator pages"}>
+                <button type="button" className="creator-discover-live" onClick={() => { closeCreatorMenu(); if(liveSessionActive)setDiscoverConfirmationOpen(true);else onDiscover(); }}><BroadcastIcon name="live" />{zh ? "发现直播" : "Discover Live"}</button>
                 {([
                   ["live", zh ? "返回直播" : "Return to live", "live"],
                   ["earnings", zh ? "收益" : "Earnings", "earnings"],
@@ -4175,6 +4249,7 @@ function StreamerStudio({
           </details>
         </div>
       </header>
+      {room.publication_status === "draft" ? <aside className="studio-draft-banner"><span><strong>{zh ? "私有草稿" : "Private draft"}</strong><small>{zh ? "此直播间尚未出现在公开发现中。" : "This room is not visible in public discovery yet."}</small></span><button type="button" onClick={() => void request(`/api/studio/rooms/${encodeURIComponent(room.slug)}/publish`, { method: "POST", body: "{}" }).then(() => refresh()).catch(() => setNotice(zh ? "无法发布直播间。" : "The room could not be published."))}>{zh ? "发布直播间" : "Publish room"}</button></aside> : null}
 
       <div
         className={`creator-section broadcaster-page phase-${effectiveSessionPhase} ${activeSection === "live" ? "studio-view-active" : "studio-view-inactive"}`}
@@ -4376,6 +4451,14 @@ function StreamerStudio({
       ) : null}
       {notice && <p className="creator-toast">{notice}</p>}
       <Modal
+        open={discoverConfirmationOpen}
+        title={zh ? "离开直播工作室？" : "Leave Streamer Studio?"}
+        description={zh ? "浏览器正在发布您的直播。离开工作室可能中断摄像头推流；请留在此页面以保持直播。" : "This browser is publishing your stream. Leaving Studio may interrupt camera publishing; stay here to keep broadcasting."}
+        closeLabel={zh ? "关闭离开确认" : "Close leave confirmation"}
+        onClose={() => setDiscoverConfirmationOpen(false)}
+        footer={<><button type="button" onClick={() => setDiscoverConfirmationOpen(false)}>{zh ? "继续直播" : "Keep broadcasting"}</button><button type="button" className="secondary" onClick={() => {setDiscoverConfirmationOpen(false);onDiscover();}}>{zh ? "仍然离开" : "Leave anyway"}</button></>}
+      ><p>{zh ? "离开不会退出登录或移除您的主播权限。" : "Leaving does not sign you out or remove creator access."}</p></Modal>
+      <Modal
         open={logoutConfirmationOpen}
         title={zh ? "退出并结束直播？" : "Sign out and end stream?"}
         description={zh ? "退出登录将结束当前直播。" : "Signing out will end your current broadcast."}
@@ -4392,6 +4475,16 @@ function StreamerStudio({
       </Modal>
     </section>
   );
+}
+function AdminCreatorReviews({zh}:{zh:boolean}){
+  const initialAdminQuery=new URLSearchParams(window.location.search);
+  const [items,setItems]=useState<any[]>([]),[filter,setFilter]=useState(initialAdminQuery.get("filter")??"all"),[search,setSearch]=useState(initialAdminQuery.get("search")??""),[selected,setSelected]=useState<any>(null),[notice,setNotice]=useState("");
+  const load=()=>{window.history.replaceState({},"",`/admin/creator-reviews?filter=${encodeURIComponent(filter)}&search=${encodeURIComponent(search)}`);void request(`/api/admin/creator-reviews?filter=${encodeURIComponent(filter)}&search=${encodeURIComponent(search)}&limit=25`).then(d=>setItems(d.items)).catch(()=>setNotice(zh?"无法加载主播审核。":"Creator reviews could not be loaded."));};
+  useEffect(()=>{window.history.replaceState({},"",`/admin/creator-reviews?filter=${encodeURIComponent(filter)}&search=${encodeURIComponent(search)}`);load();},[filter]);
+  const open=async(id:string)=>setSelected(await request(`/api/admin/creator-reviews/${id}`));
+  const act=async(action:string)=>{if(!selected)return;const reason=window.prompt(zh?"请输入原因代码或简短原因":"Enter a reason code or short reason");if(!reason)return;await request(`/api/admin/creator-reviews/${selected.creator.user_id}/actions`,{method:"POST",body:JSON.stringify({action,reasonCode:reason,userFacingReason:reason,idempotencyKey:crypto.randomUUID()})});setNotice(zh?"操作已记录。":"Decision recorded and audited.");await open(selected.creator.user_id);load();};
+  const viewDocument=async()=>{if(!selected?.creator.document_id)return;const result=await request(`/api/admin/creator-reviews/${selected.creator.user_id}/document-view`,{method:"POST",body:JSON.stringify({documentId:selected.creator.document_id})});window.open(result.viewPath,"_blank","noopener,noreferrer");};
+  return <section className="admin-creator-review"><div className="admin-section-heading"><div><p className="eyebrow">{zh?"权限保护":"PERMISSION PROTECTED"}</p><h3>{zh?"主播审核":"Creator Reviews"}</h3></div></div><div className="admin-review-filters"><label>{zh?"状态":"Status"}<select value={filter} onChange={e=>setFilter(e.target.value)}>{["all","new","auto_unreviewed","pending","uploaded","needs_reupload","active","rejected","suspended"].map(x=><option key={x} value={x}>{x.replaceAll("_"," ")}</option>)}</select></label><label>{zh?"搜索":"Search"}<input value={search} onChange={e=>setSearch(e.target.value)} placeholder={zh?"姓名、账号或用户 ID":"Name, handle, or user ID"}/></label><button type="button" onClick={load}>{zh?"搜索":"Search"}</button></div><div className="creator-review-list">{items.map(x=><button type="button" key={x.user_id} onClick={()=>void open(x.user_id)}><strong>{x.creator_handle?`@${x.creator_handle}`:x.account_handle}</strong><span>{x.creator_status} · {x.document_status??"NOT_UPLOADED"} · {x.activation_method??"—"}</span></button>)}{!items.length?<p className="muted">{zh?"没有符合条件的主播。":"No creators match these filters."}</p>:null}</div>{selected?<article className="admin-review-detail"><h4>{selected.creator.creator_name??selected.creator.display_name} · {selected.creator.creator_status}</h4><dl><div><dt>{zh?"账户":"Account"}</dt><dd>@{selected.creator.account_handle} · {selected.creator.user_id}</dd></div><div><dt>{zh?"协议":"Agreement"}</dt><dd>{selected.creator.agreement_version??"—"} · 18+ {selected.creator.age_confirmed?"confirmed":"missing"}</dd></div><div><dt>{zh?"证件":"Document"}</dt><dd>{selected.creator.document_status??"NOT_UPLOADED"} · {selected.creator.mime_type??"—"}</dd></div><div><dt>{zh?"激活":"Activation"}</dt><dd>{selected.creator.activation_method??"—"} · {selected.creator.administrative_review_status}</dd></div></dl><div className="admin-actions">{selected.creator.document_id?<button type="button" onClick={()=>void viewDocument()}>{zh?"安全查看证件":"Securely view document"}</button>:null}<button type="button" onClick={()=>void act("DOCUMENT_REVIEWED")}>{zh?"标记已审核":"Mark reviewed"}</button><button type="button" onClick={()=>void act("REUPLOAD_REQUESTED")}>{zh?"要求重新上传":"Request re-upload"}</button><button type="button" onClick={()=>void act("APPROVED")}>{zh?"批准":"Approve"}</button><button type="button" className="danger" onClick={()=>void act("REJECTED")}>{zh?"拒绝":"Reject"}</button><button type="button" className="danger" onClick={()=>void act("SUSPENDED")}>{zh?"暂停":"Suspend"}</button><button type="button" onClick={()=>void act("REACTIVATED")}>{zh?"恢复":"Reactivate"}</button></div><h5>{zh?"生命周期":"Lifecycle"}</h5>{selected.history.map((x:any,i:number)=><p key={i} className="muted">{x.from_status??"—"} → {x.to_status} · {x.reason_code??"—"}</p>)}</article>:null}{notice?<p role="status">{notice}</p>:null}</section>;
 }
 function AdminPanel({ t }: { t: typeof copy.en }) {
   const zh = t.title !== "Stream MVP";
@@ -4470,6 +4563,7 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
   return (
     <section className="workspace">
       <h2>{t.admin}</h2>
+      <AdminCreatorReviews zh={zh} />
       <section className="admin-creator-review">
         <div className="admin-section-heading">
           <div><p className="eyebrow">{t.title === "Stream MVP" ? "Creator onboarding" : "主播入驻"}</p><h3>{t.title === "Stream MVP" ? "Creator applications" : "主播申请"}</h3></div>

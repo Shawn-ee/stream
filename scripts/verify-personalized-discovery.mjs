@@ -50,7 +50,7 @@ try {
   await client.query("UPDATE live_rooms SET status='offline',broadcast_state='offline'");
 
   assert.equal((await call("/api/me/discovery-preferences", null)).status, 401);
-  assert.equal((await call("/api/me/discovery-preferences", streamer)).status, 403);
+  assert.equal((await call("/api/me/discovery-preferences", streamer)).status, 200);
   assert.equal((await call("/api/me/discovery-preferences", admin)).status, 403);
 
   const defaults = await call("/api/me/discovery-preferences", audience);

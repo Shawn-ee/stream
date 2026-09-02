@@ -19,6 +19,8 @@ export const productionEnvironmentNames = [
   "METRICS_TOKEN",
   "APP_PORT",
   "PRIVATE_SSH_TUNNEL",
+  "IDENTITY_DOCUMENT_STORAGE_PATH",
+  "IDENTITY_DOCUMENT_ENCRYPTION_KEY",
   "CLOUDFLARE_STREAM_ENABLED",
   "CLOUDFLARE_ACCOUNT_ID",
   "CLOUDFLARE_API_TOKEN",
@@ -100,6 +102,9 @@ export function validateProductionEnvironment(environment) {
   const multiplier = Number(required(environment, "RATE_LIMIT_MULTIPLIER"));
   assert.ok(Number.isFinite(multiplier) && multiplier > 0 && multiplier <= 10, "RATE_LIMIT_MULTIPLIER is outside the allowed range");
   assert.equal(boolean(environment, "TRUST_PROXY"), true, "TRUST_PROXY must be true behind the gateway");
+  assert.ok(required(environment,"IDENTITY_DOCUMENT_STORAGE_PATH").startsWith("/"),"IDENTITY_DOCUMENT_STORAGE_PATH must be absolute");
+  const identityKey=Buffer.from(required(environment,"IDENTITY_DOCUMENT_ENCRYPTION_KEY"),"base64");
+  assert.equal(identityKey.length,32,"IDENTITY_DOCUMENT_ENCRYPTION_KEY must decode to 32 bytes");
 
   const databaseName = required(environment, "POSTGRES_DB");
   const databaseUser = required(environment, "POSTGRES_USER");

@@ -63,6 +63,41 @@ export const mutationSchemas = {
       reason: boundedString(500, 2),
     },
   },
+  creatorOnboardingProfile: {
+    type: "object",
+    additionalProperties: false,
+    required: ["creatorHandle", "displayName", "bio", "category", "primaryLanguage", "timezone"],
+    properties: {
+      creatorHandle: { type: "string", minLength: 3, maxLength: 30, pattern: "^[a-z0-9_-]+$" },
+      displayName: boundedString(50, 2),
+      bio: boundedString(500, 20),
+      category: boundedString(60, 2),
+      primaryLanguage: { type: "string", enum: ["en", "zh"] },
+      timezone: boundedString(80, 3),
+      contentTags: { type: "array", maxItems: 8, items: boundedString(24, 1) },
+    },
+  },
+  creatorAgreementAcceptance: {
+    type: "object",
+    additionalProperties: false,
+    required: ["agreementVersion", "signerName", "ageConfirmed", "agreementConfirmed"],
+    properties: {
+      agreementVersion: boundedString(80),
+      signerName: boundedString(100, 2),
+      ageConfirmed: { type: "boolean", const: true },
+      agreementConfirmed: { type: "boolean", const: true },
+    },
+  },
+  studioRoomCreate: {
+    type: "object",
+    additionalProperties: false,
+    required: ["title"],
+    properties: {
+      title: boundedString(120, 2),
+      category: boundedString(60, 2),
+      streamLanguage: { type: "string", enum: ["en", "zh"] },
+    },
+  },
   report: {
     type: "object",
     additionalProperties: false,

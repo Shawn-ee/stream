@@ -14,6 +14,7 @@ export function AudienceAccountMenu({
   onAccount,
   onWallet,
   onBroadcast,
+  creatorActive,
   onSettings,
   onLanguageChange,
   onLogout,
@@ -29,6 +30,7 @@ export function AudienceAccountMenu({
   onAccount: () => void;
   onWallet: () => void;
   onBroadcast: () => void;
+  creatorActive: boolean;
   onSettings: () => void;
   onLanguageChange: () => void;
   onLogout: () => void;
@@ -61,7 +63,7 @@ export function AudienceAccountMenu({
         <button type="button" role="menuitem" onClick={choose(onFollowing)}>{zh ? "关注" : "Following"}</button>
         <button type="button" role="menuitem" onClick={choose(onWallet)}>{zh ? "钱包" : "Wallet"}</button>
         <hr />
-        <button type="button" role="menuitem" className="menu-creator-action" onClick={choose(onBroadcast)}>{zh ? "直播控制台" : "Broadcast dashboard"}</button>
+        <button type="button" role="menuitem" className="menu-creator-action" onClick={choose(onBroadcast)}>{creatorActive ? (zh ? "主播工作室" : "Streamer Studio") : (zh ? "成为主播" : "Become a creator")}</button>
         <button type="button" role="menuitem" onClick={choose(onSettings)}>{zh ? "设置" : "Settings"}</button>
         <button type="button" role="menuitem" onClick={choose(onLanguageChange)}>{zh ? "Language · 中文" : "Language · English"}</button>
         <hr />

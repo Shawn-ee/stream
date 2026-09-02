@@ -31,6 +31,8 @@ export function createTemporaryProductionEnvironment({ appPort }) {
     METRICS_TOKEN: randomSecret(),
     APP_PORT: String(appPort),
     PRIVATE_SSH_TUNNEL: "true",
+    IDENTITY_DOCUMENT_STORAGE_PATH: "/app/work/private-identity-documents",
+    IDENTITY_DOCUMENT_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
     CLOUDFLARE_STREAM_ENABLED: "false",
     CLOUDFLARE_ACCOUNT_ID: "",
     CLOUDFLARE_API_TOKEN: "",

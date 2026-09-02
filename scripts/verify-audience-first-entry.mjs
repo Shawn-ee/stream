@@ -11,12 +11,10 @@ const authSurface = app.slice(
 );
 assert.doesNotMatch(authSurface, /demo-(?:audience|streamer|admin)/, "public sign-in must not expose role shortcuts");
 assert.match(app, /isGuest \? <button[\s\S]{0,180}"Log in"/);
-assert.match(app, /window\.location\.pathname === "\/broadcast"/);
-assert.match(app, /window\.history\.pushState\([\s\S]{0,160}"\/broadcast"\)/);
-for (const item of ["View profile", "Following", "Wallet", "Broadcast dashboard", "Settings", "Language · English", "Sign out"])
+assert.doesNotMatch(app, /className="header-go-live"/, "audience header must not expose Go live");
+for (const item of ["View profile", "Following", "Wallet", "Streamer Studio", "Become a creator", "Settings", "Language · English", "Sign out"])
   assert.match(navigation, new RegExp(item));
-assert.doesNotMatch(navigation, /Become a creator/);
-assert.doesNotMatch(app, /id="creator-program"/, "unfinished creator application must not be exposed");
+assert.match(app, /<CreatorOnboarding/);
 
 assert.match(navigation, /showCreatorEntry: boolean/);
 assert.match(navigation, /item\.id !== "go-live" \|\| showCreatorEntry/);
@@ -31,7 +29,7 @@ assert.match(loginRoute, /authenticateCredentials\(handle, password\)/);
 assert.match(app, /user\.role === "admin"[\s\S]*<AdminPanel/);
 assert.match(app, /<StreamerStudio[\s\S]*onLogout/);
 
-assert.match(api, /"\/api\/broadcast\/access\/activate"/);
-assert.match(api, /config\.broadcastAccessMode === "approval_required"/);
-assert.match(api, /role === "streamer" && user\.role === "audience" && config\.broadcastAccessMode === "open"/);
-console.log("Minimal public header, consolidated account menu, server-resolved roles, and enforced open broadcast access verified.");
+assert.doesNotMatch(api, /"\/api\/broadcast\/access\/activate"/);
+assert.match(api, /"\/api\/creator\/onboarding\/activate"/);
+assert.match(api, /SELECT status FROM creator_accounts WHERE user_id=\$1/);
+console.log("Minimal public header, consolidated account menu, creator-only entry, and server-authoritative onboarding verified.");

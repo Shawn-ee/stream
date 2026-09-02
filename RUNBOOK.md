@@ -1,5 +1,23 @@
 # Local Runbook
 
+## Creator documents and review
+
+Production must set `IDENTITY_DOCUMENT_STORAGE_PATH` to a private persistent directory and `IDENTITY_DOCUMENT_ENCRYPTION_KEY` to a base64 32-byte key. Back up encrypted files separately from the key. Verify permission-denied cases, one-time view expiry, audit events, and immediate Studio denial after suspension. Never place document paths, URLs, numbers, or raw bytes in logs or tickets.
+
+## Creator onboarding, side-effect, and draft-privacy verification
+
+1. Start the local PostgreSQL/Redis services, apply migrations, and seed synthetic data.
+2. Run `npm run verify:creator-onboarding`. This creates and removes one synthetic account. It must prove that read-only creator/status/Studio navigation creates no creator profile or room, that incomplete/suspended accounts receive 403, that activation is idempotent, and that a room appears only after explicit draft creation and publication.
+3. Run `npm run verify:staging`. Do not deploy while any stage is red.
+4. In a signed-in audience browser, open the avatar menu with mouse and keyboard, choose **Creator dashboard**, and verify Back/Forward, refresh, Resume later, and the routed Profile, Identity, Agreement, Review, and status pages.
+5. Complete the mock flow using synthetic information only. Confirm activation opens Streamer Studio with no room and requests no camera or microphone access.
+6. Select **Create stream**. Confirm the resulting draft is absent from discovery and all public room URLs return not found. Publish it explicitly, then confirm it becomes discoverable but remains offline.
+7. At 390×844 confirm the step indicator, forms, account views, and Studio empty state have no horizontal overflow. Repeat key copy in English and Chinese.
+8. Review `SELECT * FROM suspicious_audience_creator_resources ORDER BY room_created_at NULLS LAST, handle;`. This is a report only. Never delete listed records without a separately reviewed migration.
+9. Run `npm run db:seed` after acceptance to remove transient test state.
+
+Production must use `CREATOR_IDENTITY_PROVIDER=disabled` until a real provider is implemented. `mock` is rejected in production. Set `CREATOR_AUTO_APPROVAL=true` only as an explicit owner-controlled product decision; the safe production example leaves it false.
+
 ## Audience navigation and broadcast-access verification
 
 Run `npm run db:seed`, `npm run verify:audience-first-entry`, `npm run verify:desktop-discovery`, `npm run verify:mobile-shell`, `npm run verify:broadcast-access`, and `npm run verify:staging`. Reseed after any focused API run.

@@ -69,8 +69,13 @@ import {
   streamThumbnailUploadLimitBytes,
 } from "./stream-thumbnail-storage.js";
 import { renderSocialPreview, validSocialPreviewPath, type SocialPreviewKind } from "./social-preview.js";
+import { IdentityDocumentUploadError, identityDocumentLimitBytes, readIdentityDocument, saveIdentityDocument, type IdentityDocumentType } from "./identity-document-storage.js";
 
 type Role = "audience" | "streamer" | "admin";
+type CreatorStatus =
+  | "AUDIENCE" | "ONBOARDING_PROFILE" | "ONBOARDING_IDENTITY"
+  | "ONBOARDING_AGREEMENT" | "READY_FOR_REVIEW" | "PENDING_REVIEW"
+  | "APPROVED" | "ACTIVE" | "REJECTED" | "SUSPENDED";
 type DemoUser = {
   id: string;
   handle: string;
@@ -79,6 +84,7 @@ type DemoUser = {
   locale: "en" | "zh";
   ageAcknowledged: boolean;
 };
+const identityDocumentViews = new Map<string,{adminId:string;documentId:string;expiresAt:number}>();
 
 async function createDueScheduleReminders(client: ReturnType<typeof database>, userId: string) {
   return client.query<{
@@ -98,7 +104,8 @@ async function createDueScheduleReminders(client: ReturnType<typeof database>, u
      JOIN users viewer ON viewer.id=f.follower_id
      JOIN users creator ON creator.id=f.streamer_id
      JOIN streamer_profiles profile ON profile.user_id=f.streamer_id
-     JOIN live_rooms room ON room.streamer_id=f.streamer_id
+     JOIN live_rooms room ON room.streamer_id=f.streamer_id AND room.publication_status='published'
+     JOIN creator_accounts creator_account ON creator_account.user_id=f.streamer_id AND creator_account.status='ACTIVE'
      WHERE f.follower_id=$1 AND f.reminder_enabled=TRUE
        AND profile.next_stream_at>NOW()
        AND profile.next_stream_at<=NOW()+INTERVAL '1 hour'
@@ -435,7 +442,7 @@ export function buildApi() {
   });
   void api.register(cookie);
   void api.register(multipart, {
-    limits: { files: 1, fileSize: avatarUploadLimitBytes, fields: 0 },
+    limits: { files: 1, fileSize: identityDocumentLimitBytes, fields: 0 },
   });
   api.addHook("onRequest", async (request) => {
     runtimeMetrics.httpRequestsTotal += 1;
@@ -450,18 +457,22 @@ export function buildApi() {
         ? 15
         : request.url === "/api/account/password"
           ? 10
+        : request.url.includes("/identity-document")
+          ? 10
+        : request.url.includes("/creator-reviews/")
+          ? 30
         : request.url.includes("/reports")
           ? 20
           : request.url.includes("/gifts") || request.url.includes("/purchase")
             ? 120
             : 180;
-    const loginHandle =
-      request.url === "/api/auth/login"
+    const credentialHandle =
+      request.url === "/api/auth/login" || request.url === "/api/auth/register"
         ? ((request.body as { handle?: string } | undefined)?.handle
             ?.trim()
             .toLowerCase() ?? "missing")
         : "";
-    const key = `${request.ip}:${request.method}:${request.routeOptions.url ?? request.url}:${loginHandle}`;
+    const key = `${request.ip}:${request.method}:${request.routeOptions.url ?? request.url}:${credentialHandle}`;
     const now = Date.now();
     const current = rateBuckets.get(key);
     const bucket =
@@ -525,23 +536,39 @@ export function buildApi() {
   ) {
     const user = await currentUser(request);
     if (!user) return reply.code(401).send({ error: "session_required" });
-    if (user.role !== role) {
-      if (role === "streamer" && user.role === "audience" && config.broadcastAccessMode === "open") {
-        const client = database();
-        await client.connect();
-        try {
-          const provisioned = await client.query(
-            "SELECT 1 FROM streamer_profiles p JOIN live_rooms r ON r.streamer_id=p.user_id WHERE p.user_id=$1",
-            [user.id],
-          );
-          if (provisioned.rows[0]) return { ...user, role: "streamer" as const };
-        } finally {
-          await client.end();
+    if (role === "streamer") {
+      const client = database();
+      await client.connect();
+      try {
+        const creator = await client.query<{ status: CreatorStatus }>(
+          "SELECT status FROM creator_accounts WHERE user_id=$1",
+          [user.id],
+        );
+        if (creator.rows[0]?.status !== "ACTIVE") {
+          return reply.code(403).send({
+            error: creator.rows[0]?.status === "SUSPENDED" ? "creator_suspended" : "creator_access_required",
+          });
         }
+      } finally {
+        await client.end();
       }
-      return reply.code(403).send({ error: "role_required", role });
+      return { ...user, role: "streamer" as const };
     }
+    if (role === "audience" && (user.role === "audience" || user.role === "streamer"))
+      return { ...user, role: "audience" as const };
+    if (user.role !== role)
+      return reply.code(403).send({ error: "role_required", role });
     return user;
+  }
+  async function requireAdminPermission(request: { cookies: Record<string,string|undefined> }, reply: FastifyReply, permission: string) {
+    const admin = await requireRole(request,reply,"admin") as DemoUser | undefined;
+    if (!admin) return;
+    const client=database(); await client.connect();
+    try {
+      const granted=await client.query("SELECT 1 FROM admin_permissions WHERE user_id=$1 AND permission=$2",[admin.id,permission]);
+      if(!granted.rows[0]) return reply.code(403).send({error:"admin_permission_required",permission});
+      return admin;
+    } finally { await client.end(); }
   }
   api.get("/health", async () => ({
     status: "ok",
@@ -617,73 +644,188 @@ export function buildApi() {
     )
       return reply.code(403).send({ error: "csrf_validation_failed" });
   });
-  api.get("/api/auth/session", async (request) => ({
-    user: await currentUser(request),
-  }));
+  api.get("/api/auth/session", async (request) => {
+    const user=await currentUser(request);if(!user)return {user:null};
+    const client=database();await client.connect();try{const creator=await client.query<{status:CreatorStatus}>("SELECT status FROM creator_accounts WHERE user_id=$1",[user.id]);return {user:{...user,creatorStatus:creator.rows[0]?.status??"AUDIENCE"}};}finally{await client.end();}
+  });
   api.get("/api/broadcast/access", async (request, reply) => {
     const user = await currentUser(request);
     if (!user) return reply.code(401).send({ error: "session_required" });
-    return {
-      mode: config.broadcastAccessMode,
-      allowed: user.role === "streamer" || (user.role === "audience" && config.broadcastAccessMode === "open"),
-      status: user.role === "streamer" ? "approved" : "not_applied",
-    };
+    const client = database();
+    await client.connect();
+    try {
+      const result = await client.query<{ status: CreatorStatus }>(
+        "SELECT status FROM creator_accounts WHERE user_id=$1",
+        [user.id],
+      );
+      const status = result.rows[0]?.status ?? "AUDIENCE";
+      return { allowed: status === "ACTIVE", status, onboardingEnabled: config.creatorOnboardingEnabled };
+    } finally {
+      await client.end();
+    }
   });
-  api.post("/api/broadcast/access/activate", async (request, reply) => {
-    const sessionUser = await currentUser(request);
-    if (!sessionUser) return reply.code(401).send({ error: "session_required" });
-    if (sessionUser.role === "admin") return reply.code(403).send({ error: "broadcast_role_not_eligible" });
-    if (sessionUser.role === "streamer") return { mode: config.broadcastAccessMode, user: sessionUser };
-    if (config.broadcastAccessMode === "approval_required")
-      return reply.code(403).send({ error: "broadcast_approval_required" });
-
+  api.get("/api/creator/onboarding", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    if (user.role === "admin") return reply.code(403).send({ error: "creator_role_not_eligible" });
+    const client = database();
+    await client.connect();
+    try {
+      const account=await client.query("SELECT status,reason_code,activated_at,activation_method,administrative_review_status,updated_at FROM creator_accounts WHERE user_id=$1", [user.id]);
+      const draft=await client.query("SELECT creator_handle,display_name,bio,category,primary_language,timezone,content_tags,profile_completed_at,updated_at FROM creator_onboarding WHERE user_id=$1", [user.id]);
+      const identity=await client.query("SELECT id,document_type,mime_type,file_size,status,uploaded_at,reviewed_at FROM creator_identity_documents WHERE user_id=$1 AND status<>'SUPERSEDED' ORDER BY uploaded_at DESC LIMIT 1", [user.id]);
+      const agreement=await client.query("SELECT v.version,v.title,v.content_text,v.effective_at,(a.id IS NOT NULL) AS accepted,COALESCE(a.age_confirmed,FALSE) AS age_confirmed,COALESCE(a.agreement_confirmed,FALSE) AS agreement_confirmed,a.signer_name,a.accepted_at FROM creator_agreement_versions v LEFT JOIN creator_agreement_acceptances a ON a.agreement_version_id=v.id AND a.user_id=$1 WHERE v.is_current=TRUE LIMIT 1", [user.id]);
+      const status = account.rows[0]?.status ?? (user.role === "streamer" ? "ACTIVE" : "AUDIENCE");
+      return {
+        status,
+        reasonCode: account.rows[0]?.reason_code ?? null,
+        draft: draft.rows[0] ?? null,
+        identity: identity.rows[0] ?? { status: "NOT_UPLOADED" },
+        agreement: agreement.rows[0] ?? null,
+        configuration: {
+          onboardingEnabled: config.creatorOnboardingEnabled,
+          identityProvider: "direct_private_upload",
+          acceptedDocumentTypes: ["passport","national_id","driver_license"],
+          acceptedFileTypes: ["application/pdf","image/jpeg","image/png"],
+          maximumFileSizeBytes: identityDocumentLimitBytes,
+          automaticApproval: config.creatorAutoApproval,
+        },
+      };
+    } finally {
+      await client.end();
+    }
+  });
+  api.post("/api/creator/onboarding/start", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    if (!config.creatorOnboardingEnabled) return reply.code(503).send({ error: "creator_onboarding_unavailable" });
+    if (user.role === "admin") return reply.code(403).send({ error: "creator_role_not_eligible" });
     const client = database();
     await client.connect();
     try {
       await client.query("BEGIN");
-      const locked = await client.query<{
-        id: string; handle: string; display_name: string; role: Role; locale: "en" | "zh";
-        test_age_acknowledged_at: Date | null; is_banned: boolean;
-      }>(
-        "SELECT id,handle,display_name,role,locale,test_age_acknowledged_at,is_banned FROM users WHERE id=$1 FOR UPDATE",
-        [sessionUser.id],
-      );
-      const user = locked.rows[0];
-      if (!user || user.is_banned) {
+      const existing = await client.query<{ status: CreatorStatus }>("SELECT status FROM creator_accounts WHERE user_id=$1 FOR UPDATE", [user.id]);
+      if (existing.rows[0]?.status === "SUSPENDED") {
         await client.query("ROLLBACK");
-        return reply.code(403).send({ error: "broadcast_access_suspended" });
+        return reply.code(403).send({ error: "creator_suspended" });
       }
-      if (user.role === "audience") {
-        const roomTitle = user.locale === "zh" ? `${user.display_name} 的直播间` : `${user.display_name}'s Live Room`;
-        await client.query(
-          "INSERT INTO streamer_profiles (user_id,bio,category,is_featured) VALUES ($1,'','General',FALSE) ON CONFLICT (user_id) DO NOTHING",
-          [user.id],
-        );
-        await client.query(
-          "INSERT INTO live_rooms (id,streamer_id,slug,title,status) VALUES ($1,$2,$3,$4,'offline') ON CONFLICT (streamer_id) DO NOTHING",
-          [crypto.randomUUID(), user.id, user.handle, roomTitle],
-        );
+      if (!existing.rows[0]) {
+        await client.query("INSERT INTO creator_accounts (user_id,status) VALUES ($1,'ONBOARDING_PROFILE')", [user.id]);
+        await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'AUDIENCE','ONBOARDING_PROFILE','onboarding_started',$2)", [crypto.randomUUID(), user.id]);
+        await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type) VALUES ($1,$2,$2,'creator_onboarding_started')", [crypto.randomUUID(), user.id]);
       }
+      await client.query("INSERT INTO creator_onboarding (user_id,creator_handle,display_name,primary_language,timezone) VALUES ($1,$2,$3,$4,'America/Chicago') ON CONFLICT (user_id) DO NOTHING", [user.id, user.handle, user.displayName, user.locale]);
       await client.query("COMMIT");
-      return {
-        mode: config.broadcastAccessMode,
-        user: {
-          id: user.id,
-          handle: user.handle,
-          displayName: user.display_name,
-          role: "streamer" as const,
-          locale: user.locale,
-          ageAcknowledged: Boolean(user.test_age_acknowledged_at),
-        },
-      };
+      return reply.code(existing.rows[0] ? 200 : 201).send({ status: existing.rows[0]?.status ?? "ONBOARDING_PROFILE" });
     } catch (error) {
       await client.query("ROLLBACK");
-      if ((error as { code?: string }).code === "23505")
-        return reply.code(409).send({ error: "broadcast_provisioning_conflict" });
       throw error;
     } finally {
       await client.end();
     }
+  });
+  api.patch<{
+    Body: { creatorHandle: string; displayName: string; bio: string; category: string; primaryLanguage: "en" | "zh"; timezone: string; contentTags?: string[] };
+  }>("/api/creator/onboarding/profile", { schema: { body: mutationSchemas.creatorOnboardingProfile } }, async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    const body = request.body;
+    try { new Intl.DateTimeFormat("en", { timeZone: body.timezone }).format(); }
+    catch { return reply.code(400).send({ error: "invalid_timezone" }); }
+    const tags = [...new Set((body.contentTags ?? []).map((item) => item.trim()).filter(Boolean))];
+    const client = database();
+    await client.connect();
+    try {
+      await client.query("BEGIN");
+      const account = await client.query<{ status: CreatorStatus }>("SELECT status FROM creator_accounts WHERE user_id=$1 FOR UPDATE", [user.id]);
+      if (!account.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "creator_onboarding_not_started" }); }
+      if (!["ONBOARDING_PROFILE","ONBOARDING_AGREEMENT"].includes(account.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "creator_profile_locked" }); }
+      const conflict = await client.query("SELECT 1 FROM users WHERE LOWER(handle)=LOWER($1) AND id<>$2 UNION ALL SELECT 1 FROM creator_onboarding WHERE LOWER(creator_handle)=LOWER($1) AND user_id<>$2 LIMIT 1", [body.creatorHandle, user.id]);
+      if (conflict.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "creator_handle_unavailable" }); }
+      await client.query("UPDATE creator_onboarding SET creator_handle=$1,display_name=$2,bio=$3,category=$4,primary_language=$5,timezone=$6,content_tags=$7,profile_completed_at=NOW(),updated_at=NOW() WHERE user_id=$8", [body.creatorHandle,body.displayName.trim(),body.bio.trim(),body.category.trim(),body.primaryLanguage,body.timezone,tags,user.id]);
+      if (account.rows[0].status === "ONBOARDING_PROFILE") {
+        await client.query("UPDATE creator_accounts SET status='ONBOARDING_AGREEMENT',updated_at=NOW() WHERE user_id=$1", [user.id]);
+        await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'ONBOARDING_PROFILE','ONBOARDING_AGREEMENT','profile_completed',$2)", [crypto.randomUUID(), user.id]);
+      }
+      await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type) VALUES ($1,$2,$2,'creator_profile_draft_completed')", [crypto.randomUUID(), user.id]);
+      await client.query("COMMIT");
+      return { status: "ONBOARDING_AGREEMENT" };
+    } catch (error) { await client.query("ROLLBACK"); if ((error as {code?:string}).code === "23505") return reply.code(409).send({error:"creator_handle_unavailable"}); throw error; }
+    finally { await client.end(); }
+  });
+  api.post<{Querystring:{documentType:IdentityDocumentType}}>("/api/creator/onboarding/identity-document", async (request, reply) => {
+    const user=await currentUser(request); if(!user)return reply.code(401).send({error:"session_required"});
+    if(!["passport","national_id","driver_license"].includes(request.query.documentType)) return reply.code(400).send({error:"unsupported_document_type"});
+    const eligibility=database();await eligibility.connect();try{const allowed=await eligibility.query("SELECT 1 FROM creator_accounts c WHERE c.user_id=$1 AND c.status IN ('ONBOARDING_IDENTITY','READY_FOR_REVIEW','ACTIVE') AND EXISTS(SELECT 1 FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=c.user_id AND v.is_current=TRUE AND a.age_confirmed=TRUE AND a.agreement_confirmed=TRUE)",[user.id]);if(!allowed.rows[0])return reply.code(409).send({error:"agreement_required_before_document"});}finally{await eligibility.end();}
+    const file=await request.file(); if(!file)return reply.code(400).send({error:"identity_document_required"});
+    const buffer=await file.toBuffer();
+    let stored;
+    try { stored=await saveIdentityDocument({storagePath:config.identityDocumentStoragePath,encryptionKey:config.identityDocumentEncryptionKey,userId:user.id,buffer}); }
+    catch(error){ if(error instanceof IdentityDocumentUploadError)return reply.code(error.code==="identity_document_too_large"?413:400).send({error:error.code}); throw error; }
+    const client=database();await client.connect();
+    try{await client.query("BEGIN");
+      const account=await client.query<{status:CreatorStatus}>("SELECT status FROM creator_accounts WHERE user_id=$1 FOR UPDATE",[user.id]);
+      if(!account.rows[0]||!["ONBOARDING_IDENTITY","READY_FOR_REVIEW","ACTIVE"].includes(account.rows[0].status)){await client.query("ROLLBACK");return reply.code(409).send({error:"identity_document_step_unavailable"});}
+      const agreement=await client.query("SELECT 1 FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=$1 AND v.is_current=TRUE AND a.age_confirmed=TRUE AND a.agreement_confirmed=TRUE",[user.id]);
+      if(!agreement.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"agreement_required_before_document"});}
+      const id=crypto.randomUUID();
+      const previous=await client.query<{id:string}>("SELECT id FROM creator_identity_documents WHERE user_id=$1 AND status<>'SUPERSEDED' ORDER BY uploaded_at DESC LIMIT 1 FOR UPDATE",[user.id]);
+      await client.query("INSERT INTO creator_identity_documents(id,user_id,storage_reference,document_type,mime_type,file_size,checksum) VALUES($1,$2,$3,$4,$5,$6,$7)",[id,user.id,stored.storageReference,request.query.documentType,stored.mimeType,stored.fileSize,stored.checksum]);
+      if(previous.rows[0])await client.query("UPDATE creator_identity_documents SET status='SUPERSEDED',replaced_at=NOW(),superseded_by=$1 WHERE id=$2",[id,previous.rows[0].id]);
+      if(account.rows[0].status==="ONBOARDING_IDENTITY"){
+        await client.query("UPDATE creator_accounts SET status='READY_FOR_REVIEW',administrative_review_status='NOT_REVIEWED',updated_at=NOW() WHERE user_id=$1",[user.id]);
+        await client.query("INSERT INTO creator_status_history(id,user_id,from_status,to_status,reason_code,actor_id) VALUES($1,$2,'ONBOARDING_IDENTITY','READY_FOR_REVIEW','identity_document_uploaded',$2)",[crypto.randomUUID(),user.id]);
+      }
+      await client.query("INSERT INTO audit_events(id,actor_id,subject_user_id,event_type,metadata) VALUES($1,$2,$2,'identity_document_uploaded',jsonb_build_object('documentId',$3::text,'mimeType',$4::text,'replacement',$5::boolean))",[crypto.randomUUID(),user.id,id,stored.mimeType,Boolean(previous.rows[0])]);
+      await client.query("INSERT INTO notifications(id,user_id,kind,title,body,notification_key) VALUES($1,$2,'creator_document','Document received','Your private identity document was received. Upload does not mean it has been verified.',$3) ON CONFLICT DO NOTHING",[crypto.randomUUID(),user.id,`creator-document-received:${id}`]);
+      await client.query("COMMIT");return reply.code(201).send({document:{id,status:"UPLOADED",documentType:request.query.documentType,mimeType:stored.mimeType,fileSize:stored.fileSize},creatorStatus:account.rows[0].status==="ONBOARDING_IDENTITY"?"READY_FOR_REVIEW":account.rows[0].status});
+    }catch(error){await client.query("ROLLBACK");throw error;}finally{await client.end();}
+  });
+  api.post<{Body:{agreementVersion:string;signerName:string;ageConfirmed:true;agreementConfirmed:true}}>("/api/creator/onboarding/agreement/accept", {schema:{body:mutationSchemas.creatorAgreementAcceptance}}, async(request,reply)=>{
+    const user=await currentUser(request); if(!user)return reply.code(401).send({error:"session_required"});
+    const client=database();await client.connect();
+    try{await client.query("BEGIN");
+      const account=await client.query<{status:CreatorStatus}>("SELECT status FROM creator_accounts WHERE user_id=$1 FOR UPDATE",[user.id]);
+      if(account.rows[0]?.status!=="ONBOARDING_AGREEMENT"){await client.query("ROLLBACK");return reply.code(409).send({error:"agreement_step_unavailable"});}
+      const version=await client.query<{id:string}>("SELECT id FROM creator_agreement_versions WHERE version=$1 AND is_current=TRUE",[request.body.agreementVersion]);
+      if(!version.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"agreement_version_outdated"});}
+      const auditId=crypto.randomUUID();
+      await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type,metadata) VALUES ($1,$2,$2,'creator_agreement_accepted',jsonb_build_object('version',$3::text,'ageConfirmed',TRUE))",[auditId,user.id,request.body.agreementVersion]);
+      await client.query("INSERT INTO creator_agreement_acceptances (id,user_id,agreement_version_id,signer_name,age_confirmed,agreement_confirmed,audit_event_id) VALUES ($1,$2,$3,$4,TRUE,TRUE,$5)",[crypto.randomUUID(),user.id,version.rows[0].id,request.body.signerName.trim(),auditId]);
+      await client.query("UPDATE creator_accounts SET status='ONBOARDING_IDENTITY',updated_at=NOW() WHERE user_id=$1",[user.id]);
+      await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'ONBOARDING_AGREEMENT','ONBOARDING_IDENTITY','agreement_accepted',$2)",[crypto.randomUUID(),user.id]);
+      await client.query("COMMIT");return {status:"ONBOARDING_IDENTITY"};
+    }catch(error){await client.query("ROLLBACK");throw error;}finally{await client.end();}
+  });
+  api.post("/api/creator/onboarding/activate",async(request,reply)=>{
+    const sessionUser=await currentUser(request);if(!sessionUser)return reply.code(401).send({error:"session_required"});
+    const client=database();await client.connect();
+    try{await client.query("BEGIN");
+      const locked=await client.query("SELECT u.id,u.handle,u.display_name,u.role,u.locale,u.test_age_acknowledged_at,u.is_banned,c.status FROM users u JOIN creator_accounts c ON c.user_id=u.id WHERE u.id=$1 FOR UPDATE",[sessionUser.id]);
+      const user=locked.rows[0];if(!user){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_onboarding_not_started"});}
+      if(user.status==="ACTIVE"){await client.query("COMMIT");return {status:"ACTIVE",user:sessionUser};}
+      if(user.is_banned||user.status==="SUSPENDED"){await client.query("ROLLBACK");return reply.code(403).send({error:"creator_suspended"});}
+      if(user.status!=="READY_FOR_REVIEW"){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_onboarding_incomplete"});}
+      const profile=await client.query("SELECT * FROM creator_onboarding WHERE user_id=$1 AND profile_completed_at IS NOT NULL",[sessionUser.id]);
+      const identity=await client.query("SELECT 1 FROM creator_identity_documents WHERE user_id=$1 AND status IN ('UPLOADED','REVIEWED') ORDER BY uploaded_at DESC LIMIT 1",[sessionUser.id]);
+      const agreement=await client.query("SELECT 1 FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=$1 AND v.is_current=TRUE AND a.age_confirmed=TRUE AND a.agreement_confirmed=TRUE",[sessionUser.id]);
+      if(!profile.rows[0]||!identity.rows[0]||!agreement.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_requirements_incomplete"});}
+      await client.query("UPDATE creator_accounts SET status='PENDING_REVIEW',updated_at=NOW() WHERE user_id=$1",[sessionUser.id]);
+      await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'READY_FOR_REVIEW','PENDING_REVIEW','activation_submitted',$2)",[crypto.randomUUID(),sessionUser.id]);
+      await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type) VALUES ($1,$2,$2,'creator_activation_submitted')",[crypto.randomUUID(),sessionUser.id]);
+      if(!config.creatorAutoApproval){await client.query("COMMIT");return {status:"PENDING_REVIEW"};}
+      await client.query("UPDATE creator_accounts SET status='APPROVED',updated_at=NOW() WHERE user_id=$1",[sessionUser.id]);
+      await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'PENDING_REVIEW','APPROVED','automatic_approval',$2)",[crypto.randomUUID(),sessionUser.id]);
+      const draft=profile.rows[0];
+      await client.query("UPDATE users SET handle=$1,display_name=$2,updated_at=NOW() WHERE id=$3",[draft.creator_handle,draft.display_name,sessionUser.id]);
+      await client.query("INSERT INTO streamer_profiles (user_id,bio,category,schedule_timezone,is_featured) VALUES ($1,$2,$3,$4,FALSE) ON CONFLICT (user_id) DO UPDATE SET bio=EXCLUDED.bio,category=EXCLUDED.category,schedule_timezone=EXCLUDED.schedule_timezone",[sessionUser.id,draft.bio,draft.category,draft.timezone]);
+      await client.query("UPDATE creator_accounts SET status='ACTIVE',activation_method='AUTOMATIC',activated_at=NOW(),updated_at=NOW() WHERE user_id=$1",[sessionUser.id]);
+      await client.query("INSERT INTO creator_status_history (id,user_id,from_status,to_status,reason_code,actor_id) VALUES ($1,$2,'APPROVED','ACTIVE','activation_completed',$2)",[crypto.randomUUID(),sessionUser.id]);
+      await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type) VALUES ($1,$2,$2,'creator_automatic_approval_completed')",[crypto.randomUUID(),sessionUser.id]);
+      await client.query("INSERT INTO notifications(id,user_id,kind,title,body,notification_key) VALUES($1,$2,'creator_review','Creator account activated','Your creator account is active. You can now open Streamer Studio.',$3) ON CONFLICT DO NOTHING",[crypto.randomUUID(),sessionUser.id,`creator-activated:${sessionUser.id}`]);
+      await client.query("COMMIT");
+      return {status:"ACTIVE",user:{id:user.id,handle:draft.creator_handle,displayName:draft.display_name,role:user.role,locale:user.locale,ageAcknowledged:Boolean(user.test_age_acknowledged_at)}};
+    }catch(error){await client.query("ROLLBACK");if((error as {code?:string}).code==="23505")return reply.code(409).send({error:"creator_handle_unavailable"});throw error;}finally{await client.end();}
   });
   api.get<{ Params: { filename: string } }>(
     "/api/media/avatars/:filename",
@@ -808,6 +950,11 @@ export function buildApi() {
     reply.clearCookie("stream_csrf", { path: "/" });
     return reply.code(204).send();
   });
+  api.get("/api/account/profile", async (request, reply) => {
+    const user = await currentUser(request);
+    if (!user) return reply.code(401).send({ error: "session_required" });
+    return { user };
+  });
   api.patch<{
     Body: { displayName?: string; locale?: "en" | "zh" };
   }>(
@@ -833,6 +980,10 @@ export function buildApi() {
         );
         await client.query(
           "INSERT INTO account_security_events (id,user_id,event_type) VALUES ($1,$2,'profile_updated')",
+          [crypto.randomUUID(), user.id],
+        );
+        await client.query(
+          "INSERT INTO audit_events (id,actor_id,subject_user_id,event_type) VALUES ($1,$2,$2,'account_profile_updated')",
           [crypto.randomUUID(), user.id],
         );
         await client.query("COMMIT");
@@ -914,6 +1065,16 @@ export function buildApi() {
           user.id,
           clientLabelForUserAgent(request.headers["user-agent"]),
         );
+        const auditClient = database();
+        await auditClient.connect();
+        try {
+          await auditClient.query(
+            "INSERT INTO audit_events (id,actor_id,subject_user_id,event_type) VALUES ($1,$2,$2,'account_password_changed')",
+            [crypto.randomUUID(), user.id],
+          );
+        } finally {
+          await auditClient.end();
+        }
         setSessionCookies(reply, session);
         return { changed: true };
       } catch (error) {
@@ -1185,7 +1346,7 @@ export function buildApi() {
           last_visited_at: Date | null;
           [key: string]: unknown;
         }>(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.goal_text, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id, u.display_name AS streamer_name, p.avatar_url, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count, (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at, ($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following, (SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count, (SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%') AND ($2='' OR p.category=$2) AND ($3='' OR r.stream_language=$3) LIMIT 100`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.goal_text, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id, u.display_name AS streamer_name, p.avatar_url, p.category, p.bio, p.schedule_text, p.next_stream_at, p.schedule_timezone, (SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count, (SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at, ($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following, (SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count, (SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND ($1='' OR r.title ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%' OR u.handle ILIKE '%' || $1 || '%' OR p.category ILIKE '%' || $1 || '%' OR $1=ANY(r.stream_tags)) AND ($2='' OR p.category=$2) AND ($3='' OR r.stream_language=$3) LIMIT 100`,
           [query, category, language, viewer?.id ?? null],
         );
         const rooms = await Promise.all(result.rows.map(async (room) => {
@@ -1233,7 +1394,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT DISTINCT category FROM streamer_profiles ORDER BY category LIMIT 100",
+        "SELECT DISTINCT p.category FROM streamer_profiles p JOIN creator_accounts ca ON ca.user_id=p.user_id AND ca.status='ACTIVE' JOIN live_rooms r ON r.streamer_id=p.user_id AND r.publication_status='published' ORDER BY p.category LIMIT 100",
       );
       return { categories: result.rows.map((row) => row.category) };
     } finally {
@@ -1247,7 +1408,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT u.id,u.handle,u.display_name,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state,r.broadcast_status_source FROM users u JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
+          "SELECT u.id,u.handle,u.display_name,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=u.id),0)::int AS follower_count,r.slug AS room_slug,r.status AS room_status,r.broadcast_state,r.broadcast_status_source FROM users u JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id LEFT JOIN live_rooms r ON r.streamer_id=u.id AND r.publication_status='published' WHERE u.id=$1",
           [request.params.streamerId],
         );
         if (!result.rows[0])
@@ -1264,11 +1425,13 @@ export function buildApi() {
       const viewer = (await requireRole(request, reply, "audience")) as
         DemoUser | undefined;
       if (!viewer) return;
+      if (viewer.id === request.params.streamerId)
+        return reply.code(400).send({ error: "cannot_follow_self" });
       const client = database();
       await client.connect();
       try {
         const target = await client.query<{ id: string; slug: string | null }>(
-          "SELECT u.id,r.slug FROM users u LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
+          "SELECT u.id,r.slug FROM users u JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' LEFT JOIN live_rooms r ON r.streamer_id=u.id AND r.publication_status='published' WHERE u.id=$1",
           [request.params.streamerId],
         );
         if (!target.rows[0])
@@ -1328,8 +1491,9 @@ export function buildApi() {
                 f.created_at AS followed_at,f.reminder_enabled
          FROM follows f
          JOIN users u ON u.id=f.streamer_id
+         JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE'
          JOIN streamer_profiles p ON p.user_id=u.id
-         JOIN live_rooms r ON r.streamer_id=u.id
+         JOIN live_rooms r ON r.streamer_id=u.id AND r.publication_status='published'
          WHERE f.follower_id=$1
          ORDER BY (r.broadcast_state='live' AND r.broadcast_status_source='cloudflare') DESC,
                   p.next_stream_at ASC NULLS LAST,f.created_at DESC
@@ -1446,7 +1610,7 @@ export function buildApi() {
       await client.connect();
       try {
         const target = await client.query<{ slug: string | null }>(
-          "SELECT r.slug FROM users u LEFT JOIN live_rooms r ON r.streamer_id=u.id WHERE u.id=$1 AND u.role='streamer'",
+          "SELECT r.slug FROM users u JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' LEFT JOIN live_rooms r ON r.streamer_id=u.id AND r.publication_status='published' WHERE u.id=$1",
           [request.params.streamerId],
         );
         const deleted = await client.query(
@@ -1538,7 +1702,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT DISTINCT ON (r.id) r.slug,r.title,u.display_name AS streamer_name,v.visited_at FROM room_visits v JOIN live_rooms r ON r.id=v.room_id JOIN users u ON u.id=r.streamer_id WHERE v.user_id=$1 ORDER BY r.id,v.visited_at DESC LIMIT 20",
+        "SELECT DISTINCT ON (r.id) r.slug,r.title,u.display_name AS streamer_name,v.visited_at FROM room_visits v JOIN live_rooms r ON r.id=v.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' JOIN users u ON u.id=r.streamer_id WHERE v.user_id=$1 AND r.publication_status='published' ORDER BY r.id,v.visited_at DESC LIMIT 20",
         [viewer.id],
       );
       return { rooms: result.rows };
@@ -1553,7 +1717,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.broadcast_transport, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id,u.display_name AS streamer_name, p.avatar_url,p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1`,
+          `SELECT r.slug, r.title, r.status, r.broadcast_state, r.broadcast_checked_at, r.broadcast_status_message, r.broadcast_status_source, r.broadcast_transport, r.stream_language, r.stream_tags, r.stream_thumbnail_url, u.id AS streamer_id,u.display_name AS streamer_name, p.avatar_url,p.category, p.bio, p.schedule_text,p.next_stream_at,p.schedule_timezone FROM live_rooms r JOIN users u ON u.id = r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id = u.id WHERE r.slug = $1 AND r.publication_status='published'`,
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -1573,7 +1737,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT r.slug,r.title,r.broadcast_state,r.broadcast_status_source,r.stream_language,r.stream_thumbnail_url,u.display_name AS streamer_name,u.handle,p.avatar_url,p.category,p.bio FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1",
+          "SELECT r.slug,r.title,r.broadcast_state,r.broadcast_status_source,r.stream_language,r.stream_thumbnail_url,u.display_name AS streamer_name,u.handle,p.avatar_url,p.category,p.bio FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1 AND r.publication_status='published'",
           [slug],
         );
         if (!result.rows[0]) return reply.code(404).send({ error: "preview_not_found" });
@@ -1597,7 +1761,7 @@ export function buildApi() {
       await client.connect();
       try {
         const room = await client.query<{ id: string }>(
-          "SELECT id FROM live_rooms WHERE slug=$1",
+          "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
           [request.params.slug],
         );
         if (!room.rows[0])
@@ -1620,9 +1784,16 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT m.id,m.body,m.created_at,u.id AS sender_id,u.display_name,u.role FROM chat_messages m JOIN live_rooms r ON r.id=m.room_id JOIN users u ON u.id=m.sender_id WHERE r.slug=$1 AND m.deleted_at IS NULL ORDER BY m.created_at DESC LIMIT 40",
+          "SELECT m.id,m.body,m.created_at,u.id AS sender_id,u.display_name,u.role FROM chat_messages m JOIN live_rooms r ON r.id=m.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' JOIN users u ON u.id=m.sender_id WHERE r.slug=$1 AND r.publication_status='published' AND m.deleted_at IS NULL ORDER BY m.created_at DESC LIMIT 40",
           [request.params.slug],
         );
+        if (!result.rows.length) {
+          const room = await client.query(
+            "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
+            [request.params.slug],
+          );
+          if (!room.rows[0]) return reply.code(404).send({ error: "room_not_found" });
+        }
         return {
           messages: result.rows.reverse().map((message) => ({
             id: message.id,
@@ -1657,7 +1828,7 @@ export function buildApi() {
     await client.connect();
     try {
       const room = await client.query<{ id: string }>(
-        "SELECT id FROM live_rooms WHERE slug=$1",
+        "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
         [request.params.slug],
       );
       if (!room.rows[0])
@@ -1685,7 +1856,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          "SELECT broadcast_state,broadcast_checked_at,broadcast_status_message,broadcast_status_source,broadcast_transport FROM live_rooms WHERE slug=$1",
+          "SELECT r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -2332,7 +2503,7 @@ export function buildApi() {
           broadcast_state: string;
           broadcast_transport: BroadcastTransport;
         }>(
-          "SELECT id,cloudflare_live_input_id,broadcast_state,broadcast_transport FROM live_rooms WHERE slug=$1",
+          "SELECT r.id,r.cloudflare_live_input_id,r.broadcast_state,r.broadcast_transport FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
           [request.params.slug],
         );
         const room = result.rows[0];
@@ -2425,12 +2596,17 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
+        const publicRoom = await client.query(
+          "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
+          [request.params.slug],
+        );
+        if (!publicRoom.rows[0]) return reply.code(404).send({ error: "room_not_found" });
         const result = await client.query<{
           cloudflare_live_input_id: string | null;
           broadcast_state: string;
           broadcast_transport: BroadcastTransport;
         }>(
-          "SELECT cloudflare_live_input_id,broadcast_state,broadcast_transport FROM live_rooms WHERE slug=$1",
+          "SELECT r.cloudflare_live_input_id,r.broadcast_state,r.broadcast_transport FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
           [request.params.slug],
         );
         const room = result.rows[0];
@@ -2748,13 +2924,18 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
+        const publicRoom = await client.query(
+          "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
+          [request.params.slug],
+        );
+        if (!publicRoom.rows[0]) return reply.code(404).send({ error: "room_not_found" });
         const result = await client.query(
-          "SELECT a.id,a.title,a.coin_cost,a.duration_label,a.display_order,r.goal_text,r.goal_target,r.goal_progress FROM room_actions a JOIN live_rooms r ON r.id=a.room_id WHERE r.slug=$1 AND a.is_active=TRUE ORDER BY a.display_order LIMIT 50",
+          "SELECT a.id,a.title,a.coin_cost,a.duration_label,a.display_order,r.goal_text,r.goal_target,r.goal_progress FROM room_actions a JOIN live_rooms r ON r.id=a.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published' AND a.is_active=TRUE ORDER BY a.display_order LIMIT 50",
           [request.params.slug],
         );
         if (!result.rows.length) {
           const room = await client.query(
-            "SELECT goal_text,goal_target,goal_progress FROM live_rooms WHERE slug=$1",
+            "SELECT r.goal_text,r.goal_target,r.goal_progress FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
             [request.params.slug],
           );
           if (!room.rows[0])
@@ -2801,7 +2982,7 @@ export function buildApi() {
         room_id: string;
         broadcast_state: string;
       }>(
-        "SELECT a.id,a.coin_cost,a.title,r.streamer_id,r.id room_id,r.broadcast_state FROM room_actions a JOIN live_rooms r ON r.id=a.room_id WHERE r.slug=$1 AND a.id=$2 AND a.is_active=TRUE FOR UPDATE",
+        "SELECT a.id,a.coin_cost,a.title,r.streamer_id,r.id room_id,r.broadcast_state FROM room_actions a JOIN live_rooms r ON r.id=a.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published' AND a.id=$2 AND a.is_active=TRUE FOR UPDATE OF a,r",
         [request.params.slug, request.params.actionId],
       );
       const item = action.rows[0];
@@ -2902,7 +3083,7 @@ export function buildApi() {
         return { duplicate: true };
       }
       const room = await client.query<{ id: string; streamer_id: string; broadcast_state: string }>(
-        "SELECT id, streamer_id, broadcast_state FROM live_rooms WHERE slug = $1 FOR UPDATE",
+        "SELECT r.id,r.streamer_id,r.broadcast_state FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published' FOR UPDATE OF r",
         [request.params.slug],
       );
       const gift = await client.query<{
@@ -2920,6 +3101,10 @@ export function buildApi() {
       if (!room.rows[0] || !gift.rows[0]) {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "room_or_gift_not_found" });
+      }
+      if (room.rows[0].streamer_id === sender.id) {
+        await client.query("ROLLBACK");
+        return reply.code(400).send({ error: "cannot_gift_self" });
       }
       if (room.rows[0].broadcast_state !== "live") {
         await client.query("ROLLBACK");
@@ -3322,6 +3507,12 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
+        const publicRoom = await client.query(
+          "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
+          [request.params.slug],
+        );
+        if (!publicRoom.rows[0])
+          return reply.code(404).send({ error: "room_not_found" });
         const result = await client.query<{
           id: string;
           mode: "ticket" | "per_minute";
@@ -3329,7 +3520,7 @@ export function buildApi() {
           per_minute_cost: number;
           status: string;
         }>(
-          "SELECT s.id,s.mode,s.ticket_cost,s.per_minute_cost,s.status FROM private_show_sessions s JOIN live_rooms r ON r.id=s.room_id WHERE r.slug=$1 AND s.status='live'",
+          "SELECT s.id,s.mode,s.ticket_cost,s.per_minute_cost,s.status FROM private_show_sessions s JOIN live_rooms r ON r.id=s.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published' AND s.status='live'",
           [request.params.slug],
         );
         const session = result.rows[0];
@@ -3383,7 +3574,7 @@ export function buildApi() {
           per_minute_cost: number;
           streamer_id: string;
         }>(
-          "SELECT s.id,s.mode,s.ticket_cost,s.per_minute_cost,r.streamer_id FROM private_show_sessions s JOIN live_rooms r ON r.id=s.room_id WHERE r.slug=$1 AND s.status='live' FOR UPDATE",
+          "SELECT s.id,s.mode,s.ticket_cost,s.per_minute_cost,r.streamer_id FROM private_show_sessions s JOIN live_rooms r ON r.id=s.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published' AND s.status='live' FOR UPDATE OF s,r",
           [request.params.slug],
         );
         const show = session.rows[0];
@@ -3464,7 +3655,7 @@ export function buildApi() {
     await client.connect();
     try {
       const result = await client.query(
-        "SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,r.stream_language,r.stream_tags,r.stream_thumbnail_url,r.chat_slow_mode_seconds,r.blocked_terms,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
+        "SELECT r.slug,r.title,r.status,r.publication_status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.goal_text,r.goal_target,r.goal_progress,r.private_show_enabled,r.private_show_mode,r.private_show_ticket_cost,r.private_show_per_minute_cost,r.stream_language,r.stream_tags,r.stream_thumbnail_url,r.chat_slow_mode_seconds,r.blocked_terms,p.avatar_url,p.bio,p.category,p.schedule_text,p.next_stream_at,p.schedule_timezone,COALESCE((SELECT SUM(amount) FROM wallet_ledger w WHERE w.user_id=r.streamer_id AND w.reference_type IN ('gift','private_show','room_action')),0)::int AS test_earnings,COALESCE((SELECT COUNT(*) FROM follows f WHERE f.streamer_id=r.streamer_id),0)::int AS followers FROM live_rooms r JOIN streamer_profiles p ON p.user_id=r.streamer_id WHERE r.streamer_id=$1",
         [user.id],
       );
       return {
@@ -3479,6 +3670,34 @@ export function buildApi() {
     } finally {
       await client.end();
     }
+  });
+  api.post<{Body:{title:string;category?:string;streamLanguage?:"en"|"zh"}}>(
+    "/api/studio/rooms",
+    {schema:{body:mutationSchemas.studioRoomCreate}},
+    async(request,reply)=>{
+      const creator=(await requireRole(request,reply,"streamer")) as DemoUser|undefined;
+      if(!creator)return;
+      const client=database();await client.connect();
+      try{await client.query("BEGIN");
+        const existing=await client.query("SELECT slug,publication_status FROM live_rooms WHERE streamer_id=$1",[creator.id]);
+        if(existing.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_room_exists",room:existing.rows[0]});}
+        const profile=await client.query("SELECT category FROM streamer_profiles WHERE user_id=$1",[creator.id]);
+        if(!profile.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_profile_missing"});}
+        const created=await client.query("INSERT INTO live_rooms (id,streamer_id,slug,title,status,publication_status,stream_language,cloudflare_live_input_id) VALUES ($1,$2,$3,$4,'offline','draft',$5,$6) RETURNING slug,title,publication_status,broadcast_state",[crypto.randomUUID(),creator.id,creator.handle,request.body.title.trim(),request.body.streamLanguage??creator.locale,config.cloudflare.liveInputId??null]);
+        if(request.body.category)await client.query("UPDATE streamer_profiles SET category=$1 WHERE user_id=$2",[request.body.category.trim(),creator.id]);
+        await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type,metadata) VALUES ($1,$2,$2,'room_created',jsonb_build_object('slug',$3::text,'publicationStatus','draft'))",[crypto.randomUUID(),creator.id,created.rows[0].slug]);
+        await client.query("COMMIT");return reply.code(201).send({room:created.rows[0]});
+      }catch(error){await client.query("ROLLBACK");if((error as {code?:string}).code==="23505")return reply.code(409).send({error:"creator_room_exists"});throw error;}finally{await client.end();}
+    }
+  );
+  api.post<{Params:{slug:string}}>("/api/studio/rooms/:slug/publish",async(request,reply)=>{
+    const creator=(await requireRole(request,reply,"streamer")) as DemoUser|undefined;if(!creator)return;
+    const client=database();await client.connect();
+    try{const result=await client.query("UPDATE live_rooms SET publication_status='published',updated_at=NOW() WHERE slug=$1 AND streamer_id=$2 AND publication_status='draft' RETURNING slug,title,publication_status,broadcast_state",[request.params.slug,creator.id]);
+      if(!result.rows[0])return reply.code(409).send({error:"room_not_publishable"});
+      await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type,metadata) VALUES ($1,$2,$2,'room_published',jsonb_build_object('slug',$3::text))",[crypto.randomUUID(),creator.id,request.params.slug]);
+      return {room:result.rows[0]};
+    }finally{await client.end();}
   });
   api.get<{ Params: { slug: string } }>(
     "/api/streamer/rooms/:slug/insights",
@@ -3610,8 +3829,14 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
+        const publicRoom = await client.query(
+          "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
+          [request.params.slug],
+        );
+        if (!publicRoom.rows[0])
+          return reply.code(404).send({ error: "room_not_found" });
         const result = await client.query(
-          "SELECT * FROM (SELECT u.display_name AS sender,gc.name_en AS label,g.coin_cost,'gift'::text AS support_type,g.created_at FROM gifts g JOIN users u ON u.id=g.sender_id JOIN gift_catalog gc ON gc.id=g.gift_id JOIN live_rooms r ON r.id=g.room_id WHERE r.slug=$1 UNION ALL SELECT u.display_name AS sender,a.title AS label,p.coin_cost,'action'::text AS support_type,p.created_at FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id JOIN users u ON u.id=p.viewer_id JOIN live_rooms r ON r.id=a.room_id WHERE r.slug=$1) support ORDER BY created_at DESC LIMIT 6",
+          "SELECT * FROM (SELECT u.display_name AS sender,gc.name_en AS label,g.coin_cost,'gift'::text AS support_type,g.created_at FROM gifts g JOIN users u ON u.id=g.sender_id JOIN gift_catalog gc ON gc.id=g.gift_id JOIN live_rooms r ON r.id=g.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published' UNION ALL SELECT u.display_name AS sender,a.title AS label,p.coin_cost,'action'::text AS support_type,p.created_at FROM room_action_purchases p JOIN room_actions a ON a.id=p.action_id JOIN users u ON u.id=p.viewer_id JOIN live_rooms r ON r.id=a.room_id JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published') support ORDER BY created_at DESC LIMIT 6",
           [request.params.slug],
         );
         return { support: result.rows };
@@ -3923,6 +4148,70 @@ export function buildApi() {
     }
     },
   );
+  api.get<{Querystring:{filter?:string;search?:string;page?:string;limit?:string;sort?:string}}>("/api/admin/creator-reviews",async(request,reply)=>{
+    const admin=await requireAdminPermission(request,reply,"creator_review.read");if(!admin)return;
+    const limit=Math.min(50,Math.max(1,Number(request.query.limit??20)||20)),page=Math.max(1,Number(request.query.page??1)||1);
+    const filter=request.query.filter??"all",search=(request.query.search??"").trim();
+    const clauses=["($1='' OR u.display_name ILIKE '%'||$1||'%' OR u.handle ILIKE '%'||$1||'%' OR o.creator_handle ILIKE '%'||$1||'%' OR u.id::text=$1)"];
+    if(filter==="new")clauses.push("c.status='READY_FOR_REVIEW'");
+    else if(filter==="auto_unreviewed")clauses.push("c.status='ACTIVE' AND c.activation_method='AUTOMATIC' AND c.administrative_review_status='NOT_REVIEWED'");
+    else if(filter==="pending")clauses.push("c.status='PENDING_REVIEW'");
+    else if(filter==="uploaded")clauses.push("d.status='UPLOADED'");
+    else if(filter==="needs_reupload")clauses.push("d.status='NEEDS_REUPLOAD'");
+    else if(filter==="active")clauses.push("c.status='ACTIVE'");
+    else if(filter==="rejected")clauses.push("c.status='REJECTED'");
+    else if(filter==="suspended")clauses.push("c.status='SUSPENDED'");
+    const client=database();await client.connect();try{
+      const result=await client.query(`SELECT u.id AS user_id,u.handle AS account_handle,u.display_name,c.status AS creator_status,c.activation_method,c.administrative_review_status,c.activated_at,c.updated_at,o.creator_handle,o.profile_completed_at,d.id AS document_id,d.status AS document_status,d.uploaded_at,ag.accepted_at,ag.agreement_version,COUNT(*) OVER()::int AS total FROM creator_accounts c JOIN users u ON u.id=c.user_id LEFT JOIN creator_onboarding o ON o.user_id=u.id LEFT JOIN LATERAL (SELECT * FROM creator_identity_documents x WHERE x.user_id=u.id AND x.status<>'SUPERSEDED' ORDER BY x.uploaded_at DESC LIMIT 1)d ON TRUE LEFT JOIN LATERAL (SELECT a.accepted_at,v.version AS agreement_version FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=u.id AND v.is_current=TRUE ORDER BY a.accepted_at DESC LIMIT 1)ag ON TRUE WHERE ${clauses.join(" AND ")} ORDER BY c.updated_at DESC,u.id LIMIT $2 OFFSET $3`,[search,limit,(page-1)*limit]);
+      return {items:result.rows,page,limit,total:result.rows[0]?.total??0};
+    }finally{await client.end();}
+  });
+  api.get<{Params:{creatorId:string}}>("/api/admin/creator-reviews/:creatorId",async(request,reply)=>{
+    const admin=await requireAdminPermission(request,reply,"creator_review.read");if(!admin)return;
+    const client=database();await client.connect();try{
+      const summary=await client.query("SELECT u.id AS user_id,u.handle AS account_handle,u.display_name,u.created_at AS account_created_at,u.is_banned,c.status AS creator_status,c.reason_code,c.activation_method,c.activated_at,c.administrative_review_status,o.creator_handle,o.display_name AS creator_name,o.bio,o.category,o.primary_language,o.timezone,o.content_tags,o.profile_completed_at,ag.age_confirmed,ag.agreement_confirmed,ag.accepted_at,ag.audit_event_id,ag.agreement_version,d.id AS document_id,d.document_type,d.mime_type,d.file_size,d.status AS document_status,d.uploaded_at,d.reviewed_at,d.reviewed_by,d.review_reason_code FROM users u JOIN creator_accounts c ON c.user_id=u.id LEFT JOIN creator_onboarding o ON o.user_id=u.id LEFT JOIN LATERAL (SELECT a.age_confirmed,a.agreement_confirmed,a.accepted_at,a.audit_event_id,v.version AS agreement_version FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=u.id AND v.is_current=TRUE ORDER BY a.accepted_at DESC LIMIT 1)ag ON TRUE LEFT JOIN LATERAL(SELECT * FROM creator_identity_documents x WHERE x.user_id=u.id AND x.status<>'SUPERSEDED' ORDER BY x.uploaded_at DESC LIMIT 1)d ON TRUE WHERE u.id=$1",[request.params.creatorId]);
+      const history=await client.query("SELECT from_status,to_status,reason_code,actor_id,created_at FROM creator_status_history WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100",[request.params.creatorId]);
+      const decisions=await client.query("SELECT action,reason_code,user_facing_reason,reviewer_id,created_at FROM creator_review_decisions WHERE creator_user_id=$1 ORDER BY created_at DESC LIMIT 100",[request.params.creatorId]);
+      const resources=await client.query("SELECT r.slug,r.title,r.publication_status,r.broadcast_state,r.created_at FROM live_rooms r WHERE r.streamer_id=$1 ORDER BY r.created_at DESC LIMIT 50",[request.params.creatorId]);
+      if(!summary.rows[0])return reply.code(404).send({error:"creator_review_not_found"});
+      return {creator:summary.rows[0],history:history.rows,decisions:decisions.rows,resources:resources.rows};
+    }finally{await client.end();}
+  });
+  api.post<{Params:{creatorId:string};Body:{documentId:string}}>("/api/admin/creator-reviews/:creatorId/document-view",async(request,reply)=>{
+    const admin=await requireAdminPermission(request,reply,"creator_document.view");if(!admin)return;
+    const client=database();await client.connect();try{
+      const document=await client.query("SELECT id FROM creator_identity_documents WHERE id=$1 AND user_id=$2 AND status<>'DELETED'",[request.body?.documentId,request.params.creatorId]);if(!document.rows[0])return reply.code(404).send({error:"identity_document_not_found"});
+      const token=crypto.randomUUID(),auditId=crypto.randomUUID();identityDocumentViews.set(token,{adminId:admin.id,documentId:request.body.documentId,expiresAt:Date.now()+60_000});
+      await client.query("INSERT INTO audit_events(id,actor_id,subject_user_id,event_type,metadata) VALUES($1,$2,$3,'identity_document_view_authorized',jsonb_build_object('documentId',$4::text,'requestId',$5::text))",[auditId,admin.id,request.params.creatorId,request.body.documentId,request.id]);
+      return {viewPath:`/api/admin/creator-documents/view/${token}`,expiresInSeconds:60,auditEventId:auditId};
+    }finally{await client.end();}
+  });
+  api.get<{Params:{token:string}}>("/api/admin/creator-documents/view/:token",async(request,reply)=>{
+    const admin=await requireAdminPermission(request,reply,"creator_document.view");if(!admin)return;
+    const grant=identityDocumentViews.get(request.params.token);identityDocumentViews.delete(request.params.token);
+    if(!grant||grant.adminId!==admin.id||grant.expiresAt<Date.now())return reply.code(404).send({error:"document_view_expired"});
+    const client=database();await client.connect();try{const result=await client.query("SELECT user_id,storage_reference,mime_type FROM creator_identity_documents WHERE id=$1 AND status<>'DELETED'",[grant.documentId]);if(!result.rows[0])return reply.code(404).send({error:"identity_document_not_found"});
+      await client.query("INSERT INTO audit_events(id,actor_id,subject_user_id,event_type,metadata) VALUES($1,$2,$3,'identity_document_viewed',jsonb_build_object('documentId',$4::text,'requestId',$5::text))",[crypto.randomUUID(),admin.id,result.rows[0].user_id,grant.documentId,request.id]);
+      const buffer=await readIdentityDocument({storagePath:config.identityDocumentStoragePath,encryptionKey:config.identityDocumentEncryptionKey,storageReference:result.rows[0].storage_reference});reply.header("cache-control","no-store");reply.header("content-disposition","inline");return reply.type(result.rows[0].mime_type).send(buffer);
+    }finally{await client.end();}
+  });
+  api.post<{Params:{creatorId:string};Body:{action:string;reasonCode:string;userFacingReason?:string;internalNotes?:string;idempotencyKey:string}}>("/api/admin/creator-reviews/:creatorId/actions",async(request,reply)=>{
+    const action=request.body?.action;const permission=["SUSPENDED","REACTIVATED"].includes(action)?"creator_access.suspend":"creator_review.decide";
+    const admin=await requireAdminPermission(request,reply,permission);if(!admin)return;
+    if(!["DOCUMENT_REVIEWED","REUPLOAD_REQUESTED","APPROVED","REJECTED","SUSPENDED","REACTIVATED"].includes(action)||!request.body.reasonCode?.trim()||!request.body.idempotencyKey?.trim())return reply.code(400).send({error:"invalid_creator_review_action"});
+    const client=database();await client.connect();try{await client.query("BEGIN");
+      const duplicate=await client.query("SELECT action,next_creator_status FROM creator_review_decisions WHERE reviewer_id=$1 AND idempotency_key=$2",[admin.id,request.body.idempotencyKey]);if(duplicate.rows[0]){await client.query("COMMIT");return {decision:duplicate.rows[0],idempotent:true};}
+      const account=await client.query<{status:CreatorStatus}>("SELECT status FROM creator_accounts WHERE user_id=$1 FOR UPDATE",[request.params.creatorId]);if(!account.rows[0]){await client.query("ROLLBACK");return reply.code(404).send({error:"creator_review_not_found"});}
+      const document=await client.query<{id:string,status:string}>("SELECT id,status FROM creator_identity_documents WHERE user_id=$1 AND status<>'SUPERSEDED' ORDER BY uploaded_at DESC LIMIT 1 FOR UPDATE",[request.params.creatorId]);
+      let next=account.rows[0].status;
+      if(action==="DOCUMENT_REVIEWED"){if(!document.rows[0]||document.rows[0].status!=="UPLOADED"){await client.query("ROLLBACK");return reply.code(409).send({error:"document_transition_invalid"});}await client.query("UPDATE creator_identity_documents SET status='REVIEWED',reviewed_at=NOW(),reviewed_by=$1,review_reason_code=$2,internal_notes=$3 WHERE id=$4",[admin.id,request.body.reasonCode,request.body.internalNotes??null,document.rows[0].id]);await client.query("UPDATE creator_accounts SET administrative_review_status='REVIEWED',updated_at=NOW() WHERE user_id=$1",[request.params.creatorId]);}
+      else if(action==="REUPLOAD_REQUESTED"){if(!document.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"document_required"});}await client.query("UPDATE creator_identity_documents SET status='NEEDS_REUPLOAD',reviewed_at=NOW(),reviewed_by=$1,review_reason_code=$2,internal_notes=$3 WHERE id=$4",[admin.id,request.body.reasonCode,request.body.internalNotes??null,document.rows[0].id]);await client.query("UPDATE creator_accounts SET administrative_review_status='NEEDS_REUPLOAD',updated_at=NOW() WHERE user_id=$1",[request.params.creatorId]);}
+      else {const transitions:Record<string,CreatorStatus[]>={APPROVED:["PENDING_REVIEW","READY_FOR_REVIEW"],REJECTED:["PENDING_REVIEW","READY_FOR_REVIEW","ACTIVE"],SUSPENDED:["ACTIVE","APPROVED"],REACTIVATED:["SUSPENDED"]};if(!transitions[action]?.includes(account.rows[0].status)){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_transition_invalid"});}next=action==="APPROVED"||action==="REACTIVATED"?"ACTIVE":action==="REJECTED"?"REJECTED":"SUSPENDED";await client.query("UPDATE creator_accounts SET status=$1,reason_code=$2,activation_method=CASE WHEN $1='ACTIVE' AND activation_method IS NULL THEN 'MANUAL' ELSE activation_method END,activated_at=CASE WHEN $1='ACTIVE' THEN COALESCE(activated_at,NOW()) ELSE activated_at END,activated_by=CASE WHEN $1='ACTIVE' THEN $3 ELSE activated_by END,updated_at=NOW() WHERE user_id=$4",[next,request.body.reasonCode,admin.id,request.params.creatorId]);await client.query("INSERT INTO creator_status_history(id,user_id,from_status,to_status,reason_code,actor_id) VALUES($1,$2,$3,$4,$5,$6)",[crypto.randomUUID(),request.params.creatorId,account.rows[0].status,next,request.body.reasonCode,admin.id]);if(action==="SUSPENDED"||action==="REJECTED")await client.query("UPDATE live_rooms SET publication_status='draft',broadcast_state='offline',status='offline',updated_at=NOW() WHERE streamer_id=$1",[request.params.creatorId]);}
+      const auditId=crypto.randomUUID();await client.query("INSERT INTO audit_events(id,actor_id,subject_user_id,event_type,metadata) VALUES($1,$2,$3,'creator_review_decision',jsonb_build_object('action',$4::text,'reasonCode',$5::text,'requestId',$6::text))",[auditId,admin.id,request.params.creatorId,action,request.body.reasonCode,request.id]);await client.query("INSERT INTO creator_review_decisions(id,creator_user_id,document_id,reviewer_id,action,previous_creator_status,next_creator_status,reason_code,user_facing_reason,internal_notes,idempotency_key,audit_event_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",[crypto.randomUUID(),request.params.creatorId,document.rows[0]?.id??null,admin.id,action,account.rows[0].status,next,request.body.reasonCode,request.body.userFacingReason??null,request.body.internalNotes??null,request.body.idempotencyKey,auditId]);
+      const titles:Record<string,string>={DOCUMENT_REVIEWED:"Document reviewed",REUPLOAD_REQUESTED:"Document re-upload requested",APPROVED:"Creator access approved",REJECTED:"Creator access rejected",SUSPENDED:"Creator access suspended",REACTIVATED:"Creator access restored"};await client.query("INSERT INTO notifications(id,user_id,kind,title,body,notification_key) VALUES($1,$2,'creator_review',$3,$4,$5) ON CONFLICT DO NOTHING",[crypto.randomUUID(),request.params.creatorId,titles[action],request.body.userFacingReason||titles[action],`creator-review:${auditId}`]);
+      await client.query("COMMIT");return {decision:{action,previousStatus:account.rows[0].status,nextStatus:next,auditEventId:auditId}};
+    }catch(error){await client.query("ROLLBACK");throw error;}finally{await client.end();}
+  });
   api.get("/api/admin/reports", async (request, reply) => {
     const admin = await requireRole(request, reply, "admin");
     if (!admin) return;
@@ -4029,51 +4318,10 @@ export function buildApi() {
           await client.query("ROLLBACK");
           return reply.code(409).send({ error: "applicant_role_changed" });
         }
-        const roomId = crypto.randomUUID();
-        const roomTitle =
-          item.locale === "zh"
-            ? `${item.display_name} 的直播间`
-            : `${item.display_name}'s Live Room`;
-        await client.query(
-          `INSERT INTO streamer_profiles
-           (user_id,bio,category,schedule_text,is_featured)
-           VALUES ($1,$2,$3,$4,FALSE)`,
-          [item.applicant_id, item.bio, item.category, item.schedule_text],
-        );
-        await client.query(
-          `INSERT INTO live_rooms (id,streamer_id,slug,title,status)
-           VALUES ($1,$2,$3,$4,'offline')`,
-          [roomId, item.applicant_id, item.handle, roomTitle],
-        );
-        await client.query(
-          "UPDATE users SET role='streamer',updated_at=NOW() WHERE id=$1",
-          [item.applicant_id],
-        );
-        await client.query(
-          `UPDATE creator_applications
-           SET status='approved',reviewed_by=$1,review_reason=$2,
-               reviewed_at=NOW(),updated_at=NOW(),provisioned_room_id=$3
-           WHERE id=$4`,
-          [admin.id, reason, roomId, item.id],
-        );
-        await client.query(
-          "INSERT INTO creator_application_events (id,application_id,actor_id,event_type) VALUES ($1,$2,$3,'approved')",
-          [crypto.randomUUID(), item.id, admin.id],
-        );
-        await client.query(
-          "INSERT INTO notifications (id,user_id,kind,title,body) VALUES ($1,$2,'creator_application','Creator application approved',$3)",
-          [crypto.randomUUID(), item.applicant_id, reason],
-        );
-        await client.query("DELETE FROM auth_sessions WHERE user_id=$1", [
-          item.applicant_id,
-        ]);
-        await client.query("COMMIT");
-        return {
-          applicationId: item.id,
-          status: "approved",
-          roomSlug: item.handle,
-          requiresRelogin: true,
-        };
+        await client.query("ROLLBACK");
+        return reply.code(409).send({
+          error: "legacy_creator_application_requires_new_onboarding",
+        });
       } catch (error) {
         await client.query("ROLLBACK");
         if ((error as { code?: string }).code === "23505")
@@ -4234,6 +4482,20 @@ io.use(async (socket, next) => {
     const user = await userForSessionToken(
       sessionTokenFromCookieHeader(socket.handshake.headers.cookie),
     );
+    if (user?.role === "streamer") {
+      const client = database();
+      await client.connect();
+      try {
+        const creator = await client.query<{ status: CreatorStatus }>(
+          "SELECT status FROM creator_accounts WHERE user_id=$1",
+          [user.id],
+        );
+        if (creator.rows[0]?.status !== "ACTIVE")
+          return next(new Error("creator_realtime_access_denied"));
+      } finally {
+        await client.end();
+      }
+    }
     socket.data.user = user ?? {
       id: `guest:${socket.id}`,
       handle: "public-guest",
@@ -4286,8 +4548,8 @@ io.on("connection", (socket) => {
         await client.connect();
         try {
           const result = await client.query(
-            "SELECT slug FROM live_rooms WHERE slug = $1",
-            [slug],
+            "SELECT r.slug FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND (r.publication_status='published' OR r.streamer_id=$2 OR $3::boolean=TRUE)",
+            [slug, socket.data.authenticated ? user.id : null, user.role === "admin"],
           );
           if (!result.rows[0]) return done?.({ error: "room_not_found" });
         } finally {
@@ -4330,8 +4592,8 @@ io.on("connection", (socket) => {
         if (restriction.rows[0]?.is_banned) return done?.({ error: "banned" });
         if (restriction.rows[0]?.is_muted) return done?.({ error: "muted" });
         const room = await client.query<{ id: string; chat_slow_mode_seconds: number; blocked_terms: string[] }>(
-          "SELECT id,chat_slow_mode_seconds,blocked_terms FROM live_rooms WHERE slug = $1",
-          [slug],
+          "SELECT r.id,r.chat_slow_mode_seconds,r.blocked_terms FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND (r.publication_status='published' OR r.streamer_id=$2 OR $3::boolean=TRUE)",
+          [slug, user.id, user.role === "admin"],
         );
         if (!room.rows[0]) return done?.({ error: "room_not_found" });
         const roomRestriction = await client.query<{ is_muted: boolean; is_banned: boolean; muted_until: Date | null }>(

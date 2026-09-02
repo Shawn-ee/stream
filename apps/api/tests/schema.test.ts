@@ -18,6 +18,16 @@ test("schema contains the full local prototype data model", async () => {
       "account_security_events",
       "creator_applications",
       "creator_application_events",
+      "creator_accounts",
+      "creator_onboarding",
+      "identity_verifications",
+      "creator_identity_documents",
+      "creator_agreement_versions",
+      "creator_agreement_acceptances",
+      "creator_status_history",
+      "audit_events",
+      "admin_permissions",
+      "creator_review_decisions",
       "gift_acknowledgements",
       "streamer_profiles",
       "live_rooms",
@@ -69,6 +79,9 @@ test("schema contains the full local prototype data model", async () => {
         (table_name='follows' AND column_name='reminder_enabled') OR
         (table_name='notifications' AND column_name IN ('room_id','notification_key'))
         OR (table_name='gifts' AND column_name IN ('combo_count','combo_expires_at'))
+        OR (table_name='creator_accounts' AND column_name IN ('activation_method','administrative_review_status'))
+        OR (table_name='creator_agreement_acceptances' AND column_name IN ('age_confirmed','agreement_confirmed','audit_event_id'))
+        OR (table_name='creator_identity_documents' AND column_name IN ('storage_reference','status','reviewed_by'))
       )
     `);
     const accountColumnNames = new Set(
@@ -81,6 +94,14 @@ test("schema contains the full local prototype data model", async () => {
       "streamer_profiles.next_stream_at",
       "streamer_profiles.schedule_timezone",
       "follows.reminder_enabled",
+      "creator_accounts.activation_method",
+      "creator_accounts.administrative_review_status",
+      "creator_agreement_acceptances.age_confirmed",
+      "creator_agreement_acceptances.agreement_confirmed",
+      "creator_agreement_acceptances.audit_event_id",
+      "creator_identity_documents.storage_reference",
+      "creator_identity_documents.status",
+      "creator_identity_documents.reviewed_by",
       "notifications.room_id",
       "notifications.notification_key",
       "gifts.combo_count",
@@ -107,6 +128,14 @@ test("schema contains the full local prototype data model", async () => {
       "chat_messages.deleted_at",
       "chat_messages.deleted_by",
     ]) assert.ok(polishColumnNames.has(column), `Expected ${column} to exist`);
+    const creatorColumns = await client.query<{ column_name: string }>(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='live_rooms' AND column_name='publication_status'",
+    );
+    assert.equal(creatorColumns.rows[0]?.column_name, "publication_status");
+    const suspiciousView = await client.query<{ table_name: string }>(
+      "SELECT table_name FROM information_schema.views WHERE table_schema='public' AND table_name='suspicious_audience_creator_resources'",
+    );
+    assert.equal(suspiciousView.rows[0]?.table_name, "suspicious_audience_creator_resources");
     const followerIndex = await client.query<{ indexname: string }>(
       "SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname='follows_streamer_created_idx'",
     );

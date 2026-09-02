@@ -116,53 +116,19 @@ try {
     "POST",
     { decision: "approved", reason: "Approved for the private local test." },
   );
-  assert.equal(decision.status, 200);
-  const approved = await decision.json();
-  assert.equal(approved.requiresRelogin, true);
-  assert.equal(approved.roomSlug, handle);
-  assert.equal(
-    (await mutate(`/api/admin/creator-applications/${application.id}/decision`, admin, "POST", {
-      decision: "approved",
-      reason: "Duplicate decision must not provision twice.",
-    })).status,
-    409,
-  );
-  for (const oldSession of [applicant, applicantSecondSession]) {
+  assert.equal(decision.status, 409);
+  assert.equal((await decision.json()).error, "legacy_creator_application_requires_new_onboarding");
+  for (const existingSession of [applicant, applicantSecondSession]) {
     assert.equal(
-      (await fetch(`${base}/api/auth/session`, { headers: { cookie: oldSession.cookie } }).then((response) => response.json())).user,
-      null,
+      (await fetch(`${base}/api/auth/session`, { headers: { cookie: existingSession.cookie } }).then((response) => response.json())).user.role,
+      "audience",
     );
   }
-
-  const creator = await login(handle, password);
-  const creatorSession = await fetch(`${base}/api/auth/session`, {
-    headers: { cookie: creator.cookie },
-  }).then((response) => response.json());
-  assert.equal(creatorSession.user.role, "streamer");
-  const studio = await fetch(`${base}/api/streamer/studio`, {
-    headers: { cookie: creator.cookie },
-  });
-  assert.equal(studio.status, 200);
-  const studioBody = await studio.json();
-  assert.equal(studioBody.room.slug, handle);
-  assert.equal(studioBody.room.broadcast_state, "offline");
-  assert.equal("cloudflare_live_input_id" in studioBody.room, false);
-
   const stored = await client.query(
-    `SELECT u.role,p.category,p.bio,p.schedule_text,r.slug,r.status,
-            r.broadcast_state,r.cloudflare_live_input_id
-     FROM users u
-     JOIN streamer_profiles p ON p.user_id=u.id
-     JOIN live_rooms r ON r.streamer_id=u.id
-     WHERE u.handle=$1`,
+    "SELECT u.role,(SELECT COUNT(*) FROM streamer_profiles p WHERE p.user_id=u.id)::int AS profiles,(SELECT COUNT(*) FROM live_rooms r WHERE r.streamer_id=u.id)::int AS rooms FROM users u WHERE u.handle=$1",
     [handle],
   );
-  assert.equal(stored.rowCount, 1);
-  assert.equal(stored.rows[0].role, "streamer");
-  assert.equal(stored.rows[0].category, applicationBody.category);
-  assert.equal(stored.rows[0].status, "offline");
-  assert.equal(stored.rows[0].broadcast_state, "offline");
-  assert.equal(stored.rows[0].cloudflare_live_input_id, null);
+  assert.deepEqual(stored.rows[0], { role: "audience", profiles: 0, rooms: 0 });
 
   const events = await client.query(
     `SELECT e.event_type
@@ -174,15 +140,15 @@ try {
   );
   assert.deepEqual(
     events.rows.map((row) => row.event_type),
-    ["submitted", "rejected", "submitted", "approved"],
+    ["submitted", "rejected", "submitted"],
   );
   const notificationCount = await client.query(
     "SELECT COUNT(*)::int AS count FROM notifications n JOIN users u ON u.id=n.user_id WHERE u.handle=$1 AND n.kind='creator_application'",
     [handle],
   );
-  assert.equal(notificationCount.rows[0].count, 2);
+  assert.equal(notificationCount.rows[0].count, 1);
 
-  console.log("Creator application authorization, rejection/resubmission, atomic approval, provisioning, audit, and session revocation verified.");
+  console.log("Legacy creator application review remains auditable but cannot bypass the new onboarding lifecycle.");
 } finally {
   await client.query("DELETE FROM users WHERE handle=$1", [handle]);
   await client.end();

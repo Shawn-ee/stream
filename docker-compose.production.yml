@@ -41,7 +41,9 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
-    volumes: [avatar_production_data:/app/work/avatars]
+    volumes:
+      - avatar_production_data:/app/work/avatars
+      - identity_document_production_data:/app/work/private-identity-documents
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/ready"]
       interval: 10s
@@ -59,3 +61,4 @@ volumes:
   postgres_production_data:
   redis_production_data:
   avatar_production_data:
+  identity_document_production_data:

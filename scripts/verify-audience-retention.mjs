@@ -58,7 +58,7 @@ try {
 
   assert.equal(
     (await call(`/api/streamers/${streamerId}/follow`, streamer, { method: "POST", body: {} })).status,
-    403,
+    400,
   );
   let followed = await call(`/api/streamers/${streamerId}/follow`, audience, {
     method: "POST",

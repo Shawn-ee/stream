@@ -1,5 +1,15 @@
 # Stream Platform Product Goal
 
+## Current milestone — creator agreement, private document receipt, and admin review
+
+Implement `creator-agreement-v1`, explicit 18+ and rules acceptance, encrypted private identity-document receipt (not automated verification), transactional automatic/manual activation, creators-as-audience capabilities, Studio **Discover Live**, and permissioned administrator review. Preserve migration 024, server authorization, explicit room creation, and the eliminated navigation side effect. Google OAuth is out of scope.
+
+## Active milestone: Server-authoritative creator onboarding and explicit Studio resources
+
+Completed locally on 2026-09-02. The implementation replaces navigation-driven creator provisioning with a resumable Profile → Identity → Agreement → Review workflow. Creator capability is governed by explicit server states, activation is transactional and idempotent, and opening Creator dashboard or Studio creates no public data. An activated creator enters an empty Studio and must explicitly create a private draft room and explicitly publish it before any audience endpoint or realtime room join can see it. Production mock identity is prohibited and fails closed. Focused integration, the complete staging gate, protected-route desktop/mobile browser acceptance, and final demo reset pass.
+
+The production identity provider, agreement-renewal enforcement for existing active creators, manual-review administration, and Google OAuth remain explicit follow-up work. They are not represented as working production features.
+
 ## Current frontend milestone status
 
 The bounded milestone **Audience-First Entry and Approval-Gated Creator Access** is complete locally. Anonymous Holiwyn is an audience discovery/viewing product with no creator or role-selection entry. One neutral credential form lets the server resolve the account role. Signed-in audience accounts can open **Become a creator / 申请成为主播** from Account & security; application alone grants no broadcast access. After administrator approval revokes the old audience sessions, the next authenticated streamer session receives the broadcaster interface. Focused checks, creator application/provisioning verification, and guest/audience/streamer browser acceptance pass. Nothing was committed, deployed, sent to Cloudflare, or broadcast.

@@ -26,6 +26,8 @@ function baseEnvironment() {
     METRICS_TOKEN: "metrics-token-32-characters-minimum-value",
     APP_PORT: "8080",
     PRIVATE_SSH_TUNNEL: "false",
+    IDENTITY_DOCUMENT_STORAGE_PATH: "/app/work/private-identity-documents",
+    IDENTITY_DOCUMENT_ENCRYPTION_KEY: "bG9jYWwtaWRlbnRpdHktZG9jdW1lbnQta2V5LTMyISE=",
     CLOUDFLARE_STREAM_ENABLED: "false",
     CLOUDFLARE_ACCOUNT_ID: "",
     CLOUDFLARE_API_TOKEN: "",

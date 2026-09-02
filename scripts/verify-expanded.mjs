@@ -116,7 +116,7 @@ await audience(`/api/streamer/rooms/${room.slug}/supporters?period=lifetime`, { 
 assert.equal((await streamer("/api/wallet")).balance, gifts.gifts[0].coin_cost);
 await streamer(`/api/rooms/${room.slug}/gifts`, {
   method: "POST",
-  expected: 403,
+    expected: 400,
   body: {
     giftId: gifts.gifts[0].id,
     quantity: 1,

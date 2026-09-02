@@ -1,5 +1,19 @@
 # Architecture Decisions
 
+## 2026-09-02 — Document receipt is not identity verification
+
+Holiwyn accepts a private encrypted document only after `creator-agreement-v1` and explicit 18+ confirmation. Upload is `UPLOADED`, administrative inspection may be `REVIEWED`, and neither means verified. No external identity provider or Google OAuth is used. Auto-activation is server-controlled, creates no room, and adds creator capability without removing audience capability.
+
+## 2026-09-02 — Creator access is stateful, server-authoritative, and side-effect free on navigation
+
+- **Decision:** Replace implicit open-mode provisioning and the legacy application approval shortcut with an explicit creator state machine and ordered onboarding commands.
+- **Reason:** A menu click or GET request must never silently change an audience account, create a room, or expose a discovery card. Hiding a button is not authorization.
+- **Implementation:** Activation revalidates profile, unexpired identity result, current agreement acceptance, and restrictions inside one transaction. Automatic approval is a server flag and records pending, approved, and active transitions. Activation creates a creator profile only. Room creation and publication are separate explicit commands.
+- **Privacy boundary:** Draft rooms require an active owner or administrator in realtime and are absent from every audience room projection and interaction endpoint.
+- **Migration:** Existing legitimate streamer roles migrate to ACTIVE. No legacy audience-owned profile/room is deleted; a review-only database view identifies suspicious records.
+- **Production boundary:** Mock identity is non-production only. Missing production identity configuration fails closed. Google login is authentication, not identity verification, and remains separate.
+- **Deferred:** Current-agreement renewal enforcement for already-active creators and the new-state manual review administration require follow-up implementation before public creator onboarding.
+
 ## 2026-09-02 - Audience navigation is minimal; broadcast eligibility is centrally enforced
 
 - Anonymous navigation exposes only discovery/search and one authentication entry. Registration is a mode inside that same modal, not a competing header action. Google and email options remain absent until a real verified provider is integrated.

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-02 — Creator onboarding and administrator review
+
+- Reordered onboarding to profile → agreement/18+ → private document upload → review → activation and removed mock-verification claims/provider dependency.
+- Added AES-256-GCM private storage, content sniffing, limits, replacement history, immutable agreement acceptance, activation/review metadata, and administrator permissions.
+- Added Creator Reviews queue/detail/actions, one-time audited viewing, safe notifications, Studio Discover Live, and creator audience access. Activation/navigation still creates no room or broadcast. Google OAuth was not added.
+
+## 2026-09-02 - Server-authoritative creator onboarding and explicit room creation (local)
+
+- Added migration `024_creator_onboarding_state.sql` with creator status, private onboarding drafts, identity results, versioned agreement acceptance, status history, audit events, and draft/published room state. Existing streamer accounts are preserved as active and questionable audience-owned creator resources are exposed through a read-only review view without deletion.
+- Replaced the old navigation-triggered broadcast activation endpoint with read-only access/status checks plus explicit start, profile, test identity, agreement, activation, draft-room creation, and publication commands.
+- Added reusable active-creator enforcement for Studio and broadcast APIs. Audience, incomplete, pending, rejected, and suspended creators are blocked; websocket creator access and public draft-room access apply the same server state.
+- Added routed bilingual account sections and a four-step creator workflow with Resume later, server-derived review status, transactional automatic approval, empty Studio, and explicit private draft creation/publication. No page load requests camera/microphone access.
+- Added focused onboarding/authorization/side-effect/draft-privacy verification and expanded schema assertions. Type checking, the production build, all 27 unit/storage tests, the focused integration checks, the complete staging gate, protected-route desktop/mobile browser acceptance, and the final demo reset pass. The final reset contains eight synthetic users, no onboarding drafts, no draft rooms, and no suspicious audience-owned creator resources. No commit, deployment, Cloudflare action, or identity collection occurred.
+
 ## 2026-09-02 - Audience-first header, account menu, and open broadcast access (local)
 
 - Reduced the signed-out audience header to HOLIWYN, discovery/search, and one purple **Log in** action. Registration remains inside the consolidated authentication modal; unsupported Google/email providers are not simulated.
