@@ -709,6 +709,12 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.following-feed-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: .5rem;
+  align-items: center;
+}
 .following-avatar {
   display: grid;
   flex: 0 0 2.6rem;
@@ -2620,6 +2626,27 @@ p {
   background: #151b2e;
   padding: 1rem;
 }
+.account-route-page,
+.account-center-grid > .following-feed,
+.account-center-grid > .discovery-preferences {
+  grid-column: 1 / -1;
+}
+.activity-list,
+.notification-list {
+  display: grid;
+  gap: .65rem;
+}
+.activity-list > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+}
+.activity-list > button span { display: grid; gap: .2rem; }
+.activity-list time,
+.notification-item time { color: #aab4cc; font-size: .78rem; }
+.offline-room-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
 .account-center-grid h3 {
   margin: 0 0 0.8rem;
 }
@@ -2635,9 +2662,20 @@ p {
   font-weight: 700;
 }
 .account-form input,
-.account-form select {
+.account-form select,
+.account-form textarea {
   width: 100%;
 }
+.account-form textarea { min-height:7rem; resize:vertical; }
+.account-public-avatar { align-items:center; display:flex; gap:1rem; }
+.account-public-avatar > .creator-avatar { height:5rem; width:5rem; }
+.account-public-avatar > div { display:flex; flex-wrap:wrap; gap:.5rem; }
+.account-avatar-upload { cursor:pointer; display:inline-flex !important; min-height:var(--control-min); padding:.7rem .9rem; place-items:center; }
+.account-avatar-upload input { display:none; }
+.account-profile-visibility { align-items:start; display:flex !important; gap:.65rem !important; }
+.account-profile-visibility input { margin-top:.25rem; width:auto; }
+.account-profile-visibility span { display:grid; gap:.2rem; }
+.account-profile-visibility strong { color:var(--color-text-primary); }
 .account-sessions,
 .account-r-wallet,
 .account-recovery {
@@ -2755,6 +2793,10 @@ p {
   .account-center-heading,
   .account-session-heading { align-items: flex-start; flex-direction: column; }
   .account-sessions article { align-items: flex-start; flex-direction: column; }
+  .following-feed-item { grid-template-columns: 1fr 1fr; }
+  .following-feed-open { grid-column: 1 / -1; }
+  .activity-list > button,
+  .notification-item { align-items: flex-start; flex-direction: column; }
   .admin-section-heading,
   .creator-review-list article > div:first-child { flex-direction: column; }
 }

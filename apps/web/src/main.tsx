@@ -32,7 +32,7 @@ import {
   type MobileDiscoveryView,
 } from "./components/discovery";
 import { LiveChatPanel, MobileRoomOverlay, RoomCreatorBar } from "./components/room";
-import { CreatorProfileSurface } from "./components/profile";
+import { AudienceProfileSurface, CreatorProfileSurface, type PublicUserProfile } from "./components/profile";
 import { RoomClassificationFields, type LanguageOption, type TagOption } from "./components/room-classification";
 import { CreatorAvatar } from "./components/avatar";
 import { CreatorOnboarding } from "./components/creator-onboarding";
@@ -49,7 +49,8 @@ type Role = "audience" | "streamer" | "admin";
 type Language = "en" | "zh";
 type SupportedLanguage={code:string;name_en:string;name_native:string};
 type RoomLanguage={code:string;nameEn:string;nameNative:string;isPrimary:boolean};
-type PublicTag={id:string;slug:string;displayName:string;type:"CONTENT"|"FORMAT"|"MOOD"|"COMMUNITY"};
+type PublicTag={id:string;slug:string;displayName:string;type:"CONTENT"|"FORMAT"|"MOOD"};
+type AccountSection="profile"|"security"|"sessions"|"preferences"|"wallet"|"following"|"activity"|"notifications";
 type User = {
   id: string;
   handle: string;
@@ -478,10 +479,10 @@ function DiscoveryPreferencePanel({
       : [...preferences.preferred_tag_slugs, item],
   });
   return (
-    <details className="discovery-preferences">
-      <summary>{zh ? "为你推荐设置" : "For You preferences"}</summary>
+    <section className="discovery-preferences">
+      <h3>{zh ? "发现偏好" : "Discovery preferences"}</h3>
       <div className="discovery-preference-body account-form">
-        <p>{zh ? "选择偏好只会调整排序；上方筛选仍用于当前浏览。" : "Preferences change ordering only; the filters above still control this browsing session."}</p>
+        <p>{zh ? "此处保存的偏好会影响不同会话中的推荐排序。发现页上的临时筛选只影响当前 URL 和浏览。" : "Saved preferences influence recommendation ordering across sessions. Temporary Discover filters affect only the current URL and browsing session."}</p>
         <fieldset className="account-shortcuts">
           <legend>{zh ? "偏好语言" : "Preferred languages"}</legend>
           {languages.map(item=><label key={item.code}><input type="checkbox" checked={preferences.preferred_languages.includes(item.code as Language)} onChange={() => toggleLanguage(item.code)} /> {zh?item.name_native:item.name_en}</label>)}
@@ -505,7 +506,7 @@ function DiscoveryPreferencePanel({
           }</small> : null}
         </div>
       </div>
-    </details>
+    </section>
   );
 }
 function App() {
@@ -520,14 +521,14 @@ function App() {
   const [followingError, setFollowingError] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [profileRoom, setProfileRoom] = useState<Room | null>(null);
-  const [query, setQuery] = useState("");
-  const [settledQuery, setSettledQuery] = useState("");
+  const [publicUserProfile, setPublicUserProfile] = useState<PublicUserProfile | null>(null);
   const initialFilters=new URLSearchParams(window.location.search);
+  const [query, setQuery] = useState(()=>initialFilters.get("q")??"");
+  const [settledQuery, setSettledQuery] = useState(()=>initialFilters.get("q")??"");
   const [selectedLanguages,setSelectedLanguages]=useState<string[]>(()=>initialFilters.get("languages")?.split(",").filter(Boolean)??[]);
   const [selectedTag,setSelectedTag]=useState(()=>initialFilters.get("tag")??"");
   const [supportedLanguages,setSupportedLanguages]=useState<SupportedLanguage[]>([]);
   const [publicTags,setPublicTags]=useState<PublicTag[]>([]);
-  const [communityTags,setCommunityTags]=useState<PublicTag[]>([]);
   const [discoveryPreferences, setDiscoveryPreferences] = useState<DiscoveryPreferences | null>(null);
   const [preferencesSaving, setPreferencesSaving] = useState(false);
   const [preferencesMessage, setPreferencesMessage] = useState<"" | "saved" | "reset" | "error">("");
@@ -542,14 +543,13 @@ function App() {
   const [routeLoading, setRouteLoading] = useState(() => parseAudienceRoute(window.location.pathname).view !== "discovery");
   const [routeError, setRouteError] = useState<"not-found" | "unavailable" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [accountSection, setAccountSection] = useState<"profile" | "security" | "sessions" | "wallet">("profile");
-  const [creatorPortalStep, setCreatorPortalStep] = useState<"profile" | "identity" | "agreement" | "review" | "status" | null>(() => {
+  const [accountSection, setAccountSection] = useState<AccountSection>("profile");
+  const [creatorPortalStep, setCreatorPortalStep] = useState<"intro" | "profile" | "identity" | "agreement" | "review" | "status" | null>(() => {
     const initial = parseAudienceRoute(window.location.pathname);
     return initial.view === "creator-onboarding" ? initial.step : initial.view === "creator-status" ? "status" : null;
   });
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(() => window.location.pathname === "/studio" || window.location.pathname === "/broadcast");
-  const [followingDirectoryOpen, setFollowingDirectoryOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("home");
   const [mobileDiscoveryView, setMobileDiscoveryView] = useState<MobileDiscoveryView>("for-you");
@@ -559,6 +559,7 @@ function App() {
   const restoringFilterHistoryRef = useRef(false);
   const authIntentIdRef = useRef(0);
   const t = copy[language];
+  const audienceCapable=user?.role==="audience"||user?.role==="streamer";
   const requireAuth = (kind: AuthIntentKind) => {
     setAuthMode("login");
     setLoginError("");
@@ -583,11 +584,30 @@ function App() {
     setRouteError(null);
     setRoom(null);
     setProfileRoom(null);
+    setPublicUserProfile(null);
     setAccountMenuOpen(false);
     setAccountOpen(false);
     setCreatorPortalStep(null);
     writeAudienceHistory({ view: "discovery" }, mode);
     window.scrollTo({ top: 0 });
+  };
+  const openAccountSection = (section: AccountSection, mode: "push" | "replace" = "push") => {
+    setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setCreatorPortalStep(null); setStudioOpen(false);
+    setAccountSection(section); setAccountOpen(true); setAccountMenuOpen(false);
+    writeAudienceHistory({ view: "account", section }, mode);
+    window.scrollTo({ top: 0 });
+  };
+  const submitGlobalSearch = (event?: FormEvent) => {
+    event?.preventDefault();
+    const value=query.trim();
+    setQuery(value); setSettledQuery(value); setAccountOpen(false); setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setCreatorPortalStep(null);
+    const params=new URLSearchParams();
+    if(value)params.set("q",value);
+    if(selectedLanguages.length)params.set("languages",selectedLanguages.join(","));
+    if(selectedTag)params.set("tag",selectedTag);
+    const path=`/discover${params.size?`?${params}`:""}`;
+    window.history.pushState({...window.history.state,holiwynAudienceRoute:path},"",path);
+    setMobileSearchOpen(false); setRouteLoading(false); setRouteError(null); window.scrollTo({top:0});
   };
   const returnFromAudienceDetail = () => {
     if (window.history.state?.holiwynAudienceParent) window.history.back();
@@ -598,6 +618,7 @@ function App() {
     setRouteLoading(false);
     setRouteError(null);
     setProfileRoom(null);
+    setPublicUserProfile(null);
     setRoom(item);
     setAccountOpen(false);
     setMobileSearchOpen(false);
@@ -609,11 +630,16 @@ function App() {
     setRouteLoading(false);
     setRouteError(null);
     setRoom(null);
+    setPublicUserProfile(null);
     setProfileRoom(item);
     setAccountOpen(false);
     setMobileSearchOpen(false);
     writeAudienceHistory({ view: "creator", slug: item.slug }, mode);
     window.scrollTo({ top: 0 });
+  };
+  const showPublicUserProfile = (profileHandle: string, mode: "push" | "replace" = "push") => {
+    routeRequestRef.current += 1;setRoom(null);setProfileRoom(null);setPublicUserProfile(null);setAccountOpen(false);setMobileSearchOpen(false);setRouteError(null);
+    writeAudienceHistory({view:"user",handle:profileHandle},mode);void hydrateAudienceRoute(`/@${encodeURIComponent(profileHandle)}`);window.scrollTo({top:0});
   };
   const hydrateAudienceRoute = useCallback(async (pathname: string) => {
     const requestId = ++routeRequestRef.current;
@@ -622,31 +648,34 @@ function App() {
     setMobileSearchOpen(false);
     setRouteError(null);
     if (route.view === "account") {
-      setRoom(null); setProfileRoom(null); setCreatorPortalStep(null);
+      setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setCreatorPortalStep(null);
       setAccountSection(route.section); setAccountOpen(true); setRouteLoading(false); return;
     }
     if (route.view === "creator-onboarding") {
-      setRoom(null); setProfileRoom(null); setAccountOpen(false);
+      setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setAccountOpen(false);
       setCreatorPortalStep(route.step); setRouteLoading(false); return;
     }
     if (route.view === "creator-status" || route.view === "studio") {
-      setRoom(null); setProfileRoom(null); setAccountOpen(false);
+      setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setAccountOpen(false);
       setCreatorPortalStep("status"); setRouteLoading(false); return;
     }
-    if (route.view === "tags") {
-      setRoom(null); setProfileRoom(null); setAccountOpen(false); setCreatorPortalStep(null); setRouteLoading(false);
-      window.setTimeout(() => document.querySelector("#popular-tags")?.scrollIntoView({ block: "start" }), 0);
+    if (route.view === "legacy-discovery") {
+      const target=`/discover${window.location.search}`;
+      window.history.replaceState({...window.history.state,holiwynAudienceRoute:target},"",target);
+      setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setAccountOpen(false); setCreatorPortalStep(null); setRouteLoading(false);
       return;
     }
     if (route.view === "discovery") {
       setRoom(null);
       setProfileRoom(null);
+      setPublicUserProfile(null);
       setRouteLoading(false);
       return;
     }
     if (route.view === "invalid") {
       setRoom(null);
       setProfileRoom(null);
+      setPublicUserProfile(null);
       setRouteError("not-found");
       setRouteLoading(false);
       return;
@@ -665,19 +694,25 @@ function App() {
     }
     setRouteLoading(true);
     try {
+      if(route.view==="user"){
+        const data=await request(`/api/users/${encodeURIComponent(route.handle)}/public`);if(requestId!==routeRequestRef.current)return;setRoom(null);setProfileRoom(null);setPublicUserProfile(data.profile);return;
+      }
       const data = await request(`/api/rooms/${encodeURIComponent(route.slug)}`);
       if (requestId !== routeRequestRef.current) return;
       if (route.view === "room") {
         setProfileRoom(null);
+        setPublicUserProfile(null);
         setRoom(data.room);
       } else {
         setRoom(null);
+        setPublicUserProfile(null);
         setProfileRoom(data.room);
       }
     } catch (error) {
       if (requestId !== routeRequestRef.current) return;
       setRoom(null);
       setProfileRoom(null);
+      setPublicUserProfile(null);
       setRouteError(error instanceof Error && error.message === "404" ? "not-found" : "unavailable");
     } finally {
       if (requestId === routeRequestRef.current) {
@@ -773,17 +808,18 @@ function App() {
       .finally(() => setSessionLoading(false));
     void request("/api/discovery/languages").then((d)=>setSupportedLanguages(d.languages)).catch(()=>setSupportedLanguages([]));
     void request("/api/discovery/tags").then((d)=>setPublicTags(d.tags)).catch(()=>setPublicTags([]));
-    void request("/api/discovery/tags?type=community").then((d)=>setCommunityTags(d.tags)).catch(()=>setCommunityTags([]));
   }, []);
   useEffect(() => {
-    if (sessionLoading || user?.role !== "audience" || !user.ageAcknowledged) return;
+    if (sessionLoading || !audienceCapable || !user?.ageAcknowledged) return;
     void hydrateAudienceRoute(window.location.pathname);
   }, [sessionLoading, user?.id, user?.role, user?.ageAcknowledged, hydrateAudienceRoute]);
   useEffect(() => {
-    if (user?.role !== "audience" || !user.ageAcknowledged) return;
+    if (!audienceCapable || !user?.ageAcknowledged) return;
     const restoreAudienceRoute = () => {
       const params = new URLSearchParams(window.location.search);
       restoringFilterHistoryRef.current = true;
+      setQuery(params.get("q") ?? "");
+      setSettledQuery(params.get("q") ?? "");
       setSelectedLanguages((params.get("languages") ?? "").split(",").filter(Boolean).slice(0, 20));
       setSelectedTag(params.get("tag") ?? "");
       void hydrateAudienceRoute(window.location.pathname);
@@ -792,7 +828,7 @@ function App() {
     return () => window.removeEventListener("popstate", restoreAudienceRoute);
   }, [user?.role, user?.ageAcknowledged, hydrateAudienceRoute]);
   useEffect(() => {
-    if (user?.role !== "audience") return;
+    if (!audienceCapable) return;
     const item = room ?? profileRoom;
     syncAudienceMetadata(item ? audienceShareTarget(item, room ? "room" : "creator") : null);
   }, [user?.role, room, profileRoom]);
@@ -801,7 +837,7 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [query]);
   useEffect(() => {
-    if (user?.role === "audience" && user.ageAcknowledged) loadRooms();
+    if (audienceCapable && user?.ageAcknowledged) loadRooms();
   }, [user, settledQuery, selectedLanguages.join(","), selectedTag]);
   useEffect(()=>{
     if (!filterHistoryReadyRef.current) {
@@ -813,13 +849,15 @@ function App() {
       return;
     }
     const params=new URLSearchParams(window.location.search);
+    if(settledQuery)params.set("q",settledQuery);else params.delete("q");
     if(selectedLanguages.length)params.set("languages",selectedLanguages.join(","));else params.delete("languages");
     if(selectedTag)params.set("tag",selectedTag);else params.delete("tag");
-    const next=`${window.location.pathname}${params.size?`?${params}`:""}`;
+    if(!["/","/discover"].includes(window.location.pathname))return;
+    const next=`/discover${params.size?`?${params}`:""}`;
     window.history.pushState({...window.history.state,holiwynAudienceRoute:next},"",next);
-  },[selectedLanguages.join(","),selectedTag]);
+  },[settledQuery,selectedLanguages.join(","),selectedTag]);
   useEffect(() => {
-    if (user?.role === "audience" && user.ageAcknowledged && user.id !== "public-guest") void loadFollowing();
+    if (audienceCapable && user?.ageAcknowledged && user.id !== "public-guest") void loadFollowing();
     else if (user?.id === "public-guest") {
       setFollowingRooms([]);
       setFollowingLoading(false);
@@ -827,7 +865,7 @@ function App() {
     }
   }, [user?.id, user?.role, user?.ageAcknowledged]);
   useEffect(() => {
-    if (user?.role !== "audience" || !user.ageAcknowledged || user.id === "public-guest") {
+    if (!audienceCapable || !user?.ageAcknowledged || user.id === "public-guest") {
       setDiscoveryPreferences(null);
       return;
     }
@@ -836,7 +874,7 @@ function App() {
       .catch(() => setDiscoveryPreferences(null));
   }, [user?.id, user?.role, user?.ageAcknowledged]);
   useEffect(() => {
-    if (user?.role !== "audience" || !user.ageAcknowledged) return;
+    if (!audienceCapable || !user?.ageAcknowledged) return;
     const socket = io({ transports: ["websocket"] });
     socket.on("connect", () => socket.emit("discovery:join"));
     socket.on(
@@ -931,7 +969,7 @@ function App() {
             body: JSON.stringify({ handle, password }),
           });
       setUser(result.user);
-      setResumeIntent(result.user.role === "audience" ? authGate : null);
+      setResumeIntent(["audience","streamer"].includes(result.user.role) ? authGate : null);
       setAuthGate(null);
       setPassword("");
     } catch {
@@ -956,7 +994,7 @@ function App() {
             }),
           });
       setUser(result.user);
-      setResumeIntent(result.user.role === "audience" ? authGate : null);
+      setResumeIntent(["audience","streamer"].includes(result.user.role) ? authGate : null);
       setAuthGate(null);
       setPassword("");
       setDisplayName("");
@@ -1013,9 +1051,9 @@ function App() {
         setStudioOpen(true);
         return;
       }
-      const step = result.status === "ONBOARDING_IDENTITY" ? "identity" : result.status === "ONBOARDING_AGREEMENT" ? "agreement" : result.status === "READY_FOR_REVIEW" ? "review" : ["PENDING_REVIEW","REJECTED","SUSPENDED"].includes(result.status) ? "status" : "profile";
+      const step = result.status === "AUDIENCE" ? "intro" : result.status === "ONBOARDING_IDENTITY" ? "identity" : result.status === "ONBOARDING_AGREEMENT" ? "agreement" : result.status === "READY_FOR_REVIEW" ? "review" : ["PENDING_REVIEW","REJECTED","SUSPENDED"].includes(result.status) ? "status" : "profile";
       setCreatorPortalStep(step);
-      const path = step === "status" ? "/creator/status" : `/creator/onboarding/${step}`;
+      const path = step === "status" ? "/creator/status" : step === "intro" ? "/creator/onboarding" : `/creator/onboarding/${step}`;
       window.history.pushState({ ...window.history.state, holiwynCreatorRoute: path }, "", path);
     } catch (error) {
       setResumeNotice(
@@ -1036,9 +1074,11 @@ function App() {
       return;
     }
     if (tab === "me") {
-      setAccountOpen(true);
-      setMobileSearchOpen(false);
-      window.scrollTo({ top: 0 });
+      openAccountSection("profile");
+      return;
+    }
+    if (tab === "inbox") {
+      openAccountSection("notifications");
       return;
     }
     setAccountOpen(false);
@@ -1049,32 +1089,27 @@ function App() {
       void loadRooms();
       return;
     }
-    const targetSelector = tab === "discover" ? "#live-now" : "#audience-library";
-    document.querySelector(targetSelector)?.scrollIntoView({ block: "start" });
+    document.querySelector("#live-now")?.scrollIntoView({ block: "start" });
   }
   useEffect(() => {
     if (!resumeIntent || !user || user.id === "public-guest") return;
-    if (user.role !== "audience") {
+    if (!["audience","streamer"].includes(user.role)) {
       setResumeIntent(null);
       return;
     }
     if (["follow", "chat", "gift", "action", "private-access", "report"].includes(resumeIntent.kind)) return;
     if (resumeIntent.kind === "following") {
-      showDiscovery();
-      setMobileDiscoveryView("following");
-      window.setTimeout(() => document.querySelector("#following-feed")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      openAccountSection("following");
     } else if (resumeIntent.kind === "wallet") {
-      setAccountOpen(true);
-      window.setTimeout(() => document.querySelector("#audience-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      openAccountSection("wallet");
     } else if (["broadcast", "go-live"].includes(resumeIntent.kind)) {
       void openBroadcastDashboard();
     } else if (resumeIntent.kind === "inbox") {
       setMobileTab("inbox");
-      window.setTimeout(() => document.querySelector("#audience-library")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      openAccountSection("notifications");
     } else {
       setMobileTab("me");
-      setAccountOpen(true);
-      window.scrollTo({ top: 0 });
+      openAccountSection("profile");
     }
     setResumeNotice(language === "en" ? "Signed in — your requested destination is ready." : "登录成功——已返回您请求的位置。");
     setResumeIntent(null);
@@ -1097,14 +1132,8 @@ function App() {
   const isGuest = user.id === "public-guest";
   const audienceExperience = (user.role === "audience" || user.role === "streamer") && !studioOpen;
   const audienceInitials = user.displayName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-  const openFollowingDirectory = () => {
-    setAccountOpen(false);
-    setFollowingDirectoryOpen(true);
-    showDiscovery();
-    window.setTimeout(() => document.querySelector("#following-feed")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-  };
   return (
-    <main className={`app role-${user.role}${room ? " room-open" : profileRoom ? " profile-open" : ""}`}>
+    <main className={`app role-${user.role}${room ? " room-open" : profileRoom || publicUserProfile ? " profile-open" : ""}`}>
       <header className={`product-header ${audienceExperience && user.ageAcknowledged ? "audience-product-header" : ""}`}>
         <div className="product-identity">
           <span className="product-mark" aria-hidden="true">
@@ -1132,7 +1161,7 @@ function App() {
               aria-label={language === "en" ? "Audience navigation" : "观众导航"}
             >
               <button
-                className={!room && !profileRoom ? "active" : ""}
+                className={!room && !profileRoom && !publicUserProfile ? "active" : ""}
                 onClick={() => {
                   showDiscovery();
                   void loadRooms();
@@ -1140,18 +1169,14 @@ function App() {
               >
                 {language === "en" ? "Discover" : "发现"}
               </button>
-              <button type="button" onClick={() => {
-                showDiscovery();
-                window.history.pushState({}, "", "/tags");
-                window.setTimeout(() => document.querySelector("#popular-tags")?.scrollIntoView({ behavior: "smooth" }), 0);
-              }}>
-                {language === "en" ? "Tags" : "标签"}
-              </button>
             </nav>
-            <label className="audience-global-search">
+            <form className="audience-global-search" role="search" onSubmit={submitGlobalSearch}>
               <span className="sr-only">{t.search}</span>
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} />
-            </label>
+              <button type="submit" aria-label={language === "en" ? "Search" : "搜索"}>
+                <span aria-hidden="true">→</span>
+              </button>
+            </form>
           </div>
         )}
         <div className="product-account">
@@ -1165,13 +1190,14 @@ function App() {
               zh={language === "zh"}
               onToggle={() => setAccountMenuOpen((current) => !current)}
               onClose={() => setAccountMenuOpen(false)}
-              onFollowing={openFollowingDirectory}
-              onAccount={() => { setAccountSection("profile");setAccountOpen(true);setCreatorPortalStep(null);window.history.pushState({},"","/account/profile");window.scrollTo({ top: 0 }); }}
-              onWallet={() => { setAccountSection("wallet");setAccountOpen(true);setCreatorPortalStep(null);window.history.pushState({},"","/account/wallet");window.scrollTo({ top: 0 }); }}
+              onFollowing={() => openAccountSection("following")}
+              onProfile={() => showPublicUserProfile(user.handle)}
+              onActivity={() => openAccountSection("activity")}
+              onNotifications={() => openAccountSection("notifications")}
+              onWallet={() => openAccountSection("wallet")}
               onBroadcast={() => void openBroadcastDashboard()}
               creatorActive={user.creatorStatus === "ACTIVE" || user.role === "streamer"}
-              onSettings={() => { setAccountSection("security");setAccountOpen(true);setCreatorPortalStep(null);window.history.pushState({},"","/account/security");window.scrollTo({ top: 0 }); }}
-              onLanguageChange={() => setLanguage(language === "en" ? "zh" : "en")}
+              onSettings={() => openAccountSection("profile")}
               onLogout={() => void logout()}
             /></>}
           </> : <><LanguagePicker language={language} onChange={setLanguage} /><button className="secondary" onClick={() => void logout()}>{t.end}</button></>}
@@ -1184,7 +1210,7 @@ function App() {
            api={request}
            onNavigate={(next) => {
              setCreatorPortalStep(next);
-             const path = next === "status" ? "/creator/status" : `/creator/onboarding/${next}`;
+             const path = next === "status" ? "/creator/status" : next === "intro" ? "/creator/onboarding" : `/creator/onboarding/${next}`;
              window.history.pushState({}, "", path);
              window.scrollTo({ top: 0 });
            }}
@@ -1204,10 +1230,26 @@ function App() {
             setUser(updated);
             setLanguage(updated.locale);
           }}
-          onClose={() => setAccountOpen(false)}
+          onBack={() => showDiscovery()}
           onLogout={() => void logout()}
           section={accountSection}
-          onSectionChange={(section) => { setAccountSection(section); window.history.pushState({},"",`/account/${section}`); }}
+          onSectionChange={(section) => openAccountSection(section)}
+          preferences={discoveryPreferences}
+          languages={supportedLanguages}
+          tags={publicTags}
+          preferencesSaving={preferencesSaving}
+          preferencesMessage={preferencesMessage}
+          onPreferencesChange={(preferences) => { setDiscoveryPreferences(preferences); setPreferencesMessage(""); }}
+          onPreferencesSave={() => void saveDiscoveryPreferences()}
+          onPreferencesReset={() => void resetDiscoveryPreferences()}
+          following={followingRooms}
+          followingLoading={followingLoading}
+          followingError={followingError}
+          onFollowingRetry={() => void loadFollowing()}
+          onOpenFollowing={(item) => showRoom(item)}
+          onReminderChange={async (streamerId, enabled) => { await request(`/api/streamers/${streamerId}/reminder`, {method:"PATCH",body:JSON.stringify({enabled})}); await loadFollowing(); }}
+          onUnfollow={async (item) => { await request(`/api/streamers/${item.streamer_id}/follow`, {method:"DELETE"}); await loadFollowing(); await loadRooms(); }}
+          onOpenHistory={(slug) => void request(`/api/rooms/${encodeURIComponent(slug)}`).then((data) => showRoom(data.room))}
         />
       ) : !isGuest && !user.ageAcknowledged ? (
         <section className="age-gate">
@@ -1235,6 +1277,12 @@ function App() {
                 : <button type="button" onClick={() => void hydrateAudienceRoute(window.location.pathname)}>{language === "en" ? "Try again" : "重试"}</button>}
             />
           </section>
+        ) : publicUserProfile ? (
+          <PublicAudienceProfileView profile={publicUserProfile} authenticated={!isGuest} zh={language==="zh"} onBack={returnFromAudienceDetail} onEdit={()=>openAccountSection("profile")} onChanged={setPublicUserProfile} onOpenCreator={()=>{
+            if(!publicUserProfile.creatorRoomSlug)return;
+            const creatorRoom=rooms.find(item=>item.slug===publicUserProfile.creatorRoomSlug);
+            if(creatorRoom)showProfile(creatorRoom);else void request(`/api/rooms/${encodeURIComponent(publicUserProfile.creatorRoomSlug)}`).then(data=>showProfile(data.room));
+          }}/>
         ) : profileRoom ? (
           <PublicCreatorProfileView
             room={profileRoom}
@@ -1285,21 +1333,21 @@ function App() {
           <section className="workspace audience-discovery" id="discover">
             <div className="discovery-shell">
               <div className="discovery-content">
-                {!isGuest && followingRooms.length ? <FollowingAvatarRow
-                  creators={followingRooms}
+                {!isGuest && followingRooms.some((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local") ? <FollowingAvatarRow
+                  creators={followingRooms.filter((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local")}
                   zh={language === "zh"}
                   onOpen={(item) => showRoom(item as Room)}
-                  onViewAll={openFollowingDirectory}
+                  onViewAll={() => openAccountSection("following")}
                 /> : null}
                 <div className="discovery-feed-anchor" id="live-now">
                   <MobileDiscoveryFeed
                     rooms={rooms}
-                    following={followingRooms}
+                    following={followingRooms.filter((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local")}
                     view={mobileDiscoveryView}
                     selectedLanguages={selectedLanguages}
                     selectedTag={selectedTag}
                     languages={supportedLanguages}
-                    tags={[...publicTags,...communityTags]}
+                    tags={publicTags}
                     roomsLoading={roomsLoading}
                     followingLoading={followingLoading}
                     roomsError={roomsError}
@@ -1327,7 +1375,7 @@ function App() {
                       <div className="discovery-filter-row">
                         <select className="discovery-language-filter" value={selectedTag} onChange={(event)=>setSelectedTag(event.target.value)} aria-label={language==="zh"?"内容标签":"Content tag"}>
                           <option value="">{language==="zh"?"所有标签":"All tags"}</option>
-                          {[...publicTags,...communityTags].map(item=><option key={item.id} value={item.slug}>{item.displayName}</option>)}
+                          {publicTags.map(item=><option key={item.id} value={item.slug}>{item.displayName}</option>)}
                         </select>
                         {selectedLanguages.length||selectedTag?<button type="button" className="secondary" onClick={()=>{setSelectedLanguages([]);setSelectedTag("");}}>{language==="zh"?"清除筛选":"Clear filters"}</button>:null}
                       </div>
@@ -1355,8 +1403,8 @@ function App() {
                         />
                       )) : (
                         <div className="live-empty-compact">
-                          <span><strong>{language === "en" ? "Nobody is live right now" : "暂时没有主播开播"}</strong><small>{language === "en" ? "Recommended creators are ready below." : "下方仍有推荐主播。"}</small></span>
-                          <button type="button" onClick={() => { setQuery("");setSelectedLanguages([]);setSelectedTag(""); }}>{language === "en" ? "Browse all live rooms" : "浏览全部直播间"}</button>
+                          <span><strong>{language === "en" ? "No one is live right now" : "暂时没有主播开播"}</strong><small>{rooms.length ? (language === "en" ? "Explore recommended creators or popular tags below." : "可在下方浏览推荐主播或热门标签。") : (language === "en" ? "Try another filter or check back soon." : "请尝试其他筛选或稍后再来。")}</small></span>
+                          {selectedLanguages.length||selectedTag||settledQuery?<button type="button" onClick={() => { setQuery("");setSettledQuery("");setSelectedLanguages([]);setSelectedTag(""); }}>{language === "en" ? "Clear filters" : "清除筛选"}</button>:!isGuest?<button type="button" onClick={()=>openAccountSection("following")}>{language==="en"?"View followed creators":"查看关注的主播"}</button>:null}
                         </div>
                       )}
                     </div>
@@ -1372,7 +1420,7 @@ function App() {
                         </div>
                       </section>
                     ) : null}
-                    <section className="language-discovery" aria-labelledby="language-discovery-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"按语言发现":"Language"}</p><h2 id="language-discovery-title">{language==="zh"?"选择直播语言":"Streams in your languages"}</h2></div></div><div className="language-filter-chips">{supportedLanguages.map(item=><button type="button" key={item.code} className={selectedLanguages.includes(item.code)?"active":""} aria-pressed={selectedLanguages.includes(item.code)} onClick={()=>setSelectedLanguages(selectedLanguages.includes(item.code)?selectedLanguages.filter(code=>code!==item.code):[...selectedLanguages,item.code])}>{language==="zh"?item.name_native:item.name_en}</button>)}</div></section>
+                    <section className="language-discovery" aria-labelledby="language-discovery-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"按语言发现":"Language"}</p><h2 id="language-discovery-title">{language==="zh"?"筛选直播语言":"Filter stream languages"}</h2></div></div><div className="language-filter-chips">{supportedLanguages.slice(0,6).map(item=><button type="button" key={item.code} className={selectedLanguages.includes(item.code)?"active":""} aria-pressed={selectedLanguages.includes(item.code)} onClick={()=>setSelectedLanguages(selectedLanguages.includes(item.code)?selectedLanguages.filter(code=>code!==item.code):[...selectedLanguages,item.code])}>{language==="zh"?item.name_native:item.name_en}</button>)}</div></section>
                     {publicTags.length ? <section className="popular-tags" id="popular-tags" aria-labelledby="popular-tags-title">
                       <div className="discovery-section-heading">
                         <div><p className="eyebrow">{language === "en" ? "Browse by interest" : "按兴趣浏览"}</p><h2 id="popular-tags-title">{language === "en" ? "Popular tags" : "热门标签"}</h2></div>
@@ -1384,55 +1432,8 @@ function App() {
                       </div>
                     </section> : null}
                     {rooms.some((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local")?<section className="trending-streams" aria-labelledby="trending-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"热门趋势":"Trending"}</p><h2 id="trending-title">{language==="zh"?"现在热门":"Trending now"}</h2></div></div><div className="live-stream-grid">{rooms.filter((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local").slice(0,4).map((item,index)=><LiveStreamCard key={`trending-${item.slug}`} room={item} index={index} t={t} zh={language==="zh"} onOpen={(selected)=>showRoom(selected as Room)}/>)}</div></section>:null}
-                    {communityTags.length?<section className="community-discovery" aria-labelledby="community-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"自愿选择":"Community"}</p><h2 id="community-title">{language==="zh"?"社区":"Communities"}</h2><p>{language==="zh"?"由平台维护、主播自愿选择。":"Platform-maintained labels creators may select voluntarily."}</p></div></div><div className="language-filter-chips">{communityTags.map(item=><button type="button" key={item.id} className={selectedTag===item.slug?"active":""} onClick={()=>setSelectedTag(selectedTag===item.slug?"":item.slug)}>{item.displayName}</button>)}</div></section>:null}
-                    {rooms.some((item) => item.next_stream_at) ? <section className="upcoming-streams" aria-labelledby="upcoming-streams-title">
-                      <div className="discovery-section-heading"><div><p className="eyebrow">{language === "en" ? "Plan what to watch" : "安排观看"}</p><h2 id="upcoming-streams-title">{language === "en" ? "Upcoming streams" : "即将开播"}</h2></div></div>
-                      <div className="upcoming-stream-list">
-                        {rooms.filter((item) => item.next_stream_at).sort((a, b) => new Date(a.next_stream_at!).getTime() - new Date(b.next_stream_at!).getTime()).slice(0, 4).map((item) => <button type="button" key={item.slug} onClick={() => showProfile(item)}>
-                          <CreatorAvatar name={item.streamer_name} url={item.avatar_url} className="upcoming-stream-avatar" />
-                          <span><strong>{item.streamer_name}</strong><small>{new Date(item.next_stream_at!).toLocaleString(language === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" })}</small></span>
-                        </button>)}
-                      </div>
-                    </section> : null}
                   </div>
                 </div>
-                {!isGuest && discoveryPreferences ? (
-                  <DiscoveryPreferencePanel
-                    preferences={discoveryPreferences}
-                    languages={supportedLanguages}
-                    tags={publicTags}
-                    zh={language === "zh"}
-                    saving={preferencesSaving}
-                    message={preferencesMessage}
-                    onChange={(preferences) => { setDiscoveryPreferences(preferences); setPreferencesMessage(""); }}
-                    onSave={() => void saveDiscoveryPreferences()}
-                    onReset={() => void resetDiscoveryPreferences()}
-                  />
-                ) : null}
-                {!isGuest && followingDirectoryOpen ? <FollowingFeed
-                  t={t}
-                  creators={followingRooms}
-                  loading={followingLoading}
-                  error={followingError}
-                  onRetry={() => void loadFollowing()}
-                  onOpen={(item) => {
-                    showRoom(item);
-                  }}
-                  onReminderChange={async (streamerId, enabled) => {
-                    await request(`/api/streamers/${streamerId}/reminder`, {
-                      method: "PATCH",
-                      body: JSON.stringify({ enabled }),
-                    });
-                    setFollowingRooms((current) => current.map((item) =>
-                      item.streamer_id === streamerId ? { ...item, reminder_enabled: enabled } : item,
-                    ));
-                  }}
-                /> : null}
-                {!isGuest ? <AudienceShelf
-                  t={t}
-                  creators={followingRooms}
-                  onOpenRoom={(slug) => void request(`/api/rooms/${encodeURIComponent(slug)}`).then((data) => showRoom(data.room))}
-                /> : null}
               </div>
             </div>
           </section>
@@ -1452,7 +1453,7 @@ function App() {
         <MobileBottomNav
           active={accountOpen ? "me" : mobileTab}
           zh={language === "zh"}
-          hidden={Boolean(room || profileRoom || creatorPortalStep || accountOpen)}
+          hidden={Boolean(room || profileRoom || publicUserProfile || creatorPortalStep || accountOpen)}
           showCreatorEntry={false}
           onNavigate={navigateMobile}
         />
@@ -1499,22 +1500,33 @@ function AccountCenter({
   user,
   language,
   onUpdated,
-  onClose,
+  onBack,
   onLogout,
   section,
   onSectionChange,
+  preferences,languages,tags,preferencesSaving,preferencesMessage,onPreferencesChange,onPreferencesSave,onPreferencesReset,
+  following,followingLoading,followingError,onFollowingRetry,onOpenFollowing,onReminderChange,onUnfollow,onOpenHistory,
 }: {
   user: User;
   language: Language;
   onUpdated: (user: User) => void;
-  onClose: () => void;
+  onBack: () => void;
   onLogout: () => void;
-  section: "profile" | "security" | "sessions" | "wallet";
-  onSectionChange: (section: "profile" | "security" | "sessions" | "wallet") => void;
+  section: AccountSection;
+  onSectionChange: (section: AccountSection) => void;
+  preferences: DiscoveryPreferences|null; languages: SupportedLanguage[]; tags: PublicTag[]; preferencesSaving:boolean; preferencesMessage:""|"saved"|"reset"|"error";
+  onPreferencesChange:(value:DiscoveryPreferences)=>void; onPreferencesSave:()=>void; onPreferencesReset:()=>void;
+  following:Room[]; followingLoading:boolean; followingError:boolean; onFollowingRetry:()=>void; onOpenFollowing:(room:Room)=>void;
+  onReminderChange:(streamerId:string,enabled:boolean)=>Promise<void>; onUnfollow:(room:Room)=>Promise<void>; onOpenHistory:(slug:string)=>void;
 }) {
   const zh = language === "zh";
+  const titles:Record<AccountSection,string>={profile:zh?"资料":"Profile",security:zh?"密码与恢复":"Password & recovery",sessions:zh?"登录设备":"Signed-in devices",preferences:zh?"发现偏好":"Discovery preferences",wallet:zh?"钱包":"Wallet",following:zh?"关注":"Following",activity:zh?"活动记录":"Activity",notifications:zh?"通知":"Notifications"};
   const [displayName, setDisplayName] = useState(user.displayName);
   const [locale, setLocale] = useState<Language>(user.locale);
+  const [publicBio,setPublicBio]=useState("");
+  const [publicProfileEnabled,setPublicProfileEnabled]=useState(true);
+  const [publicAvatarUrl,setPublicAvatarUrl]=useState<string|null>(null);
+  const [avatarSaving,setAvatarSaving]=useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -1525,13 +1537,14 @@ function AccountCenter({
       setSessions(result.sessions),
     );
   useEffect(refreshSessions, []);
+  useEffect(()=>{void request("/api/account/profile").then(result=>{setPublicBio(result.publicProfile?.bio??"");setPublicProfileEnabled(result.publicProfile?.enabled!==false);setPublicAvatarUrl(result.publicProfile?.avatarUrl??null);});},[user.id]);
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
     setNotice("");
     try {
       const result = await request("/api/account/profile", {
         method: "PATCH",
-        body: JSON.stringify({ displayName, locale }),
+        body: JSON.stringify({ displayName, locale, bio:publicBio, publicProfileEnabled }),
       });
       onUpdated(result.user);
       setNotice(zh ? "账户资料已保存。" : "Account profile saved.");
@@ -1539,6 +1552,8 @@ function AccountCenter({
       setNotice(zh ? "无法保存账户资料。" : "The account profile could not be saved.");
     }
   }
+  async function uploadPublicAvatar(file:File|null){if(!file)return;setAvatarSaving(true);setNotice("");try{const form=new FormData();form.append("avatar",file);const result=await request("/api/account/avatar",{method:"POST",body:form});setPublicAvatarUrl(result.avatarUrl);setNotice(zh?"头像已保存。":"Avatar saved.");}catch{setNotice(zh?"无法保存头像。请使用不超过 5 MB 的 JPEG、PNG 或 WebP。":"Avatar could not be saved. Use a JPEG, PNG, or WebP up to 5 MB.");}finally{setAvatarSaving(false);}}
+  async function removePublicAvatar(){setAvatarSaving(true);setNotice("");try{await request("/api/account/avatar",{method:"DELETE"});setPublicAvatarUrl(null);setNotice(zh?"头像已移除。":"Avatar removed.");}catch{setNotice(zh?"暂时无法移除头像。":"Avatar could not be removed.");}finally{setAvatarSaving(false);}}
   async function changePassword(event: FormEvent) {
     event.preventDefault();
     setNotice("");
@@ -1588,25 +1603,28 @@ function AccountCenter({
     <section className="account-center workspace">
       <div className="account-center-heading">
         <div>
-          <p className="eyebrow">{zh ? "账户与安全" : "Account & security"}</p>
-          <h2>{zh ? "管理您的账户" : "Manage your account"}</h2>
+          <p className="eyebrow">{zh ? "账户" : "ACCOUNT"}</p>
+          <h2>{titles[section]}</h2>
           <p className="muted">@{user.handle} · {roleLabel(copy[language], user.role)}</p>
         </div>
         <div>
-          <button className="secondary" onClick={onClose}>{zh ? "关闭" : "Close"}</button>
+          <button className="secondary" onClick={onBack}>{zh ? "返回发现" : "Back to Discover"}</button>
           <button className="secondary mobile-account-signout" onClick={onLogout}>{zh ? "退出登录" : "Sign out"}</button>
         </div>
       </div>
       {notice && <p className="account-notice" role="status">{notice}</p>}
       <nav className="account-section-nav" aria-label={zh ? "账户设置" : "Account settings"}>
-        {(["profile","security","sessions","wallet"] as const).map((item) => <button key={item} type="button" className={section === item ? "active" : "secondary"} aria-current={section === item ? "page" : undefined} onClick={() => onSectionChange(item)}>{item === "profile" ? (zh ? "资料" : "Profile") : item === "security" ? (zh ? "安全" : "Security") : item === "sessions" ? (zh ? "登录设备" : "Sessions") : (zh ? "钱包" : "Wallet")}</button>)}
+        {(["profile","security","sessions","preferences","wallet"] as const).map((item) => <button key={item} type="button" className={section === item ? "active" : "secondary"} aria-current={section === item ? "page" : undefined} onClick={() => onSectionChange(item)}>{titles[item]}</button>)}
       </nav>
       <div className="account-center-grid">
         <section hidden={section !== "profile"}>
           <h3>{zh ? "账户资料" : "Account profile"}</h3>
           <form className="account-form" onSubmit={(event) => void saveProfile(event)}>
+            <div className="account-public-avatar"><CreatorAvatar name={displayName} url={publicAvatarUrl} className="account-public-avatar-image"/><div><label className="secondary account-avatar-upload">{avatarSaving?(zh?"保存中…":"Saving…"):(zh?"上传头像":"Upload avatar")}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={avatarSaving} onChange={event=>{void uploadPublicAvatar(event.target.files?.[0]??null);event.currentTarget.value="";}}/></label>{publicAvatarUrl?<button type="button" className="secondary" disabled={avatarSaving} onClick={()=>void removePublicAvatar()}>{zh?"移除":"Remove"}</button>:null}</div></div>
             <label>{zh ? "显示名称" : "Display name"}<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} required /></label>
+            <label>{zh?"公开简介":"Public bio"}<textarea value={publicBio} onChange={event=>setPublicBio(event.target.value)} maxLength={280} placeholder={zh?"简单介绍一下自己":"Tell people a little about yourself"}/><small>{publicBio.length}/280</small></label>
             <label>{zh ? "界面语言" : "Interface language"}<select value={locale} onChange={(event) => setLocale(event.target.value as Language)}><option value="en">English</option><option value="zh">中文</option></select></label>
+            <label className="account-profile-visibility"><input type="checkbox" checked={publicProfileEnabled} onChange={event=>setPublicProfileEnabled(event.target.checked)}/><span><strong>{zh?"公开我的观众资料":"Public audience profile"}</strong><small>{zh?"关闭后，其他用户无法打开您的观众资料。已启用的主播主页仍保持公开。":"When off, other people cannot open your audience profile. An active creator profile remains public."}</small></span></label>
             <button>{zh ? "保存资料" : "Save profile"}</button>
           </form>
           <p className="form-help">{zh ? "账户名目前不可更改，以保持直播间、账本和审核记录的一致性。" : "Handles remain fixed so room ownership, ledgers, and moderation records stay consistent."}</p>
@@ -1630,11 +1648,14 @@ function AccountCenter({
             </article>
           ))}
         </section>
-        {user.role === "audience" && section === "wallet" ? <AudienceRWallet zh={zh} /> : null}
+        {section === "preferences" && preferences ? <DiscoveryPreferencePanel preferences={preferences} languages={languages} tags={tags} zh={zh} saving={preferencesSaving} message={preferencesMessage} onChange={onPreferencesChange} onSave={onPreferencesSave} onReset={onPreferencesReset} /> : null}
+        {section === "wallet" ? <AudienceRWallet zh={zh} /> : null}
+        {section === "following" ? <FollowingFeed t={copy[language]} creators={following} loading={followingLoading} error={followingError} onRetry={onFollowingRetry} onOpen={onOpenFollowing} onReminderChange={onReminderChange} onUnfollow={onUnfollow} /> : null}
+        {section === "activity" ? <ActivityPage zh={zh} onOpenRoom={onOpenHistory} /> : null}
+        {section === "notifications" ? <NotificationsPage zh={zh} onOpenRoom={onOpenHistory} /> : null}
         <section className="account-recovery" hidden={section !== "security"}>
           <h3>{zh ? "账户恢复" : "Account recovery"}</h3>
-          <p>{zh ? "恢复功能尚未启用。当前版本不会收集电子邮箱、发送恢复邮件或使用外部身份服务。" : "Recovery is not enabled yet. This version does not collect email, send reset links, or use an external identity provider."}</p>
-          <p className="form-help">{zh ? "计划方案：验证邮箱、短时一次性链接、所有会话撤销、速率限制和安全事件记录；启用前需要隐私政策、邮件服务和所有者批准。" : "Planned design: verified email, short-lived single-use links, full session revocation, rate limits, and security-event records. Activation requires a privacy policy, mail service, and owner approval."}</p>
+          <p>{zh ? "账户恢复功能尚不可用。" : "Account recovery is not available yet."}</p>
         </section>
       </div>
     </section>
@@ -1697,91 +1718,20 @@ function AudienceRWallet({ zh }: { zh: boolean }) {
     </section>
   );
 }
-function AudienceShelf({
-  t,
-  creators,
-  onOpenRoom,
-}: {
-  t: typeof copy.en;
-  creators: Room[];
-  onOpenRoom: (slug: string) => void;
-}) {
-  const zh = t.title !== "Stream MVP";
-  const [history, setHistory] = useState<Room[]>([]);
-  const [notes, setNotes] = useState<
-    { id: string; kind: string; title: string; body: string; read_at: string | null; room_slug?: string | null }[]
-  >([]);
-  const loadNotes = () =>
-    void request("/api/me/notifications").then((d) =>
-      setNotes(d.notifications),
-    );
-  useEffect(() => {
-    void request("/api/me/history").then((d) => setHistory(d.rooms));
-    loadNotes();
-    const timer = window.setInterval(loadNotes, 60_000);
-    const socket = io({ transports: ["websocket"] });
-    socket.on("notification:new", loadNotes);
-    return () => {
-      window.clearInterval(timer);
-      socket.disconnect();
-    };
-  }, []);
-  async function markRead(id: string) {
-    await request(`/api/me/notifications/${id}/read`, { method: "PATCH", body: "{}" });
-    loadNotes();
-  }
-  async function markAllRead() {
-    await request("/api/me/notifications/read-all", { method: "POST", body: "{}" });
-    loadNotes();
-  }
-  const unread = notes.filter((item) => !item.read_at).length;
-  const upcoming = creators
-    .filter((item) => item.next_stream_at && new Date(item.next_stream_at).getTime() > Date.now())
-    .sort((a, b) => new Date(a.next_stream_at!).getTime() - new Date(b.next_stream_at!).getTime())
-    .slice(0, 4);
-  return (
-    <div className="shelves" id="audience-library">
-      <div>
-        <h3>{t.recent}</h3>
-        {history.length ? (
-          history.map((item) => (
-            <p key={item.slug}>
-              {item.title} · {item.streamer_name}
-            </p>
-          ))
-        ) : (
-          <p className="muted">{t.noHistory}</p>
-        )}
-      </div>
-      <div>
-        <div className="notification-heading"><h3>{t.notifications}{unread ? ` (${unread})` : ""}</h3>{unread ? <button className="secondary" onClick={() => void markAllRead()}>{t.title === "Stream MVP" ? "Mark all read" : "全部标为已读"}</button> : null}</div>
-        {notes.length ? (
-          notes.slice(0, 4).map((item) => (
-            <div key={item.id} className={`notification-item ${item.read_at ? "read" : "unread"}`}>
-              <p><strong>{item.title}</strong> · {item.body}</p>
-              <div className="notification-actions">
-                {item.room_slug ? <button type="button" className="secondary" onClick={() => { if (!item.read_at) void markRead(item.id); onOpenRoom(item.room_slug!); }}>{zh ? "查看直播间" : "View room"}</button> : null}
-                {!item.read_at ? <button className="secondary" onClick={() => void markRead(item.id)}>{zh ? "标为已读" : "Mark read"}</button> : null}
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="muted">{t.noNotes}</p>
-        )}
-      </div>
-      <div className="upcoming-reminders">
-        <div className="notification-heading"><h3>{zh ? "即将开播" : "Upcoming"}</h3><span>{upcoming.length}</span></div>
-        {upcoming.length ? <div className="following-feed-list">{upcoming.map((item) => (
-          <article className="following-feed-item" key={item.slug}>
-            <button type="button" className="secondary following-feed-open" onClick={() => onOpenRoom(item.slug)}>
-              <CreatorAvatar name={item.streamer_name} url={item.avatar_url} className="following-avatar" />
-              <span><strong>{item.streamer_name}</strong><time dateTime={item.next_stream_at!}>{new Date(item.next_stream_at!).toLocaleString(zh ? "zh-CN" : "en-US", { timeZone: item.schedule_timezone || undefined })}</time><small>{item.reminder_enabled === false ? (zh ? "提醒已关闭" : "Reminder off") : (zh ? "提醒已开启" : "Reminder on")}</small></span>
-            </button>
-          </article>
-        ))}</div> : <p className="muted">{zh ? "关注的主播还没有发布下一场直播时间。" : "Followed creators have not published an upcoming stream yet."}</p>}
-      </div>
-    </div>
-  );
+function ActivityPage({zh,onOpenRoom}:{zh:boolean;onOpenRoom:(slug:string)=>void}){
+  const [history,setHistory]=useState<any[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState(false);const [page,setPage]=useState(1);const [more,setMore]=useState(false);
+  const load=(next=1)=>{setLoading(true);request(`/api/me/history?page=${next}`).then((d)=>{setHistory((old)=>next===1?d.rooms:[...old,...d.rooms]);setMore(d.hasMore);setPage(next);}).catch(()=>setError(true)).finally(()=>setLoading(false));};
+  useEffect(()=>{load();},[]);
+  return <section className="account-route-page" aria-busy={loading}><h3>{zh?"最近浏览":"Recently visited"}</h3>{error?<EmptyState icon="!" title={zh?"暂时无法加载活动记录":"Activity is temporarily unavailable"} description={zh?"请稍后重试。":"Try again in a moment."}/>:history.length?<><div className="activity-list">{history.map((item)=><button className="secondary" type="button" key={item.slug} onClick={()=>onOpenRoom(item.slug)}><span><strong>{item.title}</strong><small>{item.streamer_name}</small></span><time dateTime={item.visited_at}>{new Date(item.visited_at).toLocaleString()}</time></button>)}</div>{more?<button className="secondary account-load-more" disabled={loading} onClick={()=>load(page+1)}>{zh?"加载更多":"Load more"}</button>:null}</>:!loading?<EmptyState icon="↺" title={zh?"还没有浏览记录":"No viewing activity yet"} description={zh?"您访问过的公开直播间会显示在这里。":"Public rooms you visit will appear here."}/>:null}</section>;
+}
+function NotificationsPage({zh,onOpenRoom}:{zh:boolean;onOpenRoom:(slug:string)=>void}){
+  const [notes,setNotes]=useState<any[]>([]);const [loading,setLoading]=useState(true);const [page,setPage]=useState(1);const [more,setMore]=useState(false);
+  const load=(next=1)=>request(`/api/me/notifications?page=${next}`).then((d)=>{setNotes((old)=>next===1?d.notifications:[...old,...d.notifications]);setMore(d.hasMore);setPage(next);}).finally(()=>setLoading(false));
+  useEffect(()=>{void load();const socket=io({transports:["websocket"]});socket.on("notification:new",()=>void load());return()=>{socket.disconnect();};},[]);
+  const mark=async(id:string)=>{await request(`/api/me/notifications/${id}/read`,{method:"PATCH",body:"{}"});await load();};
+  const markAll=async()=>{await request("/api/me/notifications/read-all",{method:"POST",body:"{}"});await load();};
+  const unread=notes.filter((item)=>!item.read_at).length;
+  return <section className="account-route-page" aria-busy={loading}><div className="notification-heading"><h3>{zh?"账户通知":"Account notifications"}</h3>{unread?<button className="secondary" onClick={()=>void markAll()}>{zh?"全部标为已读":"Mark all read"}</button>:null}</div>{notes.length?<><div className="notification-list">{notes.map((item)=><article key={item.id} className={`notification-item ${item.read_at?"read":"unread"}`}><div><strong>{item.title}</strong><p>{item.room_slug&&item.room_is_live===false?(zh?"该主播目前未直播。":"This creator is currently offline."):item.body}</p><time dateTime={item.created_at} title={new Date(item.created_at).toLocaleString()}>{new Intl.RelativeTimeFormat(zh?"zh":"en",{numeric:"auto"}).format(Math.round((new Date(item.created_at).getTime()-Date.now())/60000),"minute")}</time></div><div className="notification-actions">{item.room_slug?<button className="secondary" onClick={()=>{if(!item.read_at)void mark(item.id);onOpenRoom(item.room_slug);}}>{zh?"查看当前页面":"Open current page"}</button>:null}{!item.read_at?<button className="secondary" onClick={()=>void mark(item.id)}>{zh?"标为已读":"Mark read"}</button>:null}</div></article>)}</div>{more?<button className="secondary account-load-more" disabled={loading} onClick={()=>void load(page+1)}>{zh?"加载更多":"Load more"}</button>:null}</>:!loading?<EmptyState icon="○" title={zh?"暂无通知":"No notifications yet"} description={zh?"账户和主播更新会显示在这里。":"Account and creator updates will appear here."}/>:null}</section>;
 }
 function FollowingFeed({
   t,
@@ -1791,6 +1741,7 @@ function FollowingFeed({
   onRetry,
   onOpen,
   onReminderChange,
+  onUnfollow,
 }: {
   t: typeof copy.en;
   creators: Room[];
@@ -1799,6 +1750,7 @@ function FollowingFeed({
   onRetry: () => void;
   onOpen: (room: Room) => void;
   onReminderChange: (streamerId: string, enabled: boolean) => Promise<void>;
+  onUnfollow: (room: Room) => Promise<void>;
 }) {
   const zh = t.title !== "Stream MVP";
   if (loading)
@@ -1824,7 +1776,7 @@ function FollowingFeed({
     );
   return (
     <section className="following-feed" id="following-feed">
-      <div className="following-feed-heading"><div><p className="eyebrow">{zh ? "我的关注" : "Following"}</p><h3>{zh ? "关注主播动态" : "Your creator feed"}</h3></div><span>{creators.filter((item) => item.broadcast_state === "live").length} {zh ? "正在直播" : "live"}</span></div>
+      <div className="following-feed-heading"><div><p className="eyebrow">{zh ? "我的关注" : "Following"}</p><h3>{zh ? "全部已关注主播" : "All followed creators"}</h3></div><span>{creators.filter((item) => item.broadcast_state === "live" && item.broadcast_status_source !== "local").length} {zh ? "正在直播" : "live"}</span></div>
       <div className="following-feed-list">
         {creators.map((item) => (
           <article key={item.slug} className="following-feed-item">
@@ -1835,6 +1787,7 @@ function FollowingFeed({
             <button type="button" className="secondary reminder-toggle" aria-pressed={item.reminder_enabled !== false} onClick={() => void onReminderChange(item.streamer_id, item.reminder_enabled === false)}>
               {item.reminder_enabled === false ? (zh ? "开启提醒" : "Remind me") : (zh ? "提醒已开启" : "Reminder on")}
             </button>
+            <button type="button" className="secondary" onClick={() => { if(window.confirm(zh?`取消关注 ${item.streamer_name}？`:`Unfollow ${item.streamer_name}?`)) void onUnfollow(item); }}>{zh?"取消关注":"Unfollow"}</button>
           </article>
         ))}
       </div>
@@ -3956,10 +3909,9 @@ function StreamerStudio({
     void Promise.all([
       request("/api/discovery/languages"),
       request("/api/discovery/tags?type=PUBLIC"),
-      request("/api/discovery/tags?type=COMMUNITY"),
-    ]).then(([languageResult, publicResult, communityResult]) => {
+    ]).then(([languageResult, publicResult]) => {
       setStudioLanguages((languageResult.languages ?? []).map((item: SupportedLanguage) => ({ code: item.code, nameEn: item.name_en, nameNative: item.name_native })));
-      setStudioTags([...(publicResult.tags ?? []), ...(communityResult.tags ?? [])].map((item: any) => ({ id: item.id, slug: item.slug, displayName: item.display_name ?? item.displayName, type: item.tag_type ?? item.type })));
+      setStudioTags((publicResult.tags ?? []).map((item: any) => ({ id: item.id, slug: item.slug, displayName: item.display_name ?? item.displayName, type: item.tag_type ?? item.type })));
     });
   }, []);
   useEffect(() => {
@@ -4711,6 +4663,18 @@ function AdminPanel({ t }: { t: typeof copy.en }) {
     </section>
   );
 }
+function PublicAudienceProfileView({profile,authenticated,zh,onBack,onEdit,onChanged,onOpenCreator}:{profile:PublicUserProfile;authenticated:boolean;zh:boolean;onBack:()=>void;onEdit:()=>void;onChanged:(profile:PublicUserProfile)=>void;onOpenCreator:()=>void}){
+  const [notice,setNotice]=useState("");const [reporting,setReporting]=useState(false);const [reason,setReason]=useState("inappropriate_profile");const [details,setDetails]=useState("");const [busy,setBusy]=useState(false);
+  async function toggleBlock(){if(!authenticated)return;setBusy(true);setNotice("");try{const result=await request(`/api/users/${encodeURIComponent(profile.handle)}/block`,{method:profile.blocked?"DELETE":"PUT",...(profile.blocked?{}:{body:"{}"})});onChanged({...profile,blocked:result.blocked});setNotice(result.blocked?(zh?"已屏蔽此用户。":"User blocked."):(zh?"已取消屏蔽。":"User unblocked."));}catch{setNotice(zh?"暂时无法更新屏蔽设置。":"Block setting could not be updated.");}finally{setBusy(false);}}
+  async function submitReport(event:FormEvent){event.preventDefault();setBusy(true);setNotice("");try{await request(`/api/users/${encodeURIComponent(profile.handle)}/reports`,{method:"POST",body:JSON.stringify({reason,details})});setReporting(false);setDetails("");setNotice(zh?"举报已提交审核。":"Report submitted for review.");}catch{setNotice(zh?"暂时无法提交举报。":"Report could not be submitted.");}finally{setBusy(false);}}
+  return <>
+    <AudienceProfileSurface profile={profile} zh={zh} onBack={onBack} onEdit={profile.isSelf?onEdit:undefined} onCreator={profile.creatorActive&&profile.creatorRoomSlug?onOpenCreator:undefined} onBlock={!profile.isSelf&&authenticated&&!busy?()=>void toggleBlock():undefined} onReport={!profile.isSelf&&authenticated?()=>setReporting(current=>!current):undefined}/>
+    {!profile.isSelf&&!authenticated?<p className="notice auth-resume-notice" role="status">{zh?"登录后可屏蔽或举报用户。":"Log in to block or report a user."}</p>:null}
+    {reporting?<form className="public-profile-report" onSubmit={(event)=>void submitReport(event)}><h3>{zh?"举报个人资料":"Report profile"}</h3><label>{zh?"原因":"Reason"}<select value={reason} onChange={event=>setReason(event.target.value)}><option value="inappropriate_profile">{zh?"不当资料":"Inappropriate profile"}</option><option value="harassment">{zh?"骚扰或辱骂":"Harassment or abuse"}</option><option value="impersonation">{zh?"冒充他人":"Impersonation"}</option><option value="spam">{zh?"垃圾信息":"Spam"}</option></select></label><label>{zh?"补充说明（可选）":"Details (optional)"}<textarea value={details} maxLength={500} onChange={event=>setDetails(event.target.value)}/></label><div><button type="button" className="secondary" onClick={()=>setReporting(false)}>{zh?"取消":"Cancel"}</button><button disabled={busy}>{zh?"提交举报":"Submit report"}</button></div></form>:null}
+    {notice?<p className="notice auth-resume-notice" role="status">{notice}</p>:null}
+  </>;
+}
+
 function PublicCreatorProfileView({
   room,
   recommendations,
@@ -4844,7 +4808,6 @@ function PublicCreatorProfileView({
         onFollow={() => void toggleFollow()}
         onOpenRoom={() => onOpenRoom(room)}
         onShare={() => void shareProfile()}
-        onCopy={() => void shareProfile(true)}
       />
       {shareNotice ? <p className="notice auth-resume-notice share-notice" role="status">{shareNotice}</p> : null}
       {recommendations.length ? (
@@ -4868,16 +4831,12 @@ function RoomCreatorProfileCard({
   streamerId,
   fallbackName,
   broadcastState,
-  following,
-  onFollow,
   onOpenProfile,
   t,
 }: {
   streamerId: string;
   fallbackName: string;
   broadcastState?: "live" | "connecting" | "offline" | "unavailable";
-  following: boolean;
-  onFollow: () => void;
   onOpenProfile: () => void;
   t: Record<string, string>;
 }) {
@@ -4886,7 +4845,7 @@ function RoomCreatorProfileCard({
     void request(`/api/streamers/${streamerId}`)
       .then((d) => setProfile(d.streamer))
       .catch(() => setProfile(null));
-  }, [streamerId, following]);
+  }, [streamerId]);
   if (!profile) return null;
   return (
     <aside className="creator-profile" aria-label={`${fallbackName} profile`}>
@@ -4914,9 +4873,6 @@ function RoomCreatorProfileCard({
         ) : null}
       </div>
       <div className="creator-profile-card-actions">
-        <button type="button" aria-pressed={following} onClick={onFollow}>
-          {following ? (t.title === "Stream MVP" ? "Following" : "已关注") : t.follow}
-        </button>
         <button type="button" className="secondary" onClick={onOpenProfile}>
           {t.title === "Stream MVP" ? "View full profile" : "查看完整主页"}
         </button>
@@ -5023,6 +4979,7 @@ function RoomView({
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const giftTimerRef = useRef(0);
   const handledAuthIntentRef = useRef(0);
+  const supportAvailable = broadcast.state === "live" && broadcast.source !== "local";
   useEffect(() => {
     if (!shareNotice) return;
     const timer = window.setTimeout(() => setShareNotice(""), 4_000);
@@ -5074,9 +5031,6 @@ function RoomView({
     refreshBroadcast();
     refreshShow();
     refreshWallet();
-    void request(`/api/rooms/${room.slug}/chat-history`).then((d) =>
-      setMessages(d.messages),
-    );
     if (authenticated) void request("/api/gifts").then((d) => {
       setGifts(d.gifts);
       setSelectedGiftId((current) => current || d.gifts[0]?.id || "");
@@ -5087,6 +5041,7 @@ function RoomView({
       setFollowing(data.following),
     );
   }, [room.slug, authenticated]);
+  useEffect(()=>{if(supportAvailable)void request(`/api/rooms/${room.slug}/chat-history`).then((d)=>setMessages(d.messages));else{setMessages([]);setPresence(0);setChatStatus(t.offline);}},[room.slug,supportAvailable,t.offline]);
   useEffect(() => {
     refreshPlayback();
   }, [broadcast.state, room.slug]);
@@ -5104,6 +5059,7 @@ function RoomView({
     return () => window.clearTimeout(timer);
   }, [show?.session?.expiresAt, room.slug]);
   useEffect(() => {
+    if(!supportAvailable){setPresence(0);setMessages([]);setChatStatus(t.offline);socketRef.current=null;return;}
     const socket = io({ transports: ["websocket"] });
     socketRef.current = socket;
     socket.on("connect", () => {
@@ -5177,7 +5133,7 @@ function RoomView({
       window.clearTimeout(giftTimerRef.current);
       socket.disconnect();
     };
-  }, [room.slug, t, giftSoundEnabled]);
+  }, [room.slug, t, giftSoundEnabled, supportAvailable]);
   function send() {
     if (!authenticated) {
       onRequireAuth("chat");
@@ -5288,7 +5244,6 @@ function RoomView({
     });
     setGiftNotice(t.reportSent);
   }
-  const supportAvailable = broadcast.state === "live";
   useEffect(() => {
     if (!authenticated || !resumeIntent || handledAuthIntentRef.current === resumeIntent.id) return;
     if (!["follow", "chat", "gift", "action", "private-access", "report"].includes(resumeIntent.kind)) return;
@@ -5382,7 +5337,7 @@ function RoomView({
                 : broadcast.message || playerMessage}
           </div>
         )}
-        <VideoActivityOverlay messages={messages} gift={activeGift} t={t} />
+        {supportAvailable?<VideoActivityOverlay messages={messages} gift={activeGift} t={t} />:null}
         <MobileRoomOverlay
           creatorName={room.streamer_name}
           avatarUrl={room.avatar_url}
@@ -5399,6 +5354,7 @@ function RoomView({
           giftLabel={t.title === "Stream MVP" ? "Gift" : "礼物"}
           shareLabel={t.title === "Stream MVP" ? "Share" : "分享"}
           giftEnabled={supportAvailable}
+          chatEnabled={supportAvailable}
           moreLabel={t.title === "Stream MVP" ? "More stream actions" : "更多直播操作"}
           reportLabel={t.report}
           privateAccessLabel={supportAvailable && show?.active && !show.session.hasAccess ? t.buyAccess : undefined}
@@ -5423,6 +5379,7 @@ function RoomView({
         state={broadcast.state}
         stateLabel={broadcastLabel(t, broadcast.state)}
         presence={presence}
+        showPresence={supportAvailable}
         presenceLabel={t.inRoom}
         following={following}
         followLabel={t.follow}
@@ -5449,9 +5406,9 @@ function RoomView({
         <aside className="room-offline-guidance" role="status">
           <div>
             <p className="eyebrow">{t.title === "Stream MVP" ? "CREATOR OFFLINE" : "主播离线"}</p>
-            <strong>{t.title === "Stream MVP" ? "Follow this creator for their next live session." : "关注主播，不错过下一场直播。"}</strong>
+            <strong>{following?(t.title === "Stream MVP" ? "You’re following this creator. We’ll let you know when they go live." : "您已关注该主播，开播时我们会通知您。"):(t.title === "Stream MVP" ? "Follow this creator to be notified when they go live." : "关注主播以接收开播通知。")}</strong>
           </div>
-          <button type="button" className="secondary" onClick={onOpenProfile}>{t.title === "Stream MVP" ? "View profile & schedule" : "查看主页和日程"}</button>
+          <div className="offline-room-actions"><button type="button" className="secondary" onClick={onOpenProfile}>{t.title === "Stream MVP" ? "View schedule" : "查看日程"}</button><button type="button" onClick={back}>{t.title === "Stream MVP" ? "Browse live streams" : "浏览直播"}</button></div>
         </aside>
       ) : null}
       {supportAvailable && room.goal_text && !goalProgress && (
@@ -5541,8 +5498,6 @@ function RoomView({
         streamerId={room.streamer_id}
         fallbackName={room.streamer_name}
         broadcastState={broadcast.state}
-        following={following}
-        onFollow={() => void follow()}
         onOpenProfile={onOpenProfile}
         t={t}
       />
@@ -5632,7 +5587,7 @@ function RoomView({
             </p>
           ))}
       </aside> : null}
-      <LiveChatPanel
+      {supportAvailable?<LiveChatPanel
         title={t.liveChat}
         status={chatStatus}
         presence={presence}
@@ -5648,7 +5603,7 @@ function RoomView({
         onSend={send}
         onGift={() => authenticated ? document.querySelector("#room-gifts")?.scrollIntoView({ behavior: "smooth" }) : onRequireAuth("gift")}
         className="desktop-room-chat"
-      />
+      />:null}
       <section className="mobile-room-recommendations" aria-labelledby="mobile-room-next-title">
         <div className="mobile-room-next-heading">
           <p className="eyebrow">{t.title === "Stream MVP" ? "Keep watching" : "继续观看"}</p>
@@ -5668,7 +5623,7 @@ function RoomView({
         </div>
       </section>
       <BottomSheet
-        open={mobileSheet === "chat"}
+        open={supportAvailable && mobileSheet === "chat"}
         title={t.liveChat}
         description={`${chatStatus} · ${presence} ${t.inRoom}`}
         closeLabel={t.title === "Stream MVP" ? "Close live chat" : "关闭直播聊天"}

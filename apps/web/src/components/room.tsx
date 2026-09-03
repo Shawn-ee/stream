@@ -4,7 +4,7 @@ import { ShareButton } from "./share";
 
 type ChatMessage = {
   id: string;
-  sender: { displayName: string };
+  sender: { displayName: string; handle?: string };
   body: string;
 };
 
@@ -18,6 +18,7 @@ export function RoomCreatorBar({
   state,
   stateLabel,
   presence,
+  showPresence,
   presenceLabel,
   following,
   followLabel,
@@ -48,6 +49,7 @@ export function RoomCreatorBar({
   state: string;
   stateLabel: string;
   presence: number;
+  showPresence: boolean;
   presenceLabel: string;
   following: boolean;
   followLabel: string;
@@ -80,7 +82,7 @@ export function RoomCreatorBar({
           <span className={`room-state state-${state}`}>{stateLabel}</span>
         </div>
         <h2>{title}</h2>
-        <p>{languages.map((item) => item.nameNative || item.nameEn).join(" · ")} · {presence} {presenceLabel}</p>
+        <p>{languages.map((item) => item.nameNative || item.nameEn).join(" · ")}{showPresence?` · ${presence} ${presenceLabel}`:""}</p>
         {tags.length ? <div className="room-detail-tags">{tags.map((item) => <span key={item.id}>{item.displayName}</span>)}</div> : null}
       </div>
       <div className="room-creator-actions">
@@ -157,7 +159,7 @@ export function LiveChatPanel({
       <div className="messages" aria-live="polite" aria-relevant="additions">
         {messages.length ? messages.map((item) => (
           <p className="chat-message" key={item.id}>
-            <strong>{item.sender.displayName}</strong>
+            {item.sender.handle ? <a className="chat-profile-link" href={`/@${encodeURIComponent(item.sender.handle)}`}><strong>{item.sender.displayName}</strong></a> : <strong>{item.sender.displayName}</strong>}
             <span>{item.body}</span>
           </p>
         )) : <p className="room-chat-empty">{emptyLabel}</p>}
@@ -194,6 +196,7 @@ export function MobileRoomOverlay({
   giftLabel,
   shareLabel,
   giftEnabled,
+  chatEnabled,
   moreLabel,
   reportLabel,
   privateAccessLabel,
@@ -222,6 +225,7 @@ export function MobileRoomOverlay({
   giftLabel: string;
   shareLabel: string;
   giftEnabled: boolean;
+  chatEnabled: boolean;
   moreLabel: string;
   reportLabel: string;
   privateAccessLabel?: string;
@@ -248,16 +252,16 @@ export function MobileRoomOverlay({
         <div>
           <strong>{creatorName}</strong>
           <span>{title}</span>
-          <small>{presence} {presenceLabel}</small>
+          {chatEnabled?<small>{presence} {presenceLabel}</small>:null}
         </div>
       </div>
       <div className="mobile-room-action-rail" aria-label={moreLabel}>
         <button type="button" aria-pressed={following} aria-label={following ? unfollowLabel : followLabel} onClick={onFollow}>
           <span aria-hidden="true">♥</span><small>{following ? unfollowLabel : followLabel}</small>
         </button>
-        <button type="button" aria-label={chatLabel} onClick={onChat}>
+        {chatEnabled?<button type="button" aria-label={chatLabel} onClick={onChat}>
           <span aria-hidden="true">✦</span><small>{chatLabel}</small>
-        </button>
+        </button>:null}
         {giftEnabled ? (
           <button type="button" className="mobile-room-gift" aria-label={giftLabel} onClick={onGift}>
             <span aria-hidden="true">◆</span><small>{giftLabel}</small>

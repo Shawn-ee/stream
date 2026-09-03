@@ -1,10 +1,14 @@
 # Architecture Decisions
 
+## 2026-09-03 — Public audience identity remains intentionally limited
+
+Holiwyn provides one public identity per user at `/@handle`. Active creator capabilities enrich that identity, but do not create a second audience login. Audience profiles do not expose private account or behavioral data, and audience-to-audience following is deferred until its privacy, notification, blocking, and moderation semantics are designed.
+
 ## 2026-09-02 — Languages and tags replace room categories
 
 - Every room has exactly one primary language and at most two additional languages from a controlled standard-code catalog.
 - Room language selection uses OR semantics in discovery; codes, not localized names, are stored in URLs and APIs.
-- CONTENT, FORMAT, and MOOD tags classify content. COMMUNITY is controlled and voluntary. SYSTEM and MODERATION tags are internal.
+- CONTENT, FORMAT, and MOOD tags classify public content. COMMUNITY is retained only as deprecated historical data and is inactive; SYSTEM and MODERATION tags are internal.
 - Trending and Featured remain system-owned. Creators cannot assign them.
 - Country flags are not stored, inferred, or rendered.
 - Legacy category fields are deprecated compatibility data; new Studio/public contracts do not use them.
@@ -439,3 +443,10 @@ The active product goal ends at a deployable bilingual test-only streaming platf
 - The audience homepage reserves horizontal space for live content; Following belongs in a compact creator row and the account avatar menu rather than a permanent sidebar or standalone global-nav item.
 - Guest authentication keeps explicit Sign in and Create account actions. Signed-in account, settings, creator application, and sign-out actions are grouped behind one accessible avatar menu; Wallet remains a direct high-frequency action.
 - Live status and homepage ranking continue to use existing authoritative room data. Category and schedule surfaces are views of existing fields, not synthetic recommendations or new backend truth.
+# 2026-09-03 — Discover is live-focused and account content is routed
+
+- `/discover` is canonical. `/tags` and `/categories` are compatibility redirects that preserve query state; Popular tags remain inside Discover.
+- Community labels are inactive and no longer public or creator-selectable. Historical rows are preserved for audit/migration safety.
+- Persistent preferences, Following, Activity, Notifications, and Wallet are account-owned pages. Temporary language/tag/search filters remain URL state on Discover.
+- Offline rooms do not join realtime room presence, load current live chat, or expose a chat composer. Offline community chat is not part of this milestone.
+- Audience-only accounts do not yet have a useful public profile, so their menu uses the accurate label **Profile settings** instead of sending “View public profile” to a private editor.

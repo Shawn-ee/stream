@@ -14,7 +14,7 @@ assert.match(app, /const \[sessionLoading, setSessionLoading\] = useState\(true\
 assert.match(app, /className="app-loading" aria-busy="true"/);
 assert.match(app, /\.finally\(\(\) => setSessionLoading\(false\)\)/);
 
-assert.match(app, /const \[settledQuery, setSettledQuery\] = useState\(""\)/);
+assert.match(app, /const \[settledQuery, setSettledQuery\] = useState\(\(\)=>initialFilters\.get\("q"\)\?\?""\)/);
 assert.match(app, /window\.setTimeout\(\(\) => setSettledQuery\(query\), 250\)/);
 assert.match(app, /encodeURIComponent\(settledQuery\)/);
 assert.doesNotMatch(app, /api\/rooms\?q=\$\{encodeURIComponent\(query\)\}/);
@@ -25,7 +25,7 @@ for (const state of ["roomsError", "followingError"])
   assert.match(app, new RegExp(`const \\[${state}, set${state[0].toUpperCase()}${state.slice(1)}\\]`));
 assert.match(app, /Discovery is temporarily unavailable/);
 assert.match(app, /Following is temporarily unavailable/);
-assert.match(app, /onRetry=\{\(\) => void loadFollowing\(\)\}/);
+assert.match(app, /onFollowingRetry=\{\(\) => void loadFollowing\(\)\}/);
 assert.match(discovery, /Creators are temporarily unavailable/);
 assert.match(discovery, /role="alert"/);
 assert.match(ui, /label = "Loading live creators"/);

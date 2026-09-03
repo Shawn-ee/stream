@@ -12,7 +12,7 @@ const authSurface = app.slice(
 assert.doesNotMatch(authSurface, /demo-(?:audience|streamer|admin)/, "public sign-in must not expose role shortcuts");
 assert.match(app, /isGuest \? <button[\s\S]{0,180}"Log in"/);
 assert.doesNotMatch(app, /className="header-go-live"/, "audience header must not expose Go live");
-for (const item of ["View profile", "Following", "Wallet", "Streamer Studio", "Become a creator", "Settings", "Language · English", "Sign out"])
+for (const item of ["View public profile", "Following", "Activity", "Notifications", "Wallet", "Streamer Studio", "Become a creator", "Account settings", "Sign out"])
   assert.match(navigation, new RegExp(item));
 assert.match(app, /<CreatorOnboarding/);
 

@@ -92,7 +92,7 @@ try {
   const joined = await new Promise((resolve) =>
     socket.emit("room:join", "demo-streamer", resolve),
   );
-  assert.equal(joined.error, undefined);
+  assert.deepEqual(joined, { error: "room_offline" });
   const sent = await new Promise((resolve) =>
     socket.emit("chat:send", { roomSlug: "demo-streamer", body: "guest mutation" }, resolve),
   );
@@ -107,4 +107,4 @@ assert.match(source, /authenticated=\{!isGuest\}/);
 assert.match(source, /Watching and discovery are public/);
 assert.match(source, /onRequireAuth\("chat"\)/);
 
-console.log("Public discovery, safe anonymous reads, interaction gates, and read-only guest realtime verified.");
+console.log("Public discovery, safe anonymous reads, interaction gates, and offline guest realtime refusal verified.");

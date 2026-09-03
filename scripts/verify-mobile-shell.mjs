@@ -25,7 +25,8 @@ assert.match(components, /aria-label=\{zh \? "移动导航" : "Mobile navigation
 assert.match(app, /function navigateMobile\(tab: MobileTab\)/);
 assert.match(app, /tab === "discover"[\s\S]*"#live-now"/);
 assert.match(app, /tab === "go-live"[\s\S]*openBroadcastDashboard/);
-assert.match(app, /"#audience-library"/);
+assert.match(app, /tab === "inbox"[\s\S]*openAccountSection\("notifications"\)/);
+assert.match(app, /tab === "me"[\s\S]*openAccountSection\("profile"\)/);
 assert.match(app, /scrollIntoView\(\{ block: "start" \}\)/);
 assert.match(app, /className=\{`audience-header-center \$\{mobileSearchOpen \? "mobile-search-open" : ""\}`\}/);
 assert.match(app, /<AudienceAccountMenu\b/);

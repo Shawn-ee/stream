@@ -1,5 +1,13 @@
 # Stream Platform Product Goal
 
+## Current milestone — limited public audience profiles
+
+Provide one compact `/@handle` identity for every account with only avatar, display name, handle, optional biography, join month, and active-creator status. Keep email, wallet, viewing activity, notifications, sessions, identity records, and followed creators private. Profile visibility is user-controlled; avatar, block, and report changes require explicit commands; navigation creates no product resources. Audience-to-audience following remains deferred.
+
+## Current milestone — audience information architecture cleanup
+
+Keep Discover focused on content available now; move Following, Activity, Notifications, Wallet, and persistent discovery preferences to canonical account routes; retire the duplicate Tags page and Community surface; make header search globally navigable; and make offline rooms refuse live chat and presence. Preserve creator authorization, private drafts, explicit resource creation, wallet ledgers, and the eliminated navigation side effect.
+
 ## Current milestone — structured room languages and controlled tags
 
 Replace user-facing room categories with one primary plus up to two additional standard language codes and controlled content/community tags. Keep discovery URL-driven, public APIs privacy-safe, Studio writes explicit, drafts private, creator authorization unchanged, and navigation side-effect free. Exit requires migrations 027/028, focused integration coverage, the full staging gate, production build, and responsive browser QA.

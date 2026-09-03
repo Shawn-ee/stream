@@ -41,7 +41,7 @@ assert.match(helper, /copyOnly/);
 assert.match(main, /share-notice[^\"]*" role="status"/);
 assert.match(room, /<ShareButton label=\{shareLabel\} onShare=\{onShare\}/);
 assert.match(profile, /<ShareButton label=\{zh \? "分享主播" : "Share creator"\}/);
-assert.match(profile, /zh \? "复制链接" : "Copy link"/);
+assert.doesNotMatch(profile, />Copy link</, "creator profile should expose one authoritative share action");
 assert.equal(packageJson.scripts["verify:audience-sharing"], "node --import tsx scripts/verify-audience-sharing.ts");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:audience-sharing"));
 

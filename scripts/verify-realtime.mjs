@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { io } from "socket.io-client";
+import { Client } from "pg";
 
 const base = "http://127.0.0.1:3001";
 async function login(role) {
@@ -95,7 +96,9 @@ function sendWithResult(socket, body) {
 
 const audienceAuth = await login("audience");
 const streamerCookie = await login("streamer");
-await creatorBroadcast(streamerCookie, "live");
+const database = new Client({ connectionString: process.env.DATABASE_URL });
+await database.connect();
+await database.query("UPDATE live_rooms SET status='live',broadcast_state='live',broadcast_status_source='cloudflare' WHERE slug='demo-streamer'");
 await verifyAnonymousReadOnlySocket();
 const audienceCookie = audienceAuth.cookie;
 const audience = await connect(audienceCookie);
@@ -208,6 +211,7 @@ try {
   const discoveryBroadcast = await discoveryReceived;
   assert.equal(discoveryBroadcast.slug, "demo-streamer");
   assert.equal(discoveryBroadcast.state, "connecting");
+  await database.query("UPDATE live_rooms SET status='live',broadcast_state='live',broadcast_status_source='cloudflare' WHERE slug='demo-streamer'");
   await creatorModeration(streamerCookie, "mute");
   assert.deepEqual(await sendWithResult(audience, "Muted message"), {
     error: "muted",
@@ -217,7 +221,8 @@ try {
     "Realtime presence, chat, support activity, and broadcast lifecycle updates verified.",
   );
 } finally {
-  await creatorBroadcast(streamerCookie, "offline");
+  await database.query("UPDATE live_rooms SET status='offline',broadcast_state='offline',broadcast_status_source='local' WHERE slug='demo-streamer'");
+  await database.end();
   audience.disconnect();
   admin.disconnect();
 }

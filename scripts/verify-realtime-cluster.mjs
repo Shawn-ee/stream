@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { io } from "socket.io-client";
+import { Client } from "pg";
 
 const primaryBase = "http://127.0.0.1:3001";
 const secondaryBase = "http://127.0.0.1:3002";
@@ -63,7 +64,10 @@ function join(socket) {
 
 let first;
 let second;
+const database = new Client({ connectionString: process.env.DATABASE_URL });
 try {
+  await database.connect();
+  await database.query("UPDATE live_rooms SET status='live',broadcast_state='live',broadcast_status_source='cloudflare' WHERE slug='demo-streamer'");
   await waitForReady();
   const audienceCookie = await login(primaryBase, "demo-audience");
   const adminCookie = await login(secondaryBase, "demo-admin");
@@ -97,6 +101,10 @@ try {
 } finally {
   first?.disconnect();
   second?.disconnect();
+  if (!database.ended) {
+    await database.query("UPDATE live_rooms SET status='offline',broadcast_state='offline',broadcast_status_source='local' WHERE slug='demo-streamer'");
+    await database.end();
+  }
   if (!secondary.killed) secondary.kill();
   await new Promise((resolve) => {
     if (secondary.exitCode !== null) return resolve();

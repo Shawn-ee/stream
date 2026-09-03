@@ -1,5 +1,12 @@
 # Stream MVP Backlog
 
+## Audience information architecture
+
+- Completed locally: canonical `/discover`, legacy Tags redirect, live-only Following row, routed Following/Activity/Notifications/Preferences pages, accurate account labels, and global URL-backed search.
+- Completed locally: offline room chat/presence refusal in both UI and realtime API, one room Follow control, simplified offline actions, viewer-timezone schedule rendering, and Community deprecation without deleting historical records.
+- Completed locally: compact `/@handle` audience profiles, safe public-field projection, account-controlled bio/avatar/visibility, active-creator enhancement, chat identity links, and explicit block/report actions.
+- Deferred: audience-to-audience following, offline community chat, history deletion, notification push delivery, and removal of retained Community/category schema after production-client inventory.
+
 ## Room-classification follow-up
 
 - Deferred: remove deprecated category and free-text classification columns only after external-client inventory and a reviewed production migration.

@@ -14,7 +14,7 @@ for (const guarded of ["chat", "gift", "action", "private-access", "report"])
 for (const navigation of ["account", "following", "wallet", "broadcast", "go-live", "inbox", "me"])
   assert.match(source, new RegExp(`(?:\\"${navigation}\\"|${navigation}):\\s*\\"navigate\\"`));
 
-assert.match(source, /setResumeIntent\(result\.user\.role === "audience" \? authGate : null\)/);
+assert.match(source, /setResumeIntent\(\["audience","streamer"\]\.includes\(result\.user\.role\) \? authGate : null\)/);
 assert.match(source, /resumeIntent\?\.kind !== "follow"/);
 assert.match(source, /void follow\(true\)/);
 assert.match(source, /your message is still here\. Review it, then send/);

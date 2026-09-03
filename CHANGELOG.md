@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-03 — Public audience profiles
+
+- Added compact `/@handle` profiles with safe identity fields, creator-capability enhancement, and responsive presentation.
+- Added account-controlled public bio, avatar, and profile visibility without exposing email, wallet, activity, notifications, sessions, or following data.
+- Added explicit profile block/report actions and preserved side-effect-free profile navigation.
+
+## 2026-09-03 — Audience information architecture and offline-room cleanup
+
+- Reduced Discover to live followed creators, Live now, temporary language/tag filters, meaningful Trending/Popular tags, and recommendations when inventory is limited.
+- Added routed Following, Activity, Notifications, and Discovery preferences pages; corrected avatar destinations and account section headings; removed modal Close and internal recovery-roadmap copy.
+- Made `/discover` canonical, redirected legacy Tags/Category routes, and made header search submit URL-backed results from every audience route.
+- Retired user-facing Community labels while preserving historical records, and blocked new/public Community use.
+- Moved due schedule-reminder generation out of notification reads into an idempotent server background poller.
+- Prevented offline audience room joins, presence increments, live-chat history/composer display, and chat sends at both the realtime server and UI layers. Simplified offline actions and removed duplicate Follow/share affordances.
+
 ## 2026-09-02 — Structured room languages and controlled tags
 
 - Removed Category from creator onboarding, Studio room setup/editing, public room/profile responses, cards, room details, search controls, and discovery navigation.

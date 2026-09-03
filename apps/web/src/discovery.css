@@ -61,7 +61,26 @@
   min-height: var(--control-min);
   border-radius: 999px;
   background: var(--color-surface-secondary);
-  padding: 0 var(--space-4) 0 2.35rem;
+  padding: 0 3.25rem 0 2.35rem;
+}
+
+.audience-global-search button {
+  position: absolute;
+  top: 50%;
+  right: .25rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  transform: translateY(-50%);
+}
+
+.audience-global-search button:hover,
+.audience-global-search button:focus-visible {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
 }
 
 .audience-product-header .product-account {

@@ -57,16 +57,16 @@ await client.connect();
 const audience = await login("demo-audience");
 const creator = await login("demo-streamer");
 const otherCreator = await login("demo-night-creator");
+const originalGoal = await client.query(
+  "SELECT goal_progress,broadcast_state,broadcast_status_source FROM live_rooms WHERE slug='demo-streamer'",
+);
+await client.query("UPDATE live_rooms SET status='live',broadcast_state='live',broadcast_status_source='cloudflare' WHERE slug='demo-streamer'");
 const socket = await connect(audience.cookie);
 const joined = await new Promise((resolve) =>
   socket.emit("room:join", "demo-streamer", resolve),
 );
 assert.equal(joined.error, undefined);
-const originalGoal = await client.query(
-  "SELECT goal_progress,broadcast_state FROM live_rooms WHERE slug='demo-streamer'",
-);
 try {
-  await client.query("UPDATE live_rooms SET status='live',broadcast_state='live' WHERE slug='demo-streamer'");
   const catalogResponse = await fetch(`${base}/api/gifts`);
   assert.equal(catalogResponse.status, 200);
   const catalog = (await catalogResponse.json()).gifts;
@@ -163,8 +163,8 @@ try {
   ]);
   await client.query("DELETE FROM gifts WHERE idempotency_key=ANY($1::text[])", [keys]);
   await client.query(
-    "UPDATE live_rooms SET goal_progress=$1,status=(CASE WHEN $2='live' THEN 'live' ELSE 'offline' END)::room_status,broadcast_state=$2::broadcast_lifecycle_state WHERE slug='demo-streamer'",
-    [originalGoal.rows[0].goal_progress, originalGoal.rows[0].broadcast_state],
+    "UPDATE live_rooms SET goal_progress=$1,status=(CASE WHEN $2='live' THEN 'live' ELSE 'offline' END)::room_status,broadcast_state=$2::broadcast_lifecycle_state,broadcast_status_source=$3 WHERE slug='demo-streamer'",
+    [originalGoal.rows[0].goal_progress, originalGoal.rows[0].broadcast_state, originalGoal.rows[0].broadcast_status_source],
   );
   await client.end();
 }

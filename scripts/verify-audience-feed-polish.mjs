@@ -50,7 +50,7 @@ assert.match(discovery, /mobile-live-card-overlay/);
 assert.match(discovery, /View creator/);
 assert.match(css, /scroll-snap-stop:\s*always/);
 assert.match(css, /linear-gradient\(180deg, transparent/);
-assert.match(room, /const supportAvailable = broadcast\.state === "live"/);
-assert.match(room, /View profile & schedule/);
+assert.match(room, /const supportAvailable = broadcast\.state === "live" && broadcast\.source !== "local"/);
+assert.match(room, /Browse live streams/);
 
 console.log("Audience feed density, bilingual creator variety, immersive mobile cards, and offline support guards verified.");

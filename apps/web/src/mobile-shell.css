@@ -85,9 +85,7 @@
     width: 100%;
   }
 
-  #live-now,
-  #audience-library,
-  #audience-wallet {
+  #live-now {
     scroll-margin-top: 5.5rem;
   }
 

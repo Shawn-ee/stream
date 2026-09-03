@@ -8,7 +8,7 @@ export type TagOption = {
   id: string;
   slug: string;
   displayName: string;
-  type: "CONTENT" | "FORMAT" | "MOOD" | "COMMUNITY";
+  type: "CONTENT" | "FORMAT" | "MOOD";
 };
 
 export function RoomClassificationFields({
@@ -76,7 +76,7 @@ export function RoomClassificationFields({
         <strong>{zh ? "内容标签" : "Content tags"}</strong>
         <small>{zh ? `已选择 ${selectedTagIds.length}/8` : `${selectedTagIds.length}/8 selected`}</small>
         <div role="group" aria-label={zh ? "直播内容标签" : "Room content tags"}>
-          {tags.map((item) => <label key={item.id} className={selectedTagIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={selectedTagIds.includes(item.id)} disabled={!selectedTagIds.includes(item.id) && selectedTagIds.length >= 8} onChange={() => toggleTag(item.id)} /><span>{item.displayName}</span>{item.type === "COMMUNITY" ? <small>{zh ? "社区" : "Community"}</small> : null}</label>)}
+          {tags.map((item) => <label key={item.id} className={selectedTagIds.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={selectedTagIds.includes(item.id)} disabled={!selectedTagIds.includes(item.id) && selectedTagIds.length >= 8} onChange={() => toggleTag(item.id)} /><span>{item.displayName}</span></label>)}
         </div>
       </div>
     </fieldset>

@@ -16,7 +16,7 @@ for (const component of ["MobileRoomOverlay", "LiveChatPanel"]) {
 }
 
 assert.match(app, /useState<"chat" \| "gifts" \| null>\(null\)/);
-assert.match(app, /<BottomSheet[\s\S]*open=\{mobileSheet === "chat"\}/);
+assert.match(app, /<BottomSheet[\s\S]*open=\{supportAvailable && mobileSheet === "chat"\}/);
 assert.match(app, /<BottomSheet[\s\S]*open=\{authenticated && supportAvailable && mobileSheet === "gifts"\}/);
 assert.match(app, /const supportAvailable = broadcast\.state === "live"/);
 assert.match(app, /inputId="room-chat-input-sheet"/);
@@ -24,7 +24,7 @@ assert.match(app, /className="desktop-room-chat"/);
 assert.match(app, /className="room-gift-tray desktop-room-gifts"/);
 assert.match(app, /className="mobile-room-recommendations"/);
 assert.match(app, /recommendations=\{rooms\.filter\(\(item\) => item\.slug !== room\.slug\)\}/);
-assert.match(app, /hidden=\{Boolean\(room \|\| profileRoom \|\| creatorPortalStep \|\| accountOpen\)\}/);
+assert.match(app, /hidden=\{Boolean\(room \|\| profileRoom \|\| publicUserProfile \|\| creatorPortalStep \|\| accountOpen\)\}/);
 
 for (const control of [/onChat/, /onGift/, /onFollow/, /onBack/, /onReport/]) {
   assert.match(roomComponents, control);

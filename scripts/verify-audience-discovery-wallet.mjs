@@ -27,7 +27,7 @@ const auth = await login();
 const socket = io(base, { transports: ["websocket"], extraHeaders: { cookie: auth.cookie } });
 await new Promise((resolve, reject) => { socket.once("connect", resolve); socket.once("connect_error", reject); });
 try {
-  await client.query("UPDATE live_rooms SET status='live',broadcast_state='live' WHERE slug='demo-streamer'");
+  await client.query("UPDATE live_rooms SET status='live',broadcast_state='live',broadcast_status_source='cloudflare' WHERE slug='demo-streamer'");
   await new Promise((resolve) => socket.emit("room:join", "demo-streamer", resolve));
   const all = await call("/api/rooms?languages=", auth);
   assert.equal(all.status, 200);
@@ -55,6 +55,6 @@ try {
   socket.disconnect();
   await client.query("DELETE FROM wallet_ledger WHERE idempotency_key=ANY($1::text[])", [keys.map((key) => `${key}:credit`)]);
   await client.query("DELETE FROM test_credit_orders WHERE idempotency_key=ANY($1::text[])", [keys]);
-  await client.query("UPDATE live_rooms SET status='offline',broadcast_state='offline' WHERE slug='demo-streamer'");
+  await client.query("UPDATE live_rooms SET status='offline',broadcast_state='offline',broadcast_status_source='local' WHERE slug='demo-streamer'");
   await client.end();
 }

@@ -32,6 +32,17 @@ export const mutationSchemas = {
     properties: {
       displayName: boundedString(50, 2),
       locale: { type: "string", enum: ["en", "zh"] },
+      bio: boundedString(280, 0),
+      publicProfileEnabled: { type: "boolean" },
+    },
+  },
+  publicProfileReport: {
+    type: "object",
+    additionalProperties: false,
+    required: ["reason"],
+    properties: {
+      reason: boundedString(120, 2),
+      details: boundedString(500, 0),
     },
   },
   passwordChange: {

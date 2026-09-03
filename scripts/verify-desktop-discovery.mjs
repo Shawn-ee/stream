@@ -47,7 +47,7 @@ assert.match(app, /discovery-language-filter/);
 assert.equal(packageJson.scripts["verify:desktop-discovery"], "node scripts/verify-desktop-discovery.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:desktop-discovery"));
 
-assert.match(app, /followingRooms\.length \? <FollowingAvatarRow/, "empty Following row must collapse");
+assert.match(app, /followingRooms\.some\(.*<FollowingAvatarRow/s, "Following live now must collapse when nobody followed is live");
 assert.match(app, /<AudienceAccountMenu\b/);
 assert.match(app, /className="live-empty-compact"/);
 assert.match(app, /id="popular-tags"/);

@@ -2,7 +2,7 @@
 
 ## Room classification verification
 
-After applying migrations 027 and 028, run `npm run db:seed`, `npm run verify:room-classification`, and `npm run verify:staging`. Inspect `legacy_category_migration_report` before any future compatibility-column removal. Confirm every room has one primary language at display order zero and no more than three total languages. Confirm `/api/discovery/categories` returns the documented retirement response and `/api/discovery/languages` plus `/api/discovery/tags` are healthy. Never repair missing language data by inferring from a creator's name, avatar, location, or identity.
+After applying migrations 027 through 029, run `npm run db:seed`, `npm run verify:room-classification`, and `npm run verify:staging`. Inspect `legacy_category_migration_report` before any future compatibility-column removal. Confirm every room has one primary language at display order zero and no more than three total languages. Confirm `/api/discovery/categories` and Community tag requests return their documented retirement responses, while `/api/discovery/languages` plus public `/api/discovery/tags` remain healthy. Never repair missing language data by inferring from a creator's name, avatar, location, or identity.
 
 ## Creator documents and review
 
@@ -52,7 +52,7 @@ As administrator, select a non-admin account, enter a unique test reason, choose
 
 Run `npm run db:migrate`, `npm run db:seed`, `npm run verify:personalized-discovery`, and `npm run verify:staging`. The focused verifier covers audience-only ownership, invalid/unknown preferences, deterministic ordering, followed/live priorities, bounded visit influence, response privacy, opt-out equivalence with anonymous discovery, reset, and cleanup.
 
-For rendered acceptance, sign in as `demo-audience`, acknowledge the local test gate, and open **For You preferences**. Select 中文 and Music, save, and confirm Jade Lin becomes the first recommendation without changing the current All categories/All languages filters. Switch the interface to 中文 and confirm the panel, controls, and status are bilingual. Disable personalized ordering and save; compare the creator order with a signed-out window. Select Reset and confirm defaults return. Run `npm run db:seed` afterward.
+For rendered acceptance, sign in as `demo-audience`, open **Account → Discovery preferences**, select 中文 and Music, and save. Confirm Jade Lin becomes the first recommendation without changing the temporary Discover language/tag URL filters. Switch the interface to 中文 and confirm the routed page, controls, and status are bilingual. Disable personalized ordering and save; compare creator order with a signed-out window. Select Reset and confirm defaults return. Run `npm run db:seed` afterward.
 
 Do not use this procedure to create tracking data, contact external analytics, start media, spend R, configure Cloudflare, deploy, or conduct a soak test. A soak test is a separate bounded milestone with explicit duration, load, thresholds, monitoring, and cleanup.
 
@@ -514,3 +514,6 @@ Do not create a Stripe or alternate-processor resource, webhook, product, price,
 ## Audience homepage responsive smoke test
 
 After frontend discovery changes, verify both a guest and `demo-audience` at 1440×900 and 390×844. Confirm there is no permanent desktop sidebar or horizontal overflow; the guest header shows Sign in and Create account; the signed-in avatar menu closes on Escape and exposes Following/account/settings/creator application/sign out; the Following row remains visible when empty; and the mobile Filter button reveals category and language controls without hiding the active feed.
+# Audience information-architecture verification
+
+Run `npm run verify:audience-ia-cleanup` with the local API, PostgreSQL, and Redis available. It verifies canonical account/navigation source contracts, Community retirement, zero mutation from read-only navigation endpoints, empty offline chat history, and server refusal of an audience realtime join to an offline room. Then test `/discover`, `/account/following`, `/account/activity`, `/account/notifications`, and `/account/preferences` at desktop and 390×844. Confirm Enter in the shared search field navigates to `/discover?q=...` from an account or room route.
