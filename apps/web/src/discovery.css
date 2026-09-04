@@ -1,6 +1,6 @@
 .audience-product-header {
   display: grid;
-  grid-template-columns: auto minmax(18rem, 34rem) auto;
+  grid-template-columns: minmax(10rem, 1fr) minmax(18rem, 42rem) minmax(10rem, 1fr);
   align-items: center;
   gap: var(--space-5);
 }
@@ -35,10 +35,6 @@
   min-width: 0;
 }
 
-.audience-main-nav {
-  flex: 0 0 auto;
-}
-
 .audience-global-search {
   position: relative;
   display: flex;
@@ -59,7 +55,7 @@
 .audience-global-search input {
   width: 100%;
   min-height: var(--control-min);
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-secondary);
   padding: 0 3.25rem 0 2.35rem;
 }
@@ -71,7 +67,7 @@
   min-width: 2.5rem;
   min-height: 2.5rem;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
   transform: translateY(-50%);
@@ -120,8 +116,7 @@
 }
 
 .header-go-live,
-.header-login,
-.live-empty-compact button { border-color: transparent; background: var(--color-brand-primary); color: white; }
+.header-login { border-color: transparent; background: var(--color-brand-primary); color: white; }
 
 .audience-account-menu {
   position: relative;
@@ -208,49 +203,12 @@
 .following-avatar-item.is-live .following-avatar-wrap { border-color: var(--color-live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-live) 16%, transparent); }
 .following-avatar { width: 3.5rem; height: 3.5rem; border-radius: 50%; }
 .following-live-badge { position: absolute; right: 50%; bottom: -0.3rem; translate: 50%; border-radius: 999px; background: var(--color-live); color: white; padding: .12rem .35rem; font-size: .55rem; font-weight: 950; }
-.live-empty-compact { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface-secondary); padding: var(--space-4); }
-.live-empty-compact span { display: grid; gap: var(--space-1); }
-.live-empty-compact small { color: var(--color-text-secondary); }
-
 .live-card-status i {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 50%;
   background: var(--color-live);
 }
-
-.discovery-section-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin: var(--space-8) 0 var(--space-4);
-}
-
-.discovery-section-heading h2,
-.discovery-section-heading p {
-  margin: 0;
-}
-
-.discovery-section-heading p {
-  color: var(--color-text-secondary);
-}
-
-.discovery-tag-filter {
-  min-width: 11rem;
-}
-
-.discovery-filter-row {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.discovery-language-filter {
-  min-width: 9rem;
-}
-
-.discovery-filter-row select { border: 1px solid var(--color-border); background: var(--color-surface-secondary); color: var(--color-text-primary); padding-inline: var(--space-3); }
-
 
 .live-stream-grid {
   display: grid;
@@ -262,12 +220,6 @@
   grid-column: 1 / -1;
 }
 
-
-.upcoming-stream-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-.upcoming-stream-list button { display: flex; align-items: center; gap: var(--space-3); border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); text-align: left; }
-.upcoming-stream-list span { display: grid; min-width: 0; }
-.upcoming-stream-list small { color: var(--color-text-muted); }
-.upcoming-stream-avatar { width: 2.75rem; height: 2.75rem; flex: 0 0 auto; border-radius: 50%; }
 
 .live-stream-card {
   display: grid;
@@ -477,10 +429,6 @@
     grid-template-columns: auto minmax(14rem, 1fr) auto;
   }
 
-  .audience-main-nav {
-    display: none;
-  }
-
   .live-stream-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -512,21 +460,10 @@
   .recommended-creator-grid { grid-template-columns: 1fr; }
   .simple-empty { min-height: 4rem; }
 
-  .discovery-section-heading {
-    align-items: stretch;
-    flex-direction: column;
-    margin-top: var(--space-6);
-  }
-
-  .discovery-tag-filter {
-    width: 100%;
-  }
-
   .live-stream-grid {
     grid-template-columns: 1fr;
   }
 
-  .upcoming-stream-list { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 359px) {

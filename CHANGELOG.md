@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-04 — Visual system and desktop shell polish (local)
+
+- Expanded the audience shell to the usable viewport and made the sticky header full-width with consistent responsive gutters.
+- Reduced ornamental gradients, hover motion, pill-shaped search styling, nested cards, and repeated account-page labeling.
+- Reworked Account pages around a flat tab rail, section-specific heading, open content canvas, and divider-based activity rows.
+- Replaced the oversized centered offline-room state with a compact wide composition and reduced its actions to Follow and View profile.
+- Replaced the card-like room-link confirmation with a small transient toast while preserving room, follow, report, navigation, and realtime behavior.
+- Web/API type checking, focused desktop/mobile frontend verification, production build, bundle budget, and 1440/1920 browser rendering pass.
+
 ## 2026-09-04 — Radical audience simplicity (local)
 
 - Replaced desktop/mobile discovery variants with one live-first homepage and compact URL-backed language, tag, and Following filters.

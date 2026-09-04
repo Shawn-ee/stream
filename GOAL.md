@@ -1,5 +1,9 @@
 # Stream Platform Product Goal
 
+## Current milestone — visual system and desktop shell polish
+
+Make Holiwyn feel like a deliberate production product rather than a collection of generated UI cards. Use a full-width sticky audience header, wider desktop content, flatter account pages, a compact offline-room composition, restrained button hierarchy, and transient toast feedback. Preserve mobile behavior, routing, accessibility, creator authorization, room lifecycle, privacy, and side-effect-free navigation.
+
 ## Current milestone — radical audience simplicity
 
 Make `/` the single audience homepage with only the Holiwyn logo, global search, avatar/login, one compact language/tag/following filter row, genuine live rooms, and conditional creator recommendations. Add immutable six-digit public room IDs, keep account content routed behind the avatar, and ensure offline rooms mount no playback, chat, support, gift, or presence clients. Preserve every creator, identity, admin, wallet, privacy, and explicit-room-creation boundary.

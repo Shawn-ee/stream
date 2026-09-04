@@ -1454,12 +1454,11 @@ function AccountCenter({
     <section className="account-center workspace">
       <div className="account-center-heading">
         <div>
-          <p className="eyebrow">{zh ? "账户" : "ACCOUNT"}</p>
           <h2>{titles[section]}</h2>
           <p className="muted">@{user.handle} · {roleLabel(copy[language], user.role)}</p>
         </div>
         <div>
-          <button className="secondary" onClick={onBack}>{zh ? "返回发现" : "Back to Discover"}</button>
+          <button className="secondary account-back-link" onClick={onBack}>{zh ? "返回直播" : "Back to live"}</button>
           <button className="secondary mobile-account-signout" onClick={onLogout}>{zh ? "退出登录" : "Sign out"}</button>
         </div>
       </div>
@@ -5149,13 +5148,15 @@ function RoomView({
     <button className="secondary room-back" onClick={back}>{t.back}</button>
     <div className="offline-room-card">
       <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="offline-room-avatar" />
-      <h2>{room.streamer_name} {t.title === "Stream MVP" ? "is offline" : "当前离线"}</h2>
-      <p>{following?(t.title === "Stream MVP"?"You’re following this creator.":"您已关注该主播。"):(t.title === "Stream MVP"?"Follow this creator to be notified when they go live.":"关注该主播以接收开播通知。")}</p>
-      {room.next_stream_at?<p className="offline-next-stream">{t.title === "Stream MVP"?"Next stream":"下一场直播"}: <time dateTime={room.next_stream_at}>{new Date(room.next_stream_at).toLocaleString()}</time></p>:null}
-      <div className="offline-room-actions"><button type="button" onClick={()=>void follow()}>{following?(t.title === "Stream MVP"?"Following":"已关注"):t.follow}</button><button type="button" className="secondary" onClick={onOpenProfile}>{t.title === "Stream MVP"?"View profile":"查看主页"}</button><button type="button" className="secondary" onClick={back}>{t.title === "Stream MVP"?"Browse live rooms":"浏览直播"}</button></div>
+      <div className="offline-room-copy">
+        <h2>{room.streamer_name} {t.title === "Stream MVP" ? "is offline" : "当前离线"}</h2>
+        <p>{following?(t.title === "Stream MVP"?"You’re following this creator.":"您已关注该主播。"):(t.title === "Stream MVP"?"Follow this creator to be notified when they go live.":"关注该主播以接收开播通知。")}</p>
+        {room.next_stream_at?<p className="offline-next-stream">{t.title === "Stream MVP"?"Next stream":"下一场直播"}: <time dateTime={room.next_stream_at}>{new Date(room.next_stream_at).toLocaleString()}</time></p>:null}
+        <div className="offline-room-actions"><button type="button" onClick={()=>void follow()}>{following?(t.title === "Stream MVP"?"Following":"已关注"):t.follow}</button><button type="button" className="secondary" onClick={onOpenProfile}>{t.title === "Stream MVP"?"View profile":"查看主页"}</button></div>
+      </div>
       <details className="room-more-actions"><summary aria-label={t.title === "Stream MVP"?"More actions":"更多操作"}>•••</summary><div><button type="button" onClick={()=>void shareRoom(true)}>{t.title === "Stream MVP"?"Copy room link":"复制直播间链接"}</button><button type="button" data-auth-action="report" onClick={()=>void report()}>{t.report}</button></div></details>
-      {shareNotice?<p className="notice" role="status">{shareNotice}</p>:null}
     </div>
+    {shareNotice?<p className="offline-room-toast" role="status">{shareNotice}</p>:null}
   </section>;
   return (
     <section className="workspace audience-room">
