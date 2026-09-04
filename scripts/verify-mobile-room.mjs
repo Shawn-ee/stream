@@ -24,7 +24,8 @@ assert.match(app, /className="desktop-room-chat"/);
 assert.match(app, /className="room-gift-tray desktop-room-gifts"/);
 assert.match(app, /className="mobile-room-recommendations"/);
 assert.match(app, /recommendations=\{rooms\.filter\(\(item\) => item\.slug !== room\.slug\)\}/);
-assert.match(app, /hidden=\{Boolean\(room \|\| profileRoom \|\| publicUserProfile \|\| creatorPortalStep \|\| accountOpen\)\}/);
+assert.doesNotMatch(app, /<MobileBottomNav\b/);
+assert.match(app, /if\(!supportAvailable\)return <section className="workspace audience-room offline-room-simple"/);
 
 for (const control of [/onChat/, /onGift/, /onFollow/, /onBack/, /onReport/]) {
   assert.match(roomComponents, control);
@@ -59,4 +60,4 @@ for (const preservedPath of [
 assert.equal(packageJson.scripts["verify:mobile-room"], "node scripts/verify-mobile-room.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:mobile-room"));
 
-console.log("Immersive mobile room, creator actions, chat/gift sheets, recommendations, landscape mode, and preserved product paths verified.");
+console.log("Immersive live mobile room, isolated simple offline room, creator actions, chat/gift sheets, landscape mode, and preserved media paths verified.");

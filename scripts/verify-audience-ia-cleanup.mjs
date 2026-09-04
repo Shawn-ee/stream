@@ -27,8 +27,9 @@ try{
   assert.match(app,/api\/me\/history\?page=/);assert.match(app,/api\/me\/notifications\?page=/);
   assert.match(api,/LIMIT 21 OFFSET \$2/);
   assert.match(route,/legacy-discovery/);assert.match(route,/following\|activity\|notifications/);
-  for(const label of ["Following","Activity","Notifications","Wallet","Account settings"])assert.match(navigation,new RegExp(label));
-  assert.match(app,/onSubmit=\{submitGlobalSearch\}/);assert.match(app,/\/discover\$\{params\.size/);
+  for(const label of ["Following","Activity","Notifications","Wallet","Settings"])assert.match(navigation,new RegExp(label));
+  assert.match(app,/onSubmit=\{submitGlobalSearch\}/);assert.match(app,/const path=`\/\$\{params\.size/);
+  assert.match(app,/if\(!supportAvailable\)return <section className="workspace audience-room offline-room-simple"/);
   assert.match(app,/supportAvailable\?<VideoActivityOverlay/);assert.match(app,/supportAvailable\?<LiveChatPanel/);assert.match(roomComponent,/chatEnabled\?<button/);
   console.log("Audience IA routes, Community removal, global search, navigation side-effect safety, and offline realtime refusal verified.");
 }finally{await db.end();}

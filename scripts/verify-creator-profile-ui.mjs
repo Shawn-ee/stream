@@ -35,13 +35,12 @@ for (const supportedField of [
 ]) assert.match(profile, new RegExp(supportedField), `missing supported field ${supportedField}`);
 
 assert.match(profile, /state: "live" \| "connecting" \| "offline" \| "unavailable"/);
-for (const label of ["LIVE NOW", "STARTING SOON", "STATUS UNAVAILABLE", "OFFLINE"])
-  assert.match(profile, new RegExp(label), `missing ${label} profile label`);
-
-assert.match(profile, /CURRENT ROOM/);
+assert.doesNotMatch(profile, /CURRENT ROOM|KEEP DISCOVERING|Meet \{displayName\}|Regular schedule/);
 assert.match(profile, /Back to discovery/);
 assert.match(profile, /aria-pressed=\{following\}/);
 assert.match(profile, /toLocaleString/);
+assert.match(profile, /state === "live"\?<button[^>]+creator-profile-watch live/);
+assert.equal((profile.match(/<ShareButton/g) ?? []).length, 1, "creator profile should expose one share action");
 assert.doesNotMatch(profile, /fetch\(|request\(|socket|io\(/, "presentational profile must not own network state");
 assert.doesNotMatch(profile, /verified|instagram|tiktok|recent stream|clips/i, "unsupported profile data must not be invented");
 
@@ -51,8 +50,8 @@ assert.match(room, /className="room-creator-name-link"/);
 
 for (const rule of [
   /\.creator-profile-hero-art\s*\{[\s\S]*linear-gradient/,
-  /\.creator-profile-current-room\s*\{[\s\S]*grid-template-columns/,
-  /@media \(max-width: 767px\)[\s\S]*\.creator-profile-information,[\s\S]*grid-template-columns:\s*1fr/,
+  /\.creator-profile-information\s*\{[\s\S]*grid-template-columns/,
+  /@media \(max-width: 767px\)[\s\S]*\.creator-profile-information[\s\S]*grid-template-columns:\s*1fr/,
   /\.creator-profile-actions button\s*\{[\s\S]*min-height:\s*3\.25rem/,
   /env\(safe-area-inset-bottom\)/,
   /@media \(prefers-reduced-motion: reduce\)/,
@@ -61,4 +60,4 @@ for (const rule of [
 assert.equal(packageJson.scripts["verify:creator-profile-ui"], "node scripts/verify-creator-profile-ui.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:creator-profile-ui"));
 
-console.log("Responsive creator profile data, truthful state, follow ownership, room entry, mobile layout, and unsupported-data boundaries verified.");
+console.log("Simplified responsive creator profile, truthful live-only room action, single sharing action, and unsupported-data boundaries verified.");

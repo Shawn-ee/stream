@@ -1,49 +1,9 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-
-const [app, components, styles, packageText] = await Promise.all([
-  readFile("apps/web/src/main.tsx", "utf8"),
-  readFile("apps/web/src/components/discovery.tsx", "utf8"),
-  readFile("apps/web/src/discovery.css", "utf8"),
-  readFile("package.json", "utf8"),
-]);
-const packageJson = JSON.parse(packageText);
-
-assert.match(components, /export type MobileDiscoveryView = "for-you" \| "following" \| "live"/);
-assert.match(components, /export function MobileDiscoveryFeed\b/);
-assert.match(app, /<MobileDiscoveryFeed\b/);
-assert.match(app, /useState<MobileDiscoveryView>\("for-you"\)/);
-
-for (const tab of ["for-you", "following", "live"]) {
-  assert.match(components, new RegExp(`id: "${tab}"`), `missing ${tab} mobile discovery tab`);
-}
-assert.match(components, /role="tablist"/);
-assert.match(components, /role="tab"/);
-assert.match(components, /aria-selected=\{view === tab\.id\}/);
-assert.match(components, /view === "following"[\s\S]*following/);
-assert.match(components, /view === "live"[\s\S]*roomState\(room\) === "live"/);
-assert.match(components, /LiveStreamCardSkeleton count=\{3\}/);
-assert.match(components, /mobile-discovery-empty/);
-assert.match(components, /onTagChange\(event\.target\.value\)/);
-assert.match(components, /onLanguagesChange/);
-assert.match(components, /className="mobile-filter-toggle secondary"/);
-assert.match(components, /aria-controls="mobile-discovery-filter-panel"/);
-assert.doesNotMatch(components, /<video|<iframe|autoplay|autoPlay/, "mobile discovery must use bounded static previews");
-assert.doesNotMatch(components, /fetch\(|request\(|socket|io\(/, "mobile discovery must reuse parent-owned data and realtime state");
-
-for (const rule of [
-  /\.mobile-discovery-feed\s*\{\s*display:\s*none/,
-  /@media \(max-width: 767px\)[\s\S]*\.mobile-discovery-feed\s*\{[\s\S]*display:\s*grid/,
-  /\.featured-live,[\s\S]*\.desktop-discovery-feed,[\s\S]*\.discovery-content > \.following-feed\s*\{[\s\S]*display:\s*none/,
-  /\.mobile-discovery-tabs\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/,
-  /\.mobile-discovery-tabs button\s*\{[\s\S]*min-height:\s*var\(--control-min\)/,
-  /\.mobile-live-feed-list\s*\{[\s\S]*scroll-snap-type:\s*y mandatory/,
-  /\.mobile-live-feed-list > \.live-stream-card\s*\{[\s\S]*scroll-snap-align:\s*start/,
-  /\.mobile-filter-panel\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
-  /@media \(max-width: 359px\)[\s\S]*\.mobile-discovery-controls\s*\{[\s\S]*grid-template-columns:\s*1fr/,
-]) assert.match(styles, rule);
-
-assert.equal(packageJson.scripts["verify:mobile-discovery"], "node scripts/verify-mobile-discovery.mjs");
-assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:mobile-discovery"));
-
-console.log("Mobile content-first feed, single expandable Filter control, tabs, truthful static previews, touch targets, and empty states verified.");
+import {readFile} from "node:fs/promises";
+const [app,components,styles]=await Promise.all([readFile("apps/web/src/main.tsx","utf8"),readFile("apps/web/src/components/discovery.tsx","utf8"),readFile("apps/web/src/discovery.css","utf8")]);
+assert.match(app,/<SimpleDiscovery\b/);assert.doesNotMatch(app,/<MobileDiscoveryFeed\b/);
+assert.match(components,/compact-filter-row/);assert.match(components,/type="checkbox"/);assert.match(components,/selectedLanguages/);assert.match(components,/selectedTags/);
+assert.doesNotMatch(components,/<video|<iframe|autoplay|autoPlay/);
+assert.match(styles,/@media \(max-width: 767px\)[\s\S]*\.compact-filter-row\s*\{[\s\S]*overflow-x:\s*auto/);
+assert.match(styles,/\.compact-filter-popover\s*\{[\s\S]*position:\s*fixed/);assert.match(styles,/\.live-stream-grid\s*\{[\s\S]*grid-template-columns:\s*1fr/);
+console.log("One responsive mobile feed, compact viewport-safe filters, static cards, and no duplicate discovery tabs verified.");

@@ -5,21 +5,16 @@ const app = fs.readFileSync("apps/web/src/main.tsx", "utf8");
 const navigation = fs.readFileSync("apps/web/src/components/navigation.tsx", "utf8");
 const api = fs.readFileSync("apps/api/src/index.ts", "utf8");
 
-const authSurface = app.slice(
-  app.indexOf('<div className="auth-tabs"'),
-  app.indexOf('<form className="login-form"'),
-);
+const authSurface = app.slice(app.indexOf('<Modal'), app.indexOf('</Modal>'));
 assert.doesNotMatch(authSurface, /demo-(?:audience|streamer|admin)/, "public sign-in must not expose role shortcuts");
 assert.match(app, /isGuest \? <button[\s\S]{0,180}"Log in"/);
 assert.doesNotMatch(app, /className="header-go-live"/, "audience header must not expose Go live");
-for (const item of ["View public profile", "Following", "Activity", "Notifications", "Wallet", "Streamer Studio", "Become a creator", "Account settings", "Sign out"])
+for (const item of ["Following", "Activity", "Notifications", "Wallet", "Streamer Studio", "Become a creator", "Settings", "Sign out"])
   assert.match(navigation, new RegExp(item));
+assert.doesNotMatch(navigation, /View public profile/);
 assert.match(app, /<CreatorOnboarding/);
 
-assert.match(navigation, /showCreatorEntry: boolean/);
-assert.match(navigation, /item\.id !== "go-live" \|\| showCreatorEntry/);
-assert.match(navigation, /gridTemplateColumns: `repeat\(\$\{showCreatorEntry \? 5 : 4\}/);
-assert.match(navigation, /en: "Create", zh: "创作"/);
+assert.doesNotMatch(app, /<MobileBottomNav\b/);
 
 const loginRouteStart = api.indexOf('api.post<{ Body: { handle?: string; password?: string } }>(');
 const loginRoute = api.slice(loginRouteStart, api.indexOf('"/api/auth/session"', loginRouteStart));

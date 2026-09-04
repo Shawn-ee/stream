@@ -67,13 +67,14 @@ await audience(`/api/streamers/${room.streamer_id}/follow`, {
   method: "POST",
   body: {},
 });
+const historyBeforeVisit = await audience("/api/me/history");
 await audience(`/api/rooms/${room.slug}/visit`, {
   method: "POST",
   body: {},
-  expected: 204,
+  expected: 409,
 });
 const history = await audience("/api/me/history");
-assert.ok(history.rooms.some((item) => item.slug === room.slug));
+assert.deepEqual(history.rooms, historyBeforeVisit.rooms, "simulated/offline visits must not create viewing history");
 const gifts = await audience("/api/gifts");
 assert.deepEqual(
   gifts.gifts.map((gift) => gift.coin_cost),

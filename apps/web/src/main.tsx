@@ -25,11 +25,9 @@ import "./broadcast.css";
 import "./profile.css";
 import { BottomSheet, EmptyState, LiveStreamCardSkeleton, Modal } from "./components/ui";
 import {
-  FollowingAvatarRow,
   LiveStreamCard,
-  MobileDiscoveryFeed,
+  SimpleDiscovery,
   type DiscoveryRoom,
-  type MobileDiscoveryView,
 } from "./components/discovery";
 import { LiveChatPanel, MobileRoomOverlay, RoomCreatorBar } from "./components/room";
 import { AudienceProfileSurface, CreatorProfileSurface, type PublicUserProfile } from "./components/profile";
@@ -40,9 +38,7 @@ import { audienceRoutePath, parseAudienceRoute, type AudienceRoute } from "./aud
 import { shareAudienceTarget, syncAudienceMetadata, type AudienceShareTarget, type ShareKind, type ShareOutcome } from "./audience-share";
 import {
   AudienceAccountMenu,
-  MobileBottomNav,
   MobileHeaderActions,
-  type MobileTab,
 } from "./components/navigation";
 
 type Role = "audience" | "streamer" | "admin";
@@ -100,6 +96,7 @@ const publicGuest = (locale: Language): User => ({
 });
 type Room = {
   slug: string;
+  publicRoomId?: string;
   title: string;
   status: string;
   streamer_id: string;
@@ -179,7 +176,7 @@ const copy: Record<Language, Record<string, string>> = {
     ageText: "This is not real age verification or a launch gate.",
     age: "I confirm for this local test",
     live: "Live now",
-    search: "Search rooms or streamers",
+    search: "Search room ID, creator or tag",
     followers: "followers",
     recent: "Recently visited",
     notifications: "Notifications",
@@ -264,7 +261,7 @@ const copy: Record<Language, Record<string, string>> = {
     ageText: "这不是真实年龄验证，也不是上线门槛。",
     age: "我确认用于本地测试",
     live: "正在直播",
-    search: "搜索直播间或主播",
+    search: "搜索房间号、主播或标签",
     followers: "位关注者",
     recent: "最近访问",
     notifications: "通知",
@@ -526,7 +523,8 @@ function App() {
   const [query, setQuery] = useState(()=>initialFilters.get("q")??"");
   const [settledQuery, setSettledQuery] = useState(()=>initialFilters.get("q")??"");
   const [selectedLanguages,setSelectedLanguages]=useState<string[]>(()=>initialFilters.get("languages")?.split(",").filter(Boolean)??[]);
-  const [selectedTag,setSelectedTag]=useState(()=>initialFilters.get("tag")??"");
+  const [selectedTags,setSelectedTags]=useState<string[]>(()=>((initialFilters.get("tags")??initialFilters.get("tag")??"").split(",").filter(Boolean)));
+  const [followingOnly,setFollowingOnly]=useState(()=>initialFilters.get("following")==="true");
   const [supportedLanguages,setSupportedLanguages]=useState<SupportedLanguage[]>([]);
   const [publicTags,setPublicTags]=useState<PublicTag[]>([]);
   const [discoveryPreferences, setDiscoveryPreferences] = useState<DiscoveryPreferences | null>(null);
@@ -551,8 +549,6 @@ function App() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(() => window.location.pathname === "/studio" || window.location.pathname === "/broadcast");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("home");
-  const [mobileDiscoveryView, setMobileDiscoveryView] = useState<MobileDiscoveryView>("for-you");
   const roomsRequestRef = useRef(0);
   const routeRequestRef = useRef(0);
   const filterHistoryReadyRef = useRef(false);
@@ -591,21 +587,37 @@ function App() {
     writeAudienceHistory({ view: "discovery" }, mode);
     window.scrollTo({ top: 0 });
   };
+  const showHome = () => {
+    setQuery("");
+    setSettledQuery("");
+    setSelectedLanguages([]);
+    setSelectedTags([]);
+    setFollowingOnly(false);
+    window.history.pushState({ ...window.history.state, holiwynAudienceRoute: "/" }, "", "/");
+    showDiscovery("replace");
+  };
   const openAccountSection = (section: AccountSection, mode: "push" | "replace" = "push") => {
     setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setCreatorPortalStep(null); setStudioOpen(false);
     setAccountSection(section); setAccountOpen(true); setAccountMenuOpen(false);
     writeAudienceHistory({ view: "account", section }, mode);
     window.scrollTo({ top: 0 });
   };
-  const submitGlobalSearch = (event?: FormEvent) => {
+  const submitGlobalSearch = async (event?: FormEvent) => {
     event?.preventDefault();
-    const value=query.trim();
+    let value=query.trim();
+    if(/^https?:\/\//i.test(value)){
+      try{const parsed=new URL(value);if(![window.location.hostname,"holiwyn.online","www.holiwyn.online"].includes(parsed.hostname))throw new Error("external");const match=parsed.pathname.match(/^\/room\/([^/]+)\/?$/);if(!match)throw new Error("route");value=decodeURIComponent(match[1]);}catch{setRouteError("not-found");return;}
+    }
+    if(/^[1-9][0-9]{5}$/.test(value)){
+      try{const data=await request(`/api/rooms/${value}`);routeRequestRef.current+=1;setRoom(data.room);setProfileRoom(null);setPublicUserProfile(null);setAccountOpen(false);setMobileSearchOpen(false);window.history.pushState({...window.history.state,holiwynAudienceRoute:`/room/${value}`} ,"",`/room/${value}`);setQuery("");window.scrollTo({top:0});return;}catch{setRouteError("not-found");return;}
+    }
     setQuery(value); setSettledQuery(value); setAccountOpen(false); setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setCreatorPortalStep(null);
     const params=new URLSearchParams();
     if(value)params.set("q",value);
     if(selectedLanguages.length)params.set("languages",selectedLanguages.join(","));
-    if(selectedTag)params.set("tag",selectedTag);
-    const path=`/discover${params.size?`?${params}`:""}`;
+    if(selectedTags.length)params.set("tags",selectedTags.join(","));
+    if(followingOnly)params.set("following","true");
+    const path=`/${params.size?`?${params}`:""}`;
     window.history.pushState({...window.history.state,holiwynAudienceRoute:path},"",path);
     setMobileSearchOpen(false); setRouteLoading(false); setRouteError(null); window.scrollTo({top:0});
   };
@@ -660,7 +672,9 @@ function App() {
       setCreatorPortalStep("status"); setRouteLoading(false); return;
     }
     if (route.view === "legacy-discovery") {
-      const target=`/discover${window.location.search}`;
+      const legacyTag=window.location.pathname.match(/^\/tags\/([a-z0-9-]+)\/?$/)?.[1];
+      const params=new URLSearchParams(window.location.search);if(legacyTag&&!params.has("tags")&&!params.has("tag"))params.set("tags",legacyTag);
+      const target=`/${params.size?`?${params}`:""}`;
       window.history.replaceState({...window.history.state,holiwynAudienceRoute:target},"",target);
       setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setAccountOpen(false); setCreatorPortalStep(null); setRouteLoading(false);
       return;
@@ -727,7 +741,7 @@ function App() {
     setRoomsError(false);
     try {
       const data = await request(
-        `/api/rooms?q=${encodeURIComponent(settledQuery)}&languages=${encodeURIComponent(selectedLanguages.join(","))}&tag=${encodeURIComponent(selectedTag)}`,
+        `/api/rooms?q=${encodeURIComponent(settledQuery)}&languages=${encodeURIComponent(selectedLanguages.join(","))}&tags=${encodeURIComponent(selectedTags.join(","))}${followingOnly?"&following=true":""}`,
       );
       if (requestId === roomsRequestRef.current) setRooms(data.rooms);
     } catch {
@@ -821,7 +835,8 @@ function App() {
       setQuery(params.get("q") ?? "");
       setSettledQuery(params.get("q") ?? "");
       setSelectedLanguages((params.get("languages") ?? "").split(",").filter(Boolean).slice(0, 20));
-      setSelectedTag(params.get("tag") ?? "");
+      setSelectedTags((params.get("tags") ?? params.get("tag") ?? "").split(",").filter(Boolean).slice(0,20));
+      setFollowingOnly(params.get("following")==="true");
       void hydrateAudienceRoute(window.location.pathname);
     };
     window.addEventListener("popstate", restoreAudienceRoute);
@@ -838,7 +853,7 @@ function App() {
   }, [query]);
   useEffect(() => {
     if (audienceCapable && user?.ageAcknowledged) loadRooms();
-  }, [user, settledQuery, selectedLanguages.join(","), selectedTag]);
+  }, [user, settledQuery, selectedLanguages.join(","), selectedTags.join(","), followingOnly]);
   useEffect(()=>{
     if (!filterHistoryReadyRef.current) {
       filterHistoryReadyRef.current = true;
@@ -851,11 +866,13 @@ function App() {
     const params=new URLSearchParams(window.location.search);
     if(settledQuery)params.set("q",settledQuery);else params.delete("q");
     if(selectedLanguages.length)params.set("languages",selectedLanguages.join(","));else params.delete("languages");
-    if(selectedTag)params.set("tag",selectedTag);else params.delete("tag");
-    if(!["/","/discover"].includes(window.location.pathname))return;
-    const next=`/discover${params.size?`?${params}`:""}`;
+    params.delete("tag");
+    if(selectedTags.length)params.set("tags",selectedTags.join(","));else params.delete("tags");
+    if(followingOnly)params.set("following","true");else params.delete("following");
+    if(window.location.pathname!=="/")return;
+    const next=`/${params.size?`?${params}`:""}`;
     window.history.pushState({...window.history.state,holiwynAudienceRoute:next},"",next);
-  },[settledQuery,selectedLanguages.join(","),selectedTag]);
+  },[settledQuery,selectedLanguages.join(","),selectedTags.join(","),followingOnly]);
   useEffect(() => {
     if (audienceCapable && user?.ageAcknowledged && user.id !== "public-guest") void loadFollowing();
     else if (user?.id === "public-guest") {
@@ -959,7 +976,7 @@ function App() {
     return () => {
       socket.disconnect();
     };
-  }, [user?.role, user?.ageAcknowledged, settledQuery, selectedLanguages, selectedTag]);
+  }, [user?.role, user?.ageAcknowledged, settledQuery, selectedLanguages, selectedTags, followingOnly]);
   async function login(e: FormEvent) {
     e.preventDefault();
     setLoginError("");
@@ -1033,7 +1050,6 @@ function App() {
     setUser(publicGuest(language));
     setAccountOpen(false);
     setMobileSearchOpen(false);
-    setMobileTab("home");
   }
   async function openBroadcastDashboard() {
     if (user?.id === "public-guest") {
@@ -1063,34 +1079,6 @@ function App() {
       );
     }
   }
-  function navigateMobile(tab: MobileTab) {
-    if (user?.id === "public-guest" && !["home", "discover"].includes(tab)) {
-      requireAuth(tab as AuthIntentKind);
-      return;
-    }
-    setMobileTab(tab);
-    if (tab === "go-live") {
-      void openBroadcastDashboard();
-      return;
-    }
-    if (tab === "me") {
-      openAccountSection("profile");
-      return;
-    }
-    if (tab === "inbox") {
-      openAccountSection("notifications");
-      return;
-    }
-    setAccountOpen(false);
-    showDiscovery();
-    setMobileSearchOpen(tab === "discover");
-    if (tab === "home") {
-      window.scrollTo({ top: 0 });
-      void loadRooms();
-      return;
-    }
-    document.querySelector("#live-now")?.scrollIntoView({ block: "start" });
-  }
   useEffect(() => {
     if (!resumeIntent || !user || user.id === "public-guest") return;
     if (!["audience","streamer"].includes(user.role)) {
@@ -1105,10 +1093,8 @@ function App() {
     } else if (["broadcast", "go-live"].includes(resumeIntent.kind)) {
       void openBroadcastDashboard();
     } else if (resumeIntent.kind === "inbox") {
-      setMobileTab("inbox");
       openAccountSection("notifications");
     } else {
-      setMobileTab("me");
       openAccountSection("profile");
     }
     setResumeNotice(language === "en" ? "Signed in — your requested destination is ready." : "登录成功——已返回您请求的位置。");
@@ -1135,7 +1121,7 @@ function App() {
   return (
     <main className={`app role-${user.role}${room ? " room-open" : profileRoom || publicUserProfile ? " profile-open" : ""}`}>
       <header className={`product-header ${audienceExperience && user.ageAcknowledged ? "audience-product-header" : ""}`}>
-        <div className="product-identity">
+        <button type="button" className="product-identity logo-home" aria-label={language==="zh"?"返回首页":"Holiwyn home"} onClick={showHome}>
           <span className="product-mark" aria-hidden="true">
             H
           </span>
@@ -1146,7 +1132,7 @@ function App() {
             {user.displayName} · {roleLabel(t, user.role)}
           </p>
           </div>
-        </div>
+        </button>
         {audienceExperience && user.ageAcknowledged && (
           <MobileHeaderActions
             searchOpen={mobileSearchOpen}
@@ -1156,20 +1142,6 @@ function App() {
         )}
         {audienceExperience && user.ageAcknowledged && (
           <div className={`audience-header-center ${mobileSearchOpen ? "mobile-search-open" : ""}`}>
-            <nav
-              className="audience-main-nav"
-              aria-label={language === "en" ? "Audience navigation" : "观众导航"}
-            >
-              <button
-                className={!room && !profileRoom && !publicUserProfile ? "active" : ""}
-                onClick={() => {
-                  showDiscovery();
-                  void loadRooms();
-                }}
-              >
-                {language === "en" ? "Discover" : "发现"}
-              </button>
-            </nav>
             <form className="audience-global-search" role="search" onSubmit={submitGlobalSearch}>
               <span className="sr-only">{t.search}</span>
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} />
@@ -1191,7 +1163,6 @@ function App() {
               onToggle={() => setAccountMenuOpen((current) => !current)}
               onClose={() => setAccountMenuOpen(false)}
               onFollowing={() => openAccountSection("following")}
-              onProfile={() => showPublicUserProfile(user.handle)}
               onActivity={() => openAccountSection("activity")}
               onNotifications={() => openAccountSection("notifications")}
               onWallet={() => openAccountSection("wallet")}
@@ -1232,6 +1203,7 @@ function App() {
           }}
           onBack={() => showDiscovery()}
           onLogout={() => void logout()}
+          onViewPublicProfile={()=>showPublicUserProfile(user.handle)}
           section={accountSection}
           onSectionChange={(section) => openAccountSection(section)}
           preferences={discoveryPreferences}
@@ -1330,112 +1302,8 @@ function App() {
             }}
           />
         ) : (
-          <section className="workspace audience-discovery" id="discover">
-            <div className="discovery-shell">
-              <div className="discovery-content">
-                {!isGuest && followingRooms.some((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local") ? <FollowingAvatarRow
-                  creators={followingRooms.filter((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local")}
-                  zh={language === "zh"}
-                  onOpen={(item) => showRoom(item as Room)}
-                  onViewAll={() => openAccountSection("following")}
-                /> : null}
-                <div className="discovery-feed-anchor" id="live-now">
-                  <MobileDiscoveryFeed
-                    rooms={rooms}
-                    following={followingRooms.filter((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local")}
-                    view={mobileDiscoveryView}
-                    selectedLanguages={selectedLanguages}
-                    selectedTag={selectedTag}
-                    languages={supportedLanguages}
-                    tags={publicTags}
-                    roomsLoading={roomsLoading}
-                    followingLoading={followingLoading}
-                    roomsError={roomsError}
-                    followingError={followingError}
-                    t={t}
-                    zh={language === "zh"}
-                    onViewChange={(view) => {
-                      if (isGuest && view === "following") return requireAuth("following");
-                      setMobileDiscoveryView(view);
-                    }}
-                    onLanguagesChange={setSelectedLanguages}
-                    onTagChange={setSelectedTag}
-                    onRetry={() => mobileDiscoveryView === "following" ? void loadFollowing() : void loadRooms()}
-                    onOpen={(selected: DiscoveryRoom) => {
-                      showRoom(selected as Room);
-                    }}
-                  />
-                  <div className="desktop-discovery-feed">
-                    <div className="discovery-section-heading">
-                      <div>
-                        <p className="eyebrow">{language === "en" ? "Discover" : "发现"}</p>
-                        <h2>{t.live}</h2>
-                        <p>{language === "en" ? "Creators broadcasting now and rooms worth discovering." : "正在直播以及值得发现的主播。"}</p>
-                      </div>
-                      <div className="discovery-filter-row">
-                        <select className="discovery-language-filter" value={selectedTag} onChange={(event)=>setSelectedTag(event.target.value)} aria-label={language==="zh"?"内容标签":"Content tag"}>
-                          <option value="">{language==="zh"?"所有标签":"All tags"}</option>
-                          {publicTags.map(item=><option key={item.id} value={item.slug}>{item.displayName}</option>)}
-                        </select>
-                        {selectedLanguages.length||selectedTag?<button type="button" className="secondary" onClick={()=>{setSelectedLanguages([]);setSelectedTag("");}}>{language==="zh"?"清除筛选":"Clear filters"}</button>:null}
-                      </div>
-                    </div>
-                    <div className="live-stream-grid">
-                      {roomsLoading ? (
-                        <LiveStreamCardSkeleton count={6} label={language === "en" ? "Loading live creators" : "正在加载主播"} />
-                      ) : roomsError ? (
-                        <EmptyState
-                          icon="!"
-                          title={language === "en" ? "Discovery is temporarily unavailable" : "发现内容暂时不可用"}
-                          description={language === "en" ? "We could not load creators. Check the local service and try again." : "暂时无法加载主播，请检查本地服务后重试。"}
-                          action={<button type="button" onClick={() => void loadRooms()}>{language === "en" ? "Try again" : "重试"}</button>}
-                        />
-                      ) : rooms.some((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local") ? rooms.filter((item) => (item.broadcast_state ?? item.status) === "live" && item.broadcast_status_source !== "local").map((item, index) => (
-                        <LiveStreamCard
-                          key={item.slug}
-                          room={item}
-                          index={index}
-                          t={t}
-                          zh={language === "zh"}
-                          onOpen={(selected: DiscoveryRoom) => {
-                            showRoom(selected as Room);
-                          }}
-                        />
-                      )) : (
-                        <div className="live-empty-compact">
-                          <span><strong>{language === "en" ? "No one is live right now" : "暂时没有主播开播"}</strong><small>{rooms.length ? (language === "en" ? "Explore recommended creators or popular tags below." : "可在下方浏览推荐主播或热门标签。") : (language === "en" ? "Try another filter or check back soon." : "请尝试其他筛选或稍后再来。")}</small></span>
-                          {selectedLanguages.length||selectedTag||settledQuery?<button type="button" onClick={() => { setQuery("");setSettledQuery("");setSelectedLanguages([]);setSelectedTag(""); }}>{language === "en" ? "Clear filters" : "清除筛选"}</button>:!isGuest?<button type="button" onClick={()=>openAccountSection("following")}>{language==="en"?"View followed creators":"查看关注的主播"}</button>:null}
-                        </div>
-                      )}
-                    </div>
-                    {!roomsLoading && rooms.some((item) => (item.broadcast_state ?? item.status) !== "live" || item.broadcast_status_source === "local") ? (
-                      <section className="recommended-creators" aria-labelledby="recommended-creators-title">
-                        <div className="discovery-section-heading">
-                          <div><p className="eyebrow">{language === "en" ? "Recommended" : "推荐"}</p><h2 id="recommended-creators-title">{language === "en" ? "Creators to follow" : "值得关注的主播"}</h2></div>
-                        </div>
-                        <div className="live-stream-grid">
-                          {rooms.filter((item) => (item.broadcast_state ?? item.status) !== "live" || item.broadcast_status_source === "local").map((item, index) => (
-                            <LiveStreamCard key={item.slug} room={item} index={index} t={t} zh={language === "zh"} onOpen={(selected: DiscoveryRoom) => showProfile(selected as Room)} />
-                          ))}
-                        </div>
-                      </section>
-                    ) : null}
-                    <section className="language-discovery" aria-labelledby="language-discovery-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"按语言发现":"Language"}</p><h2 id="language-discovery-title">{language==="zh"?"筛选直播语言":"Filter stream languages"}</h2></div></div><div className="language-filter-chips">{supportedLanguages.slice(0,6).map(item=><button type="button" key={item.code} className={selectedLanguages.includes(item.code)?"active":""} aria-pressed={selectedLanguages.includes(item.code)} onClick={()=>setSelectedLanguages(selectedLanguages.includes(item.code)?selectedLanguages.filter(code=>code!==item.code):[...selectedLanguages,item.code])}>{language==="zh"?item.name_native:item.name_en}</button>)}</div></section>
-                    {publicTags.length ? <section className="popular-tags" id="popular-tags" aria-labelledby="popular-tags-title">
-                      <div className="discovery-section-heading">
-                        <div><p className="eyebrow">{language === "en" ? "Browse by interest" : "按兴趣浏览"}</p><h2 id="popular-tags-title">{language === "en" ? "Popular tags" : "热门标签"}</h2></div>
-                      </div>
-                      <div className="tag-chip-grid">
-                        {publicTags.slice(0,8).map((item)=><button type="button" key={item.id} className={selectedTag===item.slug?"active":""} onClick={()=>{setSelectedTag(item.slug);document.querySelector("#live-now")?.scrollIntoView({behavior:"smooth"});}}>
-                          <span aria-hidden="true">#</span><strong>{item.displayName}</strong>
-                        </button>)}
-                      </div>
-                    </section> : null}
-                    {rooms.some((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local")?<section className="trending-streams" aria-labelledby="trending-title"><div className="discovery-section-heading"><div><p className="eyebrow">{language==="zh"?"热门趋势":"Trending"}</p><h2 id="trending-title">{language==="zh"?"现在热门":"Trending now"}</h2></div></div><div className="live-stream-grid">{rooms.filter((item)=>(item.broadcast_state??item.status)==="live"&&item.broadcast_status_source!=="local").slice(0,4).map((item,index)=><LiveStreamCard key={`trending-${item.slug}`} room={item} index={index} t={t} zh={language==="zh"} onOpen={(selected)=>showRoom(selected as Room)}/>)}</div></section>:null}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <section className="workspace audience-discovery" id="live-now">
+            <SimpleDiscovery rooms={rooms} languages={supportedLanguages} tags={publicTags} selectedLanguages={selectedLanguages} selectedTags={selectedTags} followingOnly={followingOnly} authenticated={!isGuest} loading={roomsLoading} error={roomsError} zh={language==="zh"} onLanguagesChange={setSelectedLanguages} onTagsChange={setSelectedTags} onFollowingChange={setFollowingOnly} onClear={()=>{setQuery("");setSettledQuery("");setSelectedLanguages([]);setSelectedTags([]);setFollowingOnly(false);}} onRetry={()=>void loadRooms()} onOpenRoom={(selected)=>showRoom(selected as Room)} onOpenCreator={(selected)=>showProfile(selected as Room)}/>
           </section>
         )
       ) : user.role === "admin" ? (
@@ -1449,32 +1317,12 @@ function App() {
           onDiscover={() => { setStudioOpen(false); showDiscovery("push"); }}
         />
       )}
-      {audienceExperience && user.ageAcknowledged ? (
-        <MobileBottomNav
-          active={accountOpen ? "me" : mobileTab}
-          zh={language === "zh"}
-          hidden={Boolean(room || profileRoom || publicUserProfile || creatorPortalStep || accountOpen)}
-          showCreatorEntry={false}
-          onNavigate={navigateMobile}
-        />
-      ) : null}
       <Modal
         open={isGuest && Boolean(authGate)}
-        title={language === "en" ? "Log in or join Holiwyn" : "登录或加入 Holiwyn"}
-        description={language === "en"
-          ? authGate?.kind === "follow" && authIntentPolicy.follow === "execute"
-            ? "Watching is public. Sign in to complete the follow you requested."
-            : "Watching and discovery are public. Sign in to continue this action. Nothing will be sent or purchased automatically."
-          : authGate?.kind === "follow" && authIntentPolicy.follow === "execute"
-            ? "浏览无需登录。登录后将完成您请求的关注。"
-            : "浏览和观看无需登录。登录后可继续此操作；系统不会自动发送内容或购买任何项目。"}
+        title={authMode === "login" ? (language === "en" ? "Sign in" : "登录") : (language === "en" ? "Create account" : "创建账户")}
         closeLabel={language === "en" ? "Continue browsing" : "继续浏览"}
         onClose={() => setAuthGate(null)}
       >
-        <div className="auth-tabs" role="tablist">
-          <button type="button" className={authMode === "login" ? "active" : ""} onClick={() => { setAuthMode("login"); setLoginError(""); }}>{language === "en" ? "Sign in" : "登录"}</button>
-          <button type="button" className={authMode === "register" ? "active" : ""} onClick={() => { setAuthMode("register"); setHandle(""); setLoginError(""); }}>{language === "en" ? "Create account" : "创建账户"}</button>
-        </div>
         <form className="login-form" onSubmit={(event) => void (authMode === "login" ? login(event) : register(event))}>
           <label>{language === "en" ? "Account handle" : "账户名"}<input value={handle} onChange={(event) => setHandle(event.target.value.toLowerCase())} autoComplete="username" minLength={3} maxLength={30} pattern={authMode === "register" ? "[a-z0-9_]+" : "[a-z0-9_-]+"} required /></label>
           {authMode === "register" ? <label>{language === "en" ? "Display name" : "显示名称"}<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} autoComplete="nickname" minLength={2} maxLength={50} required /></label> : null}
@@ -1482,6 +1330,7 @@ function App() {
           {authMode === "register" ? <p className="form-help">{language === "en" ? "Private staging only. Do not use personal information or a real password. New accounts begin with zero R." : "仅限私有预发布环境。请勿使用个人信息或真实密码。新账户初始 R 为零。"}</p> : null}
           <button>{authMode === "login" ? (language === "en" ? "Sign in" : "登录") : (language === "en" ? "Create account" : "创建账户")}</button>
         </form>
+        <button type="button" className="auth-mode-switch text-action" onClick={()=>{setAuthMode(authMode==="login"?"register":"login");setLoginError("");setPassword("");}}>{authMode==="login"?(language==="en"?"New to Holiwyn? Create account":"首次使用 Holiwyn？创建账户"):(language==="en"?"Already have an account? Sign in":"已有账户？登录")}</button>
         {loginError ? <p className="error" role="alert">{loginError}</p> : null}
       </Modal>
       {resumeNotice ? <p className="notice auth-resume-notice" role="status">{resumeNotice}</p> : null}
@@ -1502,6 +1351,7 @@ function AccountCenter({
   onUpdated,
   onBack,
   onLogout,
+  onViewPublicProfile,
   section,
   onSectionChange,
   preferences,languages,tags,preferencesSaving,preferencesMessage,onPreferencesChange,onPreferencesSave,onPreferencesReset,
@@ -1512,6 +1362,7 @@ function AccountCenter({
   onUpdated: (user: User) => void;
   onBack: () => void;
   onLogout: () => void;
+  onViewPublicProfile:()=>void;
   section: AccountSection;
   onSectionChange: (section: AccountSection) => void;
   preferences: DiscoveryPreferences|null; languages: SupportedLanguage[]; tags: PublicTag[]; preferencesSaving:boolean; preferencesMessage:""|"saved"|"reset"|"error";
@@ -1626,6 +1477,7 @@ function AccountCenter({
             <label>{zh ? "界面语言" : "Interface language"}<select value={locale} onChange={(event) => setLocale(event.target.value as Language)}><option value="en">English</option><option value="zh">中文</option></select></label>
             <label className="account-profile-visibility"><input type="checkbox" checked={publicProfileEnabled} onChange={event=>setPublicProfileEnabled(event.target.checked)}/><span><strong>{zh?"公开我的观众资料":"Public audience profile"}</strong><small>{zh?"关闭后，其他用户无法打开您的观众资料。已启用的主播主页仍保持公开。":"When off, other people cannot open your audience profile. An active creator profile remains public."}</small></span></label>
             <button>{zh ? "保存资料" : "Save profile"}</button>
+            {publicProfileEnabled?<button type="button" className="secondary" onClick={onViewPublicProfile}>{zh?"查看公开资料":"View public profile"}</button>:null}
           </form>
           <p className="form-help">{zh ? "账户名目前不可更改，以保持直播间、账本和审核记录的一致性。" : "Handles remain fixed so room ownership, ledgers, and moderation records stay consistent."}</p>
         </section>
@@ -4812,10 +4664,7 @@ function PublicCreatorProfileView({
       {shareNotice ? <p className="notice auth-resume-notice share-notice" role="status">{shareNotice}</p> : null}
       {recommendations.length ? (
         <section className="creator-profile-recommendations" aria-labelledby="profile-recommendations-title">
-          <div>
-            <p className="eyebrow">{zh ? "继续发现" : "KEEP DISCOVERING"}</p>
-            <h2 id="profile-recommendations-title">{zh ? "更多主播" : "More creators"}</h2>
-          </div>
+          <h2 id="profile-recommendations-title">{zh ? "更多主播" : "More creators"}</h2>
           <div className="live-stream-grid">
             {recommendations.slice(0, 4).map((item, index) => (
               <LiveStreamCard key={item.slug} room={item} index={index} t={t} zh={zh} onOpen={(selected) => onOpenRoom(selected as Room)} />
@@ -5023,12 +4872,16 @@ function RoomView({
   }, [t]);
   useEffect(() => {
     setMobileSheet(null);
+    refreshBroadcast();
+    if (authenticated) void request(`/api/streamers/${room.streamer_id}/follow-status`).then((data) =>
+      setFollowing(data.following),
+    );
+    if(!supportAvailable)return;
     if (authenticated) void request(`/api/rooms/${room.slug}/visit`, {
       method: "POST",
       body: "{}",
     });
     refreshPlayback();
-    refreshBroadcast();
     refreshShow();
     refreshWallet();
     if (authenticated) void request("/api/gifts").then((d) => {
@@ -5037,10 +4890,7 @@ function RoomView({
     });
     refreshActions();
     refreshSupportFeed();
-    if (authenticated) void request(`/api/streamers/${room.streamer_id}/follow-status`).then((data) =>
-      setFollowing(data.following),
-    );
-  }, [room.slug, authenticated]);
+  }, [room.slug, authenticated,supportAvailable]);
   useEffect(()=>{if(supportAvailable)void request(`/api/rooms/${room.slug}/chat-history`).then((d)=>setMessages(d.messages));else{setMessages([]);setPresence(0);setChatStatus(t.offline);}},[room.slug,supportAvailable,t.offline]);
   useEffect(() => {
     refreshPlayback();
@@ -5295,6 +5145,18 @@ function RoomView({
     }, 0);
     onIntentHandled(t.title === "Stream MVP" ? "Signed in — review Report and submit it when ready." : "登录成功——请确认后再提交举报。");
   }, [authenticated, resumeIntent?.id, supportAvailable, room.slug]);
+  if(!supportAvailable)return <section className="workspace audience-room offline-room-simple">
+    <button className="secondary room-back" onClick={back}>{t.back}</button>
+    <div className="offline-room-card">
+      <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="offline-room-avatar" />
+      <h2>{room.streamer_name} {t.title === "Stream MVP" ? "is offline" : "当前离线"}</h2>
+      <p>{following?(t.title === "Stream MVP"?"You’re following this creator.":"您已关注该主播。"):(t.title === "Stream MVP"?"Follow this creator to be notified when they go live.":"关注该主播以接收开播通知。")}</p>
+      {room.next_stream_at?<p className="offline-next-stream">{t.title === "Stream MVP"?"Next stream":"下一场直播"}: <time dateTime={room.next_stream_at}>{new Date(room.next_stream_at).toLocaleString()}</time></p>:null}
+      <div className="offline-room-actions"><button type="button" onClick={()=>void follow()}>{following?(t.title === "Stream MVP"?"Following":"已关注"):t.follow}</button><button type="button" className="secondary" onClick={onOpenProfile}>{t.title === "Stream MVP"?"View profile":"查看主页"}</button><button type="button" className="secondary" onClick={back}>{t.title === "Stream MVP"?"Browse live rooms":"浏览直播"}</button></div>
+      <details className="room-more-actions"><summary aria-label={t.title === "Stream MVP"?"More actions":"更多操作"}>•••</summary><div><button type="button" onClick={()=>void shareRoom(true)}>{t.title === "Stream MVP"?"Copy room link":"复制直播间链接"}</button><button type="button" data-auth-action="report" onClick={()=>void report()}>{t.report}</button></div></details>
+      {shareNotice?<p className="notice" role="status">{shareNotice}</p>:null}
+    </div>
+  </section>;
   return (
     <section className="workspace audience-room">
       <button className="secondary room-back" onClick={back}>

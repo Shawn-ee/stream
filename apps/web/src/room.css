@@ -790,3 +790,13 @@
 .room-detail-tags span { border-radius: var(--radius-pill); background: var(--color-surface-secondary); color: var(--color-text-secondary); padding: 0.15rem 0.45rem; font-size: 0.72rem; }
 .chat-profile-link { color:inherit; text-decoration:none; }
 .chat-profile-link:hover,.chat-profile-link:focus-visible { color:var(--color-brand-primary); text-decoration:underline; }
+.offline-room-simple { min-height: calc(100dvh - 8rem); }
+.offline-room-card { position: relative; display: grid; width: min(100%,34rem); min-height: 22rem; margin: clamp(2rem,8vh,7rem) auto 0; place-items: center; align-content: center; gap: var(--space-3); text-align: center; }
+.offline-room-card h2,.offline-room-card p { margin: 0; }
+.offline-room-card > p { color: var(--color-text-secondary); }
+.offline-room-avatar { width: 5rem; height: 5rem; border-radius: 50%; }
+.offline-next-stream { font-size: .9rem; }
+.offline-room-card .room-more-actions { position: absolute; top: 0; right: 0; }
+.offline-room-card .room-more-actions > summary { display: grid; width: var(--control-min); height: var(--control-min); place-items: center; border: 1px solid var(--color-border); border-radius: 50%; cursor: pointer; list-style: none; }
+.offline-room-card .room-more-actions > div { position: absolute; right: 0; display: grid; width: 12rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: var(--space-2); box-shadow: var(--shadow-raised); }
+.offline-room-card .room-more-actions button { border: 0; background: transparent; color: var(--color-text-primary); text-align: left; }

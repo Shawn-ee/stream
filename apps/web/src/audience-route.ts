@@ -15,8 +15,8 @@ const publicHandle = /^[a-z0-9_-]{3,30}$/;
 
 export function parseAudienceRoute(pathname: string): AudienceRoute {
   const normalized = pathname.replace(/\/+$/, "") || "/";
-  if (normalized === "/" || normalized === "/discover") return { view: "discovery" };
-  if (normalized === "/tags" || normalized === "/categories") return { view: "legacy-discovery" };
+  if (normalized === "/") return { view: "discovery" };
+  if (normalized === "/discover" || normalized === "/tags" || normalized === "/categories" || /^\/tags\/[a-z0-9-]+$/.test(normalized)) return { view: "legacy-discovery" };
   const account = normalized.match(/^\/account\/(profile|security|sessions|preferences|wallet|following|activity|notifications)$/);
   if (account) return { view: "account", section: account[1] as Extract<AudienceRoute, { view: "account" }>["section"] };
   const onboarding = normalized.match(/^\/creator\/onboarding\/(profile|identity|agreement|review)$/);
@@ -42,7 +42,7 @@ export function parseAudienceRoute(pathname: string): AudienceRoute {
 }
 
 export function audienceRoutePath(route: Exclude<AudienceRoute, { view: "invalid" }>) {
-  if (route.view === "discovery" || route.view === "legacy-discovery") return "/discover";
+  if (route.view === "discovery" || route.view === "legacy-discovery") return "/";
   if (route.view === "account") return `/account/${route.section}`;
   if (route.view === "creator-onboarding") return route.step === "intro" ? "/creator/onboarding" : `/creator/onboarding/${route.step}`;
   if (route.view === "creator-status") return "/creator/status";

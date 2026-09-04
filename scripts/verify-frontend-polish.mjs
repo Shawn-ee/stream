@@ -23,7 +23,7 @@ assert.match(app, /requestId === roomsRequestRef\.current/);
 
 for (const state of ["roomsError", "followingError"])
   assert.match(app, new RegExp(`const \\[${state}, set${state[0].toUpperCase()}${state.slice(1)}\\]`));
-assert.match(app, /Discovery is temporarily unavailable/);
+assert.match(discovery, /Live rooms are temporarily unavailable/);
 assert.match(app, /Following is temporarily unavailable/);
 assert.match(app, /onFollowingRetry=\{\(\) => void loadFollowing\(\)\}/);
 assert.match(discovery, /Creators are temporarily unavailable/);

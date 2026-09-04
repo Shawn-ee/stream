@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { LiveStreamCardSkeleton } from "./ui";
+import { EmptyState, LiveStreamCardSkeleton } from "./ui";
 import { CreatorAvatar } from "./avatar";
 
 export type DiscoveryRoom = {
   slug: string;
+  publicRoomId?: string;
   title: string;
   status: string;
   streamer_id: string;
@@ -30,6 +31,34 @@ export type MobileDiscoveryView = "for-you" | "following" | "live";
 
 function roomState(room: DiscoveryRoom) {
   return room.broadcast_state ?? (room.status === "live" ? "live" : "offline");
+}
+
+export function RecommendedCreatorCard({room,zh,onOpen}:{room:DiscoveryRoom;zh:boolean;onOpen:(room:DiscoveryRoom)=>void}){
+  const primary=room.languages?.find(item=>item.isPrimary)??room.languages?.[0];
+  return <button type="button" className="recommended-creator-card" onClick={()=>onOpen(room)} aria-label={`${zh?"查看主播":"View creator"}: ${room.streamer_name}`}>
+    <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="recommended-creator-avatar" />
+    <span><strong>{room.streamer_name}</strong><small>{primary?.nameNative??primary?.nameEn??""}{room.tags?.[0]?` · #${room.tags[0].displayName}`:""}</small></span>
+  </button>;
+}
+
+export function SimpleDiscovery({rooms,languages,tags,selectedLanguages,selectedTags,followingOnly,authenticated,loading,error,zh,onLanguagesChange,onTagsChange,onFollowingChange,onClear,onRetry,onOpenRoom,onOpenCreator}:{
+  rooms:DiscoveryRoom[];languages:DiscoveryLanguage[];tags:DiscoveryTag[];selectedLanguages:string[];selectedTags:string[];followingOnly:boolean;authenticated:boolean;loading:boolean;error:boolean;zh:boolean;
+  onLanguagesChange:(value:string[])=>void;onTagsChange:(value:string[])=>void;onFollowingChange:(value:boolean)=>void;onClear:()=>void;onRetry:()=>void;onOpenRoom:(room:DiscoveryRoom)=>void;onOpenCreator:(room:DiscoveryRoom)=>void;
+}){
+  const live=rooms.filter(room=>roomState(room)==="live"&&!isSimulated(room));
+  const recommended=rooms.filter(room=>roomState(room)!=="live"&&!isSimulated(room)).slice(0,Math.max(0,4-live.length));
+  const toggle=(items:string[],item:string)=>items.includes(item)?items.filter(value=>value!==item):[...items,item];
+  return <section className="simple-discovery" aria-labelledby="live-title">
+    <div className="simple-discovery-heading"><h2 id="live-title">{zh?"直播":"Live"}</h2></div>
+    <div className="compact-filter-row" aria-label={zh?"发现筛选":"Discovery filters"}>
+      <details className="compact-filter"><summary>{selectedLanguages.length?selectedLanguages.length===1?(languages.find(item=>item.code===selectedLanguages[0])?.name_native??selectedLanguages[0]):`${selectedLanguages.length} ${zh?"种语言":"languages"}`:(zh?"语言":"Language")}</summary><div className="compact-filter-popover"><strong>{zh?"语言":"Language"}</strong>{languages.map(item=><label key={item.code}><input type="checkbox" checked={selectedLanguages.includes(item.code)} onChange={()=>onLanguagesChange(toggle(selectedLanguages,item.code))}/><span>{zh?item.name_native:item.name_en}</span></label>)}{selectedLanguages.length?<button type="button" className="text-action" onClick={()=>onLanguagesChange([])}>{zh?"清除":"Clear"}</button>:null}</div></details>
+      <details className="compact-filter"><summary>{selectedTags.length?selectedTags.length===1?`#${tags.find(item=>item.slug===selectedTags[0])?.displayName??selectedTags[0]}`:`${selectedTags.length} ${zh?"个标签":"tags"}`:(zh?"标签":"Tags")}</summary><div className="compact-filter-popover"><strong>{zh?"标签":"Tags"}</strong>{tags.slice(0,12).map(item=><label key={item.id}><input type="checkbox" checked={selectedTags.includes(item.slug)} onChange={()=>onTagsChange(toggle(selectedTags,item.slug))}/><span>#{item.displayName}</span></label>)}{selectedTags.length?<button type="button" className="text-action" onClick={()=>onTagsChange([])}>{zh?"清除":"Clear"}</button>:null}</div></details>
+      {authenticated?<label className="following-only"><input type="checkbox" checked={followingOnly} onChange={event=>onFollowingChange(event.target.checked)}/><span>{zh?"仅关注":"Following only"}</span></label>:null}
+      {selectedLanguages.length||selectedTags.length||followingOnly?<button type="button" className="text-action" onClick={onClear}>{zh?"全部清除":"Clear all"}</button>:null}
+    </div>
+    {loading?<div className="live-stream-grid"><LiveStreamCardSkeleton count={4} label={zh?"正在加载直播":"Loading live rooms"}/></div>:error?<EmptyState icon="!" title={zh?"暂时无法加载直播":"Live rooms are temporarily unavailable"} description={zh?"请稍后重试。":"Try again in a moment."} action={<button type="button" onClick={onRetry}>{zh?"重试":"Try again"}</button>}/>:live.length?<div className="live-stream-grid">{live.map((room,index)=><LiveStreamCard key={room.slug} room={room} index={index} t={{followers:zh?"粉丝":"followers"}} zh={zh} onOpen={onOpenRoom}/>)}</div>:<div className="simple-empty"><strong>{zh?"暂时没有主播开播":"No one is live right now."}</strong>{selectedLanguages.length||selectedTags.length||followingOnly?<button type="button" className="text-action" onClick={onClear}>{zh?"清除筛选":"Clear filters"}</button>:null}</div>}
+    {!loading&&!error&&recommended.length?<section className="simple-recommendations" aria-labelledby="recommended-title"><h2 id="recommended-title">{zh?"你可能喜欢的主播":"Creators you may like"}</h2><div className="recommended-creator-grid">{recommended.map(room=><RecommendedCreatorCard key={room.streamer_id} room={room} zh={zh} onOpen={onOpenCreator}/>)}</div></section>:null}
+  </section>;
 }
 
 function isSimulated(room: DiscoveryRoom) {
@@ -87,9 +116,8 @@ export function LiveStreamCard({
         {room.stream_thumbnail_url ? <img className="live-card-thumbnail" src={room.stream_thumbnail_url} alt="" loading="lazy" decoding="async" /> : null}
         <span className="live-card-status">
           {state === "live" ? <i aria-hidden="true" /> : null}
-          {isSimulated(room) ? (zh ? "模拟" : "SIMULATED") : stateLabel(state, zh)}
+          {stateLabel(state, zh)}
         </span>
-        <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="live-card-preview-avatar" />
         <RoomLanguageLabels room={room} compact />
         {state === "live" ? <span className="live-card-viewers">{room.viewer_count ?? 0} {zh ? "观看" : "watching"}</span> : null}
         <span className="mobile-live-card-overlay">
@@ -101,19 +129,17 @@ export function LiveStreamCard({
           <strong>{room.title}</strong>
           <span className="mobile-live-card-creator">
             <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className="mobile-live-card-avatar" />
-            <span><b>{room.streamer_name}</b><small>{room.follower_count ?? 0} {t.followers}</small></span>
+            <span><b>{room.streamer_name}</b></span>
           </span>
           {state !== "live" ? <small className="mobile-live-card-schedule">{scheduleLabel(room, zh)}</small> : null}
           <span className="mobile-live-card-cta">{state === "live" ? (zh ? "进入直播" : "Watch live") : (zh ? "查看主播" : "View creator")}</span>
         </span>
       </span>
       <span className="live-card-details">
-        <CreatorAvatar name={room.streamer_name} url={room.avatar_url} className={`live-card-avatar state-${state}`} />
         <span className="live-card-copy">
           <strong>{room.title}</strong>
           <span className="live-card-creator">{room.streamer_name}</span>
-          <small>{room.follower_count ?? 0} {t.followers}{room.is_following ? ` · ${zh ? "已关注" : "Following"}` : ""}</small>
-          {room.tags?.length ? <span className="live-card-tags" aria-label={`${zh ? "标签" : "Tags"}: ${room.tags.map(tag=>tag.displayName).join(", ")}`}>{room.tags.slice(0,3).map(tag=><span key={tag.id}>#{tag.displayName}</span>)}</span> : null}
+          {room.tags?.length ? <span className="live-card-tags" aria-label={`${zh ? "标签" : "Tags"}: ${room.tags.map(tag=>tag.displayName).join(", ")}`}>{room.tags.slice(0,2).map(tag=><span key={tag.id}>#{tag.displayName}</span>)}</span> : null}
         </span>
       </span>
     </button>
@@ -141,7 +167,7 @@ export function FeaturedLive({
       <div className="featured-live-overlay">
         <span className="featured-kicker">
           {state === "live" ? <i aria-hidden="true" /> : null}
-          {isSimulated(room) ? (zh ? "模拟直播状态" : "SIMULATED STATUS") : state === "live" ? (zh ? "精选直播" : "FEATURED LIVE") : (zh ? "推荐主播" : "FEATURED CREATOR")}
+          {state === "live" ? (zh ? "精选直播" : "FEATURED LIVE") : (zh ? "推荐主播" : "FEATURED CREATOR")}
         </span>
         <div>
           <p>{room.streamer_name}{room.tags?.[0]?` · ${room.tags[0].displayName}`:""}</p>

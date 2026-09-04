@@ -11,7 +11,6 @@ export function AudienceAccountMenu({
   onToggle,
   onClose,
   onFollowing,
-  onProfile,
   onActivity,
   onNotifications,
   onWallet,
@@ -28,7 +27,6 @@ export function AudienceAccountMenu({
   onToggle: () => void;
   onClose: () => void;
   onFollowing: () => void;
-  onProfile: () => void;
   onActivity: () => void;
   onNotifications: () => void;
   onWallet: () => void;
@@ -61,14 +59,13 @@ export function AudienceAccountMenu({
       </button>
       {open ? <div className="audience-account-popover" role="menu" aria-label={zh ? "账户选项" : "Account options"}>
         <header><strong>{displayName}</strong><small>@{handle}</small></header>
-        <button type="button" role="menuitem" onClick={choose(onProfile)}>{zh ? "查看公开资料" : "View public profile"}</button>
         <button type="button" role="menuitem" onClick={choose(onFollowing)}>{zh ? "关注" : "Following"}</button>
         <button type="button" role="menuitem" onClick={choose(onActivity)}>{zh ? "活动记录" : "Activity"}</button>
         <button type="button" role="menuitem" onClick={choose(onNotifications)}>{zh ? "通知" : "Notifications"}</button>
         <button type="button" role="menuitem" onClick={choose(onWallet)}>{zh ? "钱包" : "Wallet"}</button>
         <hr />
         <button type="button" role="menuitem" className="menu-creator-action" onClick={choose(onBroadcast)}>{creatorActive ? (zh ? "主播工作室" : "Streamer Studio") : (zh ? "成为主播" : "Become a creator")}</button>
-        <button type="button" role="menuitem" onClick={choose(onSettings)}>{zh ? "账户设置" : "Account settings"}</button>
+        <button type="button" role="menuitem" onClick={choose(onSettings)}>{zh ? "设置" : "Settings"}</button>
         <hr />
         <button type="button" role="menuitem" className="menu-signout" onClick={choose(onLogout)}>{zh ? "退出登录" : "Sign out"}</button>
       </div> : null}

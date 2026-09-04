@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-04 — Radical audience simplicity (local)
+
+- Replaced desktop/mobile discovery variants with one live-first homepage and compact URL-backed language, tag, and Following filters.
+- Removed Discover navigation, mobile bottom navigation, permanent language buttons, Popular Tags/Trending duplication, homepage account feeds, and redundant explanatory copy.
+- Added immutable six-digit public room IDs, exact-ID resolution, plural tag/following filters, and a privacy-safe read-only search endpoint.
+- Simplified live cards, offline creator recommendations, creator profiles, authentication, and offline rooms.
+- Offline room entry now avoids visit writes and all live-only client/data loading; the server also rejects offline visit recording.
+- Type checks, static milestone verification, canonical-route verification, and production builds pass. Database/staging/browser verification is pending because Docker Desktop is unavailable.
+
 ## 2026-09-03 — Public audience profiles
 
 - Added compact `/@handle` profiles with safe identity fields, creator-capability enhancement, and responsive presentation.

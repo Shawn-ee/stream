@@ -104,7 +104,8 @@ try {
 const source = fs.readFileSync(path.join(process.cwd(), "apps/web/src/main.tsx"), "utf8");
 assert.match(source, /const publicGuest =/);
 assert.match(source, /authenticated=\{!isGuest\}/);
-assert.match(source, /Watching and discovery are public/);
+assert.doesNotMatch(source, /Watching and discovery are public/);
+assert.match(source, /title=\{authMode === "login"[^\n]+"Sign in"/);
 assert.match(source, /onRequireAuth\("chat"\)/);
 
 console.log("Public discovery, safe anonymous reads, interaction gates, and offline guest realtime refusal verified.");

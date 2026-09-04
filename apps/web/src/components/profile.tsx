@@ -72,10 +72,10 @@ export function CreatorProfileSurface({
   languages,
   tags,
   followerCount,
-  scheduleText,
+  scheduleText: _scheduleText,
   nextStreamAt,
-  scheduleTimezone,
-  roomTitle,
+  scheduleTimezone: _scheduleTimezone,
+  roomTitle: _roomTitle,
   state,
   following,
   zh,
@@ -104,13 +104,6 @@ export function CreatorProfileSurface({
   onShare: () => void;
 }) {
   const nextStream = nextStreamLabel(nextStreamAt, zh);
-  const stateText = state === "live"
-    ? (zh ? "直播中" : "LIVE NOW")
-    : state === "connecting"
-      ? (zh ? "正在准备直播" : "STARTING SOON")
-      : state === "unavailable"
-        ? (zh ? "直播状态暂时不可用" : "STATUS UNAVAILABLE")
-        : (zh ? "当前离线" : "OFFLINE");
   return (
     <section className={`public-creator-profile state-${state}`} aria-labelledby="public-creator-name">
       <button type="button" className="creator-profile-back" onClick={onBack}>
@@ -123,7 +116,6 @@ export function CreatorProfileSurface({
         <div className="creator-profile-identity">
           <CreatorAvatar name={displayName} url={avatarUrl} className={`creator-profile-avatar state-${state}`} />
           <div className="creator-profile-name">
-            <span className={`creator-profile-state state-${state}`}>{stateText}</span>
             <h2 id="public-creator-name">{displayName}</h2>
             <p>@{handle} · {followerCount.toLocaleString()} {zh ? "位关注者" : followerCount === 1 ? "follower" : "followers"}</p>
           </div>
@@ -131,43 +123,20 @@ export function CreatorProfileSurface({
             <button type="button" className="creator-profile-follow" aria-pressed={following} onClick={onFollow}>
               {following ? (zh ? "已关注" : "Following") : (zh ? "关注" : "Follow")}
             </button>
-            <button type="button" className={state === "live" ? "creator-profile-watch live" : "creator-profile-watch"} onClick={onOpenRoom}>
-              {state === "live" ? (zh ? "观看直播" : "Watch live") : (zh ? "进入直播间" : "Visit room")}
-            </button>
+            {state === "live"?<button type="button" className="creator-profile-watch live" onClick={onOpenRoom}>{zh ? "观看直播" : "Watch live"}</button>:null}
             <ShareButton label={zh ? "分享主播" : "Share creator"} onShare={onShare} />
           </div>
         </div>
       </div>
 
-      <div className="creator-profile-information">
+      <div className="creator-profile-information simplified">
         <article className="creator-profile-about">
-          <p className="eyebrow">{zh ? "关于主播" : "ABOUT"}</p>
-          <h3>{zh ? "认识" : "Meet"} {displayName}</h3>
           <p>{bio || (zh ? "主播暂未填写简介。" : "This creator has not added a bio yet.")}</p>
           {languages.length ? <span>{(zh ? "语言" : "Languages")}: {languages.map((item) => item.nameNative || item.nameEn).join(" · ")}</span> : null}
           {tags.length ? <span>{tags.slice(0, 3).map((item) => item.displayName).join(" · ")}</span> : null}
-        </article>
-        <article className="creator-profile-schedule">
-          <p className="eyebrow">{zh ? "直播日程" : "SCHEDULE"}</p>
-          <h3>{nextStream ? (zh ? "下一场直播" : "Next stream") : (zh ? "常规直播时间" : "Regular schedule")}</h3>
-          {nextStream ? <><time dateTime={nextStreamAt ?? undefined}>{nextStream}</time><small>{zh?"按您的本地时区显示":"Shown in your local timezone"}</small></> : <><p>{scheduleText || (zh ? "直播时间待公布。" : "Stream times will be announced here.")}</p>{scheduleTimezone ? <small>{zh ? "主播时区" : "Creator timezone"}: {scheduleTimezone}</small> : null}</>}
+          {nextStream?<span>{zh?"下一场直播":"Next stream"}: <time dateTime={nextStreamAt??undefined}>{nextStream}</time></span>:null}
         </article>
       </div>
-
-      <article className={`creator-profile-current-room state-${state}`}>
-        <div className="creator-profile-room-art" aria-hidden="true">
-          <CreatorAvatar name={displayName} url={avatarUrl} className="creator-profile-room-avatar" />
-          <strong>{stateText}</strong>
-        </div>
-        <div>
-          <p className="eyebrow">{zh ? "直播间" : "CURRENT ROOM"}</p>
-          <h3>{roomTitle}</h3>
-          <p>{state === "live" ? (zh ? "直播正在进行，立即加入互动。" : "The broadcast is live. Join the room now.") : (zh ? "主播离线时仍可查看日程和直播间信息。" : "Visit the room for the schedule and offline details.")}</p>
-          <button type="button" onClick={onOpenRoom}>
-            {state === "live" ? (zh ? "立即观看" : "Watch now") : (zh ? "查看直播间" : "View room")}
-          </button>
-        </div>
-      </article>
     </section>
   );
 }

@@ -3,9 +3,10 @@ import { readFile } from "node:fs/promises";
 import { audienceRoutePath, parseAudienceRoute } from "../apps/web/src/audience-route.ts";
 
 assert.deepEqual(parseAudienceRoute("/"), { view: "discovery" });
-assert.deepEqual(parseAudienceRoute("/discover"), { view: "discovery" });
+assert.deepEqual(parseAudienceRoute("/discover"), { view: "legacy-discovery" });
 assert.deepEqual(parseAudienceRoute("/tags"), { view: "legacy-discovery" });
 assert.deepEqual(parseAudienceRoute("/categories"), { view: "legacy-discovery" });
+assert.deepEqual(parseAudienceRoute("/tags/music"), { view: "legacy-discovery" });
 assert.deepEqual(parseAudienceRoute("/account/security"), { view: "account", section: "security" });
 assert.deepEqual(parseAudienceRoute("/account/following"), { view: "account", section: "following" });
 assert.deepEqual(parseAudienceRoute("/account/activity"), { view: "account", section: "activity" });
@@ -22,7 +23,7 @@ assert.deepEqual(parseAudienceRoute("/creator/night-creator"), { view: "creator"
 assert.deepEqual(parseAudienceRoute("/@demo_audience"), { view: "user", handle: "demo_audience" });
 for (const invalid of ["/room", "/room/a/b", "/room/%2F", "/creator/bad_slug", "/admin", "/account/nope"])
   assert.deepEqual(parseAudienceRoute(invalid), { view: "invalid" }, `expected invalid route: ${invalid}`);
-assert.equal(audienceRoutePath({ view: "discovery" }), "/discover");
+assert.equal(audienceRoutePath({ view: "discovery" }), "/");
 assert.equal(audienceRoutePath({ view: "creator-onboarding", step: "intro" }), "/creator/onboarding");
 assert.equal(audienceRoutePath({ view: "account", section: "wallet" }), "/account/wallet");
 assert.equal(audienceRoutePath({ view: "creator-onboarding", step: "agreement" }), "/creator/onboarding/agreement");

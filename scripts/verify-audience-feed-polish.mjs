@@ -46,11 +46,12 @@ assert.equal((await offlineAction.json()).error, "broadcast_not_live");
 const discovery = fs.readFileSync(path.join(root, "apps/web/src/components/discovery.tsx"), "utf8");
 const css = fs.readFileSync(path.join(root, "apps/web/src/discovery.css"), "utf8");
 const room = fs.readFileSync(path.join(root, "apps/web/src/main.tsx"), "utf8");
-assert.match(discovery, /mobile-live-card-overlay/);
+assert.match(discovery, /export function SimpleDiscovery/);
 assert.match(discovery, /View creator/);
-assert.match(css, /scroll-snap-stop:\s*always/);
-assert.match(css, /linear-gradient\(180deg, transparent/);
+assert.match(css, /\.compact-filter-popover/);
+assert.match(css, /\.recommended-creator-grid/);
+assert.doesNotMatch(css, /scroll-snap-stop:\s*always/);
 assert.match(room, /const supportAvailable = broadcast\.state === "live" && broadcast\.source !== "local"/);
 assert.match(room, /Browse live streams/);
 
-console.log("Audience feed density, bilingual creator variety, immersive mobile cards, and offline support guards verified.");
+console.log("Audience feed density, bilingual creator variety, compact filters, conditional recommendations, and offline support guards verified.");

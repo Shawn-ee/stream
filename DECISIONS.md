@@ -450,3 +450,11 @@ The active product goal ends at a deployable bilingual test-only streaming platf
 - Persistent preferences, Following, Activity, Notifications, and Wallet are account-owned pages. Temporary language/tag/search filters remain URL state on Discover.
 - Offline rooms do not join realtime room presence, load current live chat, or expose a chat composer. Offline community chat is not part of this milestone.
 - Audience-only accounts do not yet have a useful public profile, so their menu uses the accurate label **Profile settings** instead of sending “View public profile” to a private editor.
+
+## 2026-09-04 — One audience homepage and six-digit room IDs
+
+- `/` is the canonical audience homepage. `/discover`, `/tags`, `/tags/:tag`, and `/categories` are compatibility redirects that preserve useful filters.
+- The audience header contains only the logo, global search, and avatar/login. Account feeds and settings remain routed behind the avatar.
+- Public rooms receive immutable random six-digit IDs. Exact IDs resolve directly without exposing database UUIDs; existing slugs remain compatible.
+- Language and tag selections use OR within each group and AND between groups. Search and filters are read-only and must not join presence or create records.
+- Offline room presentation is a separate render path and does not mount playback, chat, gift, action, support, private-show, or presence clients.

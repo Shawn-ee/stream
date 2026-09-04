@@ -1,5 +1,12 @@
 # Stream MVP Backlog
 
+## Radical audience simplicity
+
+- Implemented locally: canonical `/`, legacy Discover/Tags redirects, minimal header, compact multi-language/tag filters, live-first grid, conditional offline creator recommendations, compact cards, concise authentication, and simplified creator profiles.
+- Implemented locally: immutable six-digit public room IDs and read-only ranked search data; offline room visits no longer record activity or mount live-only clients.
+- Verification blocker: Docker Desktop is unavailable, so migration execution, database integration checks, browser QA against the local API, and the complete staging gate remain required before release.
+- Deferred: autocomplete rendering for the existing read-only search endpoint, synthetic-production record markers/cleanup report, and removal of obsolete unmounted discovery components after compatibility verifiers are migrated.
+
 ## Audience information architecture
 
 - Completed locally: canonical `/discover`, legacy Tags redirect, live-only Following row, routed Following/Activity/Notifications/Preferences pages, accurate account labels, and global URL-backed search.

@@ -1387,7 +1387,7 @@ export function buildApi() {
       await client.end();
     }
   });
-  api.get<{ Querystring: { q?: string; languages?: string; tag?: string } }>(
+  api.get<{ Querystring: { q?: string; languages?: string; tag?: string; tags?: string; following?: string; live?: string } }>(
     "/api/rooms",
     async (request, reply) => {
       const viewer = await currentUser(request);
@@ -1396,12 +1396,15 @@ export function buildApi() {
       try {
         const query = request.query.q?.trim() ?? "";
         const languages = (request.query.languages??"").split(",").map(code=>code.trim()).filter(Boolean);
-        const tag = request.query.tag?.trim() ?? "";
+        const tagSlugs = (request.query.tags ?? request.query.tag ?? "").split(",").map(value=>value.trim()).filter(Boolean);
+        const followingOnly = request.query.following === "true";
+        const liveOnly = request.query.live === "true";
         if (languages.length>20||new Set(languages).size!==languages.length||languages.some(code=>!/^[a-z]{2}$/.test(code)))
           return reply.code(400).send({ error: "invalid_stream_languages" });
         const enabledLanguages=await client.query("SELECT language_code FROM supported_languages WHERE enabled=TRUE AND language_code=ANY($1::text[])",[languages]);
         if(enabledLanguages.rows.length!==languages.length)return reply.code(400).send({error:"unsupported_stream_language"});
-        if(tag&&!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(tag))return reply.code(400).send({error:"invalid_tag_filter"});
+        if(tagSlugs.length>20||new Set(tagSlugs).size!==tagSlugs.length||tagSlugs.some(tag=>!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(tag)))return reply.code(400).send({error:"invalid_tag_filter"});
+        if(followingOnly&&!viewer)return reply.code(401).send({error:"demo_session_required"});
         const preferencesResult = viewer && viewer.role !== "admin"
           ? await client.query<{
               preferred_languages: string[];
@@ -1425,8 +1428,8 @@ export function buildApi() {
           last_visited_at: Date | null;
           [key: string]: unknown;
         }>(
-          `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.goal_text,r.stream_thumbnail_url,u.id AS streamer_id,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},COALESCE((SELECT array_agg(rl.language_code ORDER BY rl.display_order) FROM room_languages rl WHERE rl.room_id=r.id),'{}'::text[]) AS language_codes,COALESCE((SELECT array_agg(t.normalized_slug ORDER BY rt.display_order) FROM room_tags rt JOIN tags t ON t.id=rt.tag_id WHERE rt.room_id=r.id AND t.status='ACTIVE' AND t.tag_type IN ('CONTENT','FORMAT','MOOD')),'{}'::text[]) AS tag_slugs,(SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count,(SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at,($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following,(SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count,(SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN streamer_profiles p ON p.user_id=u.id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND ($1='' OR r.title ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%' OR u.handle ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM room_tags search_rt JOIN tags search_t ON search_t.id=search_rt.tag_id WHERE search_rt.room_id=r.id AND search_t.status='ACTIVE' AND search_t.tag_type IN ('CONTENT','FORMAT','MOOD') AND (search_t.display_name ILIKE '%'||$1||'%' OR search_t.normalized_slug ILIKE '%'||$1||'%')) OR EXISTS(SELECT 1 FROM room_languages search_rl JOIN supported_languages search_l ON search_l.language_code=search_rl.language_code WHERE search_rl.room_id=r.id AND (search_l.language_code=$1 OR search_l.name_en ILIKE '%'||$1||'%' OR search_l.name_native ILIKE '%'||$1||'%'))) AND (cardinality($2::text[])=0 OR EXISTS(SELECT 1 FROM room_languages filter_rl WHERE filter_rl.room_id=r.id AND filter_rl.language_code=ANY($2::text[]))) AND ($3='' OR EXISTS(SELECT 1 FROM room_tags filter_rt JOIN tags filter_t ON filter_t.id=filter_rt.tag_id WHERE filter_rt.room_id=r.id AND filter_t.normalized_slug=$3 AND filter_t.status='ACTIVE' AND filter_t.tag_type IN ('CONTENT','FORMAT','MOOD'))) LIMIT 100`,
-          [query, languages, tag, viewer?.id ?? null],
+          `SELECT r.slug,r.public_room_id AS "publicRoomId",r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.goal_text,r.stream_thumbnail_url,u.id AS streamer_id,u.handle AS streamer_handle,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},COALESCE((SELECT array_agg(rl.language_code ORDER BY rl.display_order) FROM room_languages rl WHERE rl.room_id=r.id),'{}'::text[]) AS language_codes,COALESCE((SELECT array_agg(t.normalized_slug ORDER BY rt.display_order) FROM room_tags rt JOIN tags t ON t.id=rt.tag_id WHERE rt.room_id=r.id AND t.status='ACTIVE' AND t.tag_type IN ('CONTENT','FORMAT','MOOD')),'{}'::text[]) AS tag_slugs,(SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count,(SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at,($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following,(SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count,(SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN streamer_profiles p ON p.user_id=u.id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND ($1='' OR r.public_room_id=$1 OR r.slug ILIKE '%'||$1||'%' OR r.title ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%' OR u.handle ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM room_tags search_rt JOIN tags search_t ON search_t.id=search_rt.tag_id WHERE search_rt.room_id=r.id AND search_t.status='ACTIVE' AND search_t.tag_type IN ('CONTENT','FORMAT','MOOD') AND (search_t.display_name ILIKE '%'||$1||'%' OR search_t.normalized_slug ILIKE '%'||$1||'%')) OR EXISTS(SELECT 1 FROM room_languages search_rl JOIN supported_languages search_l ON search_l.language_code=search_rl.language_code WHERE search_rl.room_id=r.id AND (search_l.language_code=$1 OR search_l.name_en ILIKE '%'||$1||'%' OR search_l.name_native ILIKE '%'||$1||'%'))) AND (cardinality($2::text[])=0 OR EXISTS(SELECT 1 FROM room_languages filter_rl WHERE filter_rl.room_id=r.id AND filter_rl.language_code=ANY($2::text[]))) AND (cardinality($3::text[])=0 OR EXISTS(SELECT 1 FROM room_tags filter_rt JOIN tags filter_t ON filter_t.id=filter_rt.tag_id WHERE filter_rt.room_id=r.id AND filter_t.normalized_slug=ANY($3::text[]) AND filter_t.status='ACTIVE' AND filter_t.tag_type IN ('CONTENT','FORMAT','MOOD'))) AND (NOT $5::boolean OR EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AND (NOT $6::boolean OR (r.broadcast_state='live' AND r.broadcast_status_source<>'local')) LIMIT 100`,
+          [query, languages, tagSlugs, viewer?.id ?? null, followingOnly, liveOnly],
         );
         const rooms = await Promise.all(result.rows.map(async (room) => {
           const presence = realtime ? await roomPresence(room.slug) : { count: 0, users: [] };
@@ -1468,6 +1471,16 @@ export function buildApi() {
       }
     },
   );
+  api.get<{ Querystring: { q?: string } }>("/api/search", async (request, reply) => {
+    const q=request.query.q?.trim()??"";
+    if(!q||q.length>120)return reply.code(400).send({error:"invalid_search_query"});
+    const client=database();await client.connect();
+    try{
+      const rooms=await client.query(`SELECT r.slug,r.public_room_id AS "publicRoomId",r.title,r.broadcast_state,u.handle AS "creatorHandle",u.display_name AS "creatorName" FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND (r.public_room_id=$1 OR r.slug ILIKE '%'||$1||'%' OR r.title ILIKE '%'||$1||'%' OR u.handle ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%') ORDER BY CASE WHEN r.public_room_id=$1 THEN 0 WHEN LOWER(r.slug)=LOWER($1) THEN 1 WHEN LOWER(u.handle)=LOWER($1) THEN 2 WHEN r.broadcast_state='live' AND r.broadcast_status_source<>'local' THEN 3 ELSE 4 END,r.title LIMIT 8`,[q]);
+      const tags=await client.query(`SELECT normalized_slug AS slug,display_name AS "displayName" FROM tags WHERE status='ACTIVE' AND tag_type IN ('CONTENT','FORMAT','MOOD') AND (normalized_slug ILIKE '%'||$1||'%' OR display_name ILIKE '%'||$1||'%') ORDER BY CASE WHEN LOWER(normalized_slug)=LOWER($1) THEN 0 ELSE 1 END,display_name LIMIT 5`,[q]);
+      return {rooms:rooms.rows,tags:tags.rows};
+    }finally{await client.end();}
+  });
   api.get("/api/discovery/languages", async () => {
     const client = database();
     await client.connect();
@@ -1800,7 +1813,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug,r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.stream_thumbnail_url,u.id AS streamer_id,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1 AND r.publication_status='published'`,
+          `SELECT r.slug,r.public_room_id AS "publicRoomId",r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.stream_thumbnail_url,u.id AS streamer_id,u.handle AS streamer_handle,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE (r.slug=$1 OR r.public_room_id=$1) AND r.publication_status='published'`,
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -1843,12 +1856,14 @@ export function buildApi() {
       const client = database();
       await client.connect();
       try {
-        const room = await client.query<{ id: string }>(
-          "SELECT r.id FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
+        const room = await client.query<{ id: string; broadcast_state:string; broadcast_status_source:string }>(
+          "SELECT r.id,r.broadcast_state,r.broadcast_status_source FROM live_rooms r JOIN creator_accounts ca ON ca.user_id=r.streamer_id AND ca.status='ACTIVE' WHERE r.slug=$1 AND r.publication_status='published'",
           [request.params.slug],
         );
         if (!room.rows[0])
           return reply.code(404).send({ error: "room_not_found" });
+        if(room.rows[0].broadcast_state!=="live"||room.rows[0].broadcast_status_source==="local")
+          return reply.code(409).send({error:"room_not_live"});
         await client.query(
           "INSERT INTO room_visits (id,room_id,user_id) VALUES ($1,$2,$3)",
           [crypto.randomUUID(), room.rows[0].id, viewer.id],
@@ -3772,7 +3787,7 @@ export function buildApi() {
         const profile=await client.query("SELECT 1 FROM streamer_profiles WHERE user_id=$1",[creator.id]);
         if(!profile.rows[0]){await client.query("ROLLBACK");return reply.code(409).send({error:"creator_profile_missing"});}
         const roomId=crypto.randomUUID();
-        const created=await client.query("INSERT INTO live_rooms (id,streamer_id,slug,title,status,publication_status,stream_language,cloudflare_live_input_id) VALUES ($1,$2,$3,$4,'offline','draft',$5,$6) RETURNING slug,title,publication_status,broadcast_state",[roomId,creator.id,creator.handle,request.body.title.trim(),request.body.primaryLanguage,config.cloudflare.liveInputId??null]);
+        const created=await client.query("INSERT INTO live_rooms (id,streamer_id,slug,title,status,publication_status,stream_language,cloudflare_live_input_id) VALUES ($1,$2,$3,$4,'offline','draft',$5,$6) RETURNING slug,public_room_id AS \"publicRoomId\",title,publication_status,broadcast_state",[roomId,creator.id,creator.handle,request.body.title.trim(),request.body.primaryLanguage,config.cloudflare.liveInputId??null]);
         await replaceRoomClassification(client,roomId,request.body);
         await client.query("INSERT INTO audit_events (id,actor_id,subject_user_id,event_type,metadata) VALUES ($1,$2,$2,'room_created',jsonb_build_object('slug',$3::text,'publicationStatus','draft'))",[crypto.randomUUID(),creator.id,created.rows[0].slug]);
         await client.query("COMMIT");return reply.code(201).send({room:{...created.rows[0],languages:[request.body.primaryLanguage,...request.body.additionalLanguages],tagIds:request.body.tagIds}});

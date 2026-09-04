@@ -1,5 +1,9 @@
 # Stream Platform Product Goal
 
+## Current milestone — radical audience simplicity
+
+Make `/` the single audience homepage with only the Holiwyn logo, global search, avatar/login, one compact language/tag/following filter row, genuine live rooms, and conditional creator recommendations. Add immutable six-digit public room IDs, keep account content routed behind the avatar, and ensure offline rooms mount no playback, chat, support, gift, or presence clients. Preserve every creator, identity, admin, wallet, privacy, and explicit-room-creation boundary.
+
 ## Current milestone — limited public audience profiles
 
 Provide one compact `/@handle` identity for every account with only avatar, display name, handle, optional biography, join month, and active-creator status. Keep email, wallet, viewing activity, notifications, sessions, identity records, and followed creators private. Profile visibility is user-controlled; avatar, block, and report changes require explicit commands; navigation creates no product resources. Audience-to-audience following remains deferred.
