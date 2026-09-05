@@ -1158,8 +1158,8 @@ function App() {
   const audienceExperience = (user.role === "audience" || user.role === "streamer") && !studioOpen;
   const audienceInitials = user.displayName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   return (
-    <main className={`app role-${user.role}${room ? " room-open" : profileRoom || publicUserProfile ? " profile-open" : ""}`}>
-      <header className={`product-header ${audienceExperience && user.ageAcknowledged ? "audience-product-header" : ""}`}>
+    <main className={`app role-${user.role}${studioOpen ? " studio-open" : ""}${room ? " room-open" : profileRoom || publicUserProfile ? " profile-open" : ""}`}>
+      {!studioOpen ? <header className={`product-header ${audienceExperience && user.ageAcknowledged ? "audience-product-header" : ""}`}>
         <button type="button" className="product-identity logo-home" aria-label={language==="zh"?"返回首页":"Holiwyn home"} onClick={showHome}>
           <span className="product-mark" aria-hidden="true">
             H
@@ -1212,7 +1212,7 @@ function App() {
             /></>}
           </> : <><LanguagePicker language={language} onChange={setLanguage} /><button className="secondary" onClick={() => void logout()}>{t.end}</button></>}
         </div>
-      </header>
+      </header> : null}
        {!isGuest && creatorPortalStep ? (
          <CreatorOnboarding
            language={language}
@@ -1354,6 +1354,7 @@ function App() {
           onLanguageChange={setLanguage}
           onLogout={() => void logout()}
           onDiscover={() => { setStudioOpen(false); showDiscovery("push"); }}
+          onAccount={(section) => { setStudioOpen(false); openAccountSection(section); }}
         />
       )}
       <Modal
@@ -3102,8 +3103,8 @@ function QuickGoLive({
       </div>
       <div className="broadcast-health-layers" aria-label={zh ? "直播传输状态" : "Broadcast delivery health"}>
         <span className={stream ? "ready" : "waiting"}><i /> <b>{zh ? "设备" : "Device"}</b><small>{stream ? (zh ? "相机和麦克风已就绪" : "Camera and microphone ready") : (zh ? "等待权限" : "Waiting for permission")}</small></span>
-        <span className={broadcastSource === "local" ? "waiting" : broadcastState === "live" ? "ready" : broadcastState === "connecting" ? "pending" : broadcastState === "unavailable" ? "error" : "waiting"}><i /> <b>{broadcastSource === "local" ? (zh ? "模拟状态" : "Simulation status") : (zh ? "Cloudflare 接收" : "Cloudflare ingest")}</b><small>{broadcastSource === "local" ? (zh ? "未发布媒体" : "No media published") : broadcastState === "live" ? (zh ? "正在接收直播" : "Receiving broadcast") : broadcastState === "connecting" ? (zh ? "正在建立连接" : "Connecting") : broadcastState === "unavailable" ? (zh ? "暂时无法确认" : "Temporarily unconfirmed") : (zh ? "尚未开播" : "Not live yet")}</small></span>
-        <span className={broadcastSource === "local" ? "waiting" : broadcastState === "live" ? "ready" : broadcastState === "connecting" ? "pending" : "waiting"}><i /> <b>{zh ? "观众播放" : "Audience playback"}</b><small>{broadcastSource === "local" ? (zh ? "没有观众视频" : "No audience media") : broadcastState === "live" ? (zh ? "播放授权已可用" : "Playback authorization available") : broadcastState === "connecting" ? (zh ? "正在准备播放" : "Preparing playback") : (zh ? "等待直播" : "Waiting for broadcast")}</small></span>
+        <span className={broadcastSource === "local" ? "waiting" : broadcastState === "live" ? "ready" : broadcastState === "connecting" ? "pending" : broadcastState === "unavailable" ? "error" : "waiting"}><i /> <b>{zh ? "直播连接" : "Stream connection"}</b><small>{broadcastSource === "local" ? (zh ? "等待开播" : "Ready when you are") : broadcastState === "live" ? (zh ? "连接正常" : "Connected") : broadcastState === "connecting" ? (zh ? "正在连接" : "Connecting") : broadcastState === "unavailable" ? (zh ? "暂时无法确认" : "Temporarily unavailable") : (zh ? "等待开播" : "Waiting to start")}</small></span>
+        <span className={broadcastSource === "local" ? "waiting" : broadcastState === "live" ? "ready" : broadcastState === "connecting" ? "pending" : "waiting"}><i /> <b>{zh ? "观众画面" : "Viewer playback"}</b><small>{broadcastSource === "local" ? (zh ? "开播后可用" : "Available after you go live") : broadcastState === "live" ? (zh ? "可正常播放" : "Available") : broadcastState === "connecting" ? (zh ? "正在准备" : "Preparing") : (zh ? "等待开播" : "Waiting to start")}</small></span>
       </div>
       {phase === "ended" ? (
         <div className="broadcast-ended-summary">
@@ -3111,7 +3112,7 @@ function QuickGoLive({
           <h4>{zh ? "直播已结束" : "Stream ended"}</h4>
           <p>{zh ? `时长 ${lastDuration} · 峰值观众 ${peakViewers}` : `Duration ${lastDuration} · Peak viewers ${peakViewers}`}</p>
           {sessionSummary ? <div className="broadcast-ended-metrics">
-            <span><small>{zh ? "测试收益" : "Test support"}</small><strong>{Number(sessionSummary.totalSupport ?? 0).toLocaleString()}</strong></span>
+            <span><small>{zh ? "本场收益" : "R earned"}</small><strong>{Number(sessionSummary.totalSupport ?? 0).toLocaleString()}</strong></span>
             <span><small>{zh ? "支持者" : "Supporters"}</small><strong>{sessionSummary.supporterCount ?? 0}</strong></span>
             <span><small>{zh ? "聊天消息" : "Chat messages"}</small><strong>{sessionSummary.chatMessages ?? 0}</strong></span>
             <span><small>{zh ? "新关注" : "New followers"}</small><strong>{sessionSummary.newFollowers ?? 0}</strong></span>
@@ -3534,7 +3535,7 @@ function CreatorEarningsWallet({
         <div className="creator-period-tabs" aria-label={zh ? "收益周期" : "Earnings period"}>{periods.map(([value, label]) => <button type="button" key={value} className={period === value ? "active" : ""} onClick={() => { setNextCursor(null); setTransactions([]); setPeriod(value); }}>{label}</button>)}</div>
         <div className="creator-earnings-cards">
           <article><span>{zh ? "所选周期收入" : "Selected-period income"}</span><strong>{summary ? Number(summary.periodIncome).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
-          <article><span>{zh ? "累计测试收入" : "Lifetime test income"}</span><strong>{summary ? Number(summary.lifetimeIncome).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
+          <article><span>{zh ? "累计收入" : "Lifetime income"}</span><strong>{summary ? Number(summary.lifetimeIncome).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
           <article><span>{zh ? "礼物收入" : "Gift income"}</span><strong>{summary ? Number(summary.breakdown.gift).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
           <article><span>{zh ? "互动收入" : "Action income"}</span><strong>{summary ? Number(summary.breakdown.action).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
           <article><span>{zh ? "私密直播" : "Private show"}</span><strong>{summary ? Number(summary.breakdown.privateShow).toLocaleString() : "—"}</strong><small>{t.coins}</small></article>
@@ -3675,12 +3676,14 @@ function StreamerStudio({
   onLanguageChange,
   onLogout,
   onDiscover,
+  onAccount,
 }: {
   t: typeof copy.en;
   language: Language;
   onLanguageChange: (language: Language) => void;
   onLogout: () => void;
   onDiscover: () => void;
+  onAccount: (section: "profile" | "wallet") => void;
 }) {
   const [studio, setStudio] = useState<any>(null);
   const [notice, setNotice] = useState("");
@@ -4045,7 +4048,6 @@ function StreamerStudio({
       </section>
     );
   const broadcastState = room.broadcast_state ?? "offline";
-  const simulatedBroadcast = room.broadcast_status_source === "local";
   const effectiveSessionPhase =
     ["connecting", "live", "error", "ending"].includes(runtime.phase)
       ? runtime.phase
@@ -4059,13 +4061,27 @@ function StreamerStudio({
     100,
     Math.round((room.goal_progress / Math.max(1, room.goal_target)) * 100),
   );
+  const studioNavigation = [
+    ["live", liveSessionActive ? (zh ? "直播控制" : "Live control") : (zh ? "开播设置" : "Stream setup"), "live"],
+    ["earnings", zh ? "收益" : "Earnings", "earnings"],
+    ["supporters", zh ? "支持者" : "Supporters", "supporters"],
+    ["followers", zh ? "关注者" : "Followers", "followers"],
+    ["actions", zh ? "互动与变现" : "Monetization", "actions"],
+    ["profile", zh ? "公开主页" : "Public profile", "profile"],
+    ["settings", zh ? "设置" : "Settings", "settings"],
+  ] as const;
+  const selectStudioSection = (section: typeof studioNavigation[number][0]) => {
+    if (section === "live") returnToLive();
+    else openAuxiliarySection(section);
+    closeCreatorMenu();
+  };
   return (
     <section className={`workspace creator-studio broadcaster-runtime-${effectiveSessionPhase} ${activeSection === "live" ? "creator-live-view" : "creator-center-view"}`}>
       <header className="broadcaster-header">
         <strong className="broadcaster-brand">HOLIWYN</strong>
         <div className="broadcaster-session-state" aria-live="polite">
           <span className={effectiveSessionPhase === "live" ? "is-live" : ""}>
-            <i /> {simulatedBroadcast && effectiveSessionPhase === "live" ? (zh ? "模拟直播" : "SIMULATED LIVE") : effectiveSessionPhase === "live" ? (zh ? "直播中" : "LIVE") : simulatedBroadcast && effectiveSessionPhase === "connecting" ? (zh ? "模拟连接" : "SIMULATED STARTING") : effectiveSessionPhase === "connecting" ? (zh ? "正在开播" : "STARTING") : effectiveSessionPhase === "ending" ? (zh ? "正在结束" : "ENDING") : effectiveSessionPhase === "preview" ? (zh ? "预览就绪" : "PREVIEW READY") : (zh ? "准备开播" : "SET UP")}
+            <i /> {effectiveSessionPhase === "live" ? (zh ? "直播中" : "LIVE") : effectiveSessionPhase === "connecting" ? (zh ? "正在开播" : "STARTING") : effectiveSessionPhase === "ending" ? (zh ? "正在结束" : "ENDING") : effectiveSessionPhase === "preview" ? (zh ? "预览就绪" : "PREVIEW READY") : (zh ? "准备开播" : "SET UP")}
           </span>
           <time>{runtime.duration}</time>
           <span className="broadcaster-viewers"><BroadcastIcon name="viewers" /> {viewerCount}</span>
@@ -4088,26 +4104,22 @@ function StreamerStudio({
                 />
                 <span><strong>{studio.user?.displayName}</strong><small>@{studio.user?.handle}</small></span>
               </header>
-              <nav className="creator-menu-sections" aria-label={zh ? "创作者页面" : "Creator pages"}>
-                <button type="button" className="creator-discover-live" onClick={() => { closeCreatorMenu(); if(liveSessionActive)setDiscoverConfirmationOpen(true);else onDiscover(); }}><BroadcastIcon name="live" />{zh ? "发现直播" : "Discover Live"}</button>
-                {([
-                  ["live", zh ? "返回直播" : "Return to live", "live"],
-                  ["earnings", zh ? "收益" : "Earnings", "earnings"],
-                  ["supporters", zh ? "支持者排行" : "Top supporters", "supporters"],
-                  ["followers", zh ? "关注者" : "Followers", "followers"],
-                  ["actions", zh ? "互动与私密直播" : "Actions & private show", "actions"],
-                  ["profile", zh ? "公开主页" : "Public profile", "profile"],
-                  ["settings", zh ? "设置" : "Settings", "settings"],
-                ] as const).map(([section, label, icon]) => (
+              <div className="creator-menu-utilities">
+                <button type="button" onClick={() => { closeCreatorMenu(); if(liveSessionActive)setDiscoverConfirmationOpen(true);else onDiscover(); }}><BroadcastIcon name="live" />{zh ? "发现直播" : "Discover Live"}</button>
+                {!liveSessionActive ? <>
+                  <button type="button" onClick={() => { closeCreatorMenu(); onAccount("profile"); }}><BroadcastIcon name="profile" />{zh ? "账户设置" : "Account settings"}</button>
+                  <button type="button" onClick={() => { closeCreatorMenu(); onAccount("wallet"); }}><BroadcastIcon name="earnings" />{zh ? "钱包" : "Wallet"}</button>
+                </> : null}
+              </div>
+              <nav className="creator-menu-sections studio-mobile-nav" aria-label={zh ? "创作者页面" : "Creator pages"}>
+                {studioNavigation.map(([section, label, icon]) => (
                   <button
                     type="button"
                     key={section}
                     className={activeSection === section || (section === "actions" && activeSection === "private") ? "active" : ""}
                     aria-current={activeSection === section ? "page" : undefined}
                     onClick={() => {
-                      if (section === "live") returnToLive();
-                      else openAuxiliarySection(section);
-                      closeCreatorMenu();
+                      selectStudioSection(section);
                     }}
                   ><BroadcastIcon name={icon as CreatorIconName} />{label}</button>
                 ))}
@@ -4131,6 +4143,23 @@ function StreamerStudio({
           </details>
         </div>
       </header>
+      <aside className="studio-primary-nav" aria-label={zh ? "主播工作室导航" : "Streamer Studio navigation"}>
+        <div className="studio-nav-heading">
+          <small>{zh ? "主播工作室" : "STREAMER STUDIO"}</small>
+          <strong>{studio.user?.displayName ?? (zh ? "主播" : "Creator")}</strong>
+        </div>
+        <nav>
+          {studioNavigation.map(([section, label, icon]) => (
+            <button
+              type="button"
+              key={section}
+              className={activeSection === section || (section === "actions" && activeSection === "private") ? "active" : ""}
+              aria-current={activeSection === section ? "page" : undefined}
+              onClick={() => selectStudioSection(section)}
+            ><BroadcastIcon name={icon as CreatorIconName} /><span>{label}</span></button>
+          ))}
+        </nav>
+      </aside>
       {room.publication_status === "draft" ? <aside className="studio-draft-banner"><span><strong>{zh ? "私有草稿" : "Private draft"}</strong><small>{zh ? "此直播间尚未出现在公开发现中。" : "This room is not visible in public discovery yet."}</small></span><button type="button" onClick={() => void request(`/api/studio/rooms/${encodeURIComponent(room.slug)}/publish`, { method: "POST", body: "{}" }).then(() => refresh()).catch(() => setNotice(zh ? "无法发布直播间。" : "The room could not be published."))}>{zh ? "发布直播间" : "Publish room"}</button></aside> : null}
 
       <div
@@ -4211,7 +4240,6 @@ function StreamerStudio({
       {activeSection === "followers" ? (
         <section className="creator-section creator-config-page creator-followers-page">
           {liveSessionActive ? <div className="broadcast-continues-banner" role="status"><span><i />{zh ? "您的直播仍在继续；关注者会实时更新。" : "Your broadcast is still running; followers update in realtime."}</span><button type="button" onClick={returnToLive}>{zh ? "返回直播" : "Back to live"}</button></div> : null}
-          <div className="creator-page-heading"><h3>{zh ? "关注者" : "Followers"}</h3></div>
           <CreatorFollowersPage slug={room.slug} t={t} />
         </section>
       ) : null}
@@ -4220,7 +4248,7 @@ function StreamerStudio({
         <section className="creator-section creator-config-page">
           <div className="creator-page-heading">
             <div>
-              <h3>{zh ? "互动与目标" : "Actions & goal"}</h3>
+              <h3>{zh ? "互动与变现" : "Monetization"}</h3>
             </div>
             <button type="button" className="secondary" onClick={() => openAuxiliarySection("private")}>{zh ? "私密直播设置" : "Private show settings"}</button>
           </div>
@@ -4297,7 +4325,7 @@ function StreamerStudio({
                 <small>{zh ? "JPEG、PNG 或 WebP，最大 5 MB。保存后会裁剪为正方形。" : "JPEG, PNG, or WebP up to 5 MB. Saved as a square crop."}</small>
                 {avatarFile ? <div className="avatar-focus-controls"><label>{zh ? "左右位置" : "Horizontal position"}<input type="range" min="0" max="100" value={avatarFocusX} onChange={(event) => setAvatarFocusX(Number(event.target.value))} /></label><label>{zh ? "上下位置" : "Vertical position"}<input type="range" min="0" max="100" value={avatarFocusY} onChange={(event) => setAvatarFocusY(Number(event.target.value))} /></label></div> : null}
               </div>
-              <p className="eyebrow">{zh ? "观众预览" : "Viewer preview"}</p>
+              <p className="profile-preview-label">{zh ? "观众预览" : "Viewer preview"}</p>
               <h3>{title || (zh ? "未命名直播" : "Untitled stream")}</h3>
               <p>{bio || (zh ? "添加一句简介，告诉观众您的直播内容。" : "Add a short bio so viewers know what you stream.")}</p>
               <div className="streamer-profile-preview-meta">

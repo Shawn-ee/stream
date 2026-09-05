@@ -31,10 +31,11 @@ assert.ok((app.match(/socket\.on\("chat:deleted"/g) ?? []).length >= 3, "creator
 assert.match(api, /chat_slow_mode_seconds/);
 assert.match(api, /blocked_terms/);
 
-for (const health of ["Device", "Cloudflare ingest", "Audience playback"])
+for (const health of ["Device", "Stream connection", "Viewer playback"])
   assert.match(app, new RegExp(health), `missing layered health label: ${health}`);
-for (const summary of ["Test support", "Supporters", "Chat messages", "New followers", "Top supporter"])
+for (const summary of ["R earned", "Supporters", "Chat messages", "New followers", "Top supporter"])
   assert.match(app, new RegExp(summary), `missing post-stream summary: ${summary}`);
+assert.doesNotMatch(app, /SIMULATED LIVE|SIMULATED STARTING|Lifetime test income|Test support/, "production Studio must not expose test-state labels");
 
 for (const icon of ["viewers", "more", "close", "upload", "timeout", "ban"])
   assert.match(app, new RegExp(`${icon}:`), `missing SVG icon ${icon}`);

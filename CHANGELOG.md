@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-04 — Streamer Studio production UI (local)
+
+- Removed the outer audience/account header while Studio is open, eliminating the overlapping sticky-header defect on desktop and mobile.
+- Added a persistent desktop Studio sidebar with concise, state-aware destinations; retained the same navigation in a contained mobile avatar sheet.
+- Reduced the desktop setup imbalance, moved editable setup ahead of the empty camera preview on mobile, and shortened the initial mobile path to stream details and device permission.
+- Flattened configuration pages, standardized eight-pixel controls, reduced oversized empty/data panels, and simplified Followers, Earnings, Monetization, and profile-preview labeling.
+- Replaced user-facing simulation/test income labels with production-facing connection, playback, and R-earned language while retaining environment-gated local tooling.
+- Updated Studio verification contracts; focused navigation, broadcaster, wallet, profile, mobile, type-check, and production-build checks pass. Browser submission of the local test age acknowledgement was intentionally not performed.
+
 ## 2026-09-04 — Creator onboarding upload reliability (local)
 
 - Fixed the production gateway contract so valid identity uploads can reach the API while oversized requests receive a structured error.

@@ -1,5 +1,12 @@
 # Architecture Decisions
 
+## 2026-09-04 — Studio uses one shell and separates navigation from the account menu
+
+- Studio suppresses the audience header and owns one sticky status header so nested sticky regions cannot cover creator controls.
+- Desktop Studio destinations live in a stable left rail. The avatar popover is an account utility on desktop and becomes a bounded navigation sheet on compact screens.
+- The active publisher remains mounted while the creator visits Studio data/configuration views. Leaving Studio during an active browser broadcast retains the existing explicit warning.
+- Pre-live mobile setup presents editable details and the explicit device-permission action before an empty media preview. Navigation still creates no room or broadcast and never requests media permission.
+
 ## 2026-09-04 — Identity images are optimized locally, but the server remains authoritative
 
 - JPEG and PNG identity images above the presentation target are decoded with source orientation, bounded to 2600 pixels on the longest edge, flattened onto a white background, and encoded as JPEG toward 3 MB before upload. The source file is never modified or transmitted when an optimized derivative is used.

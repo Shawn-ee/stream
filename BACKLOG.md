@@ -1,5 +1,11 @@
 # Stream MVP Backlog
 
+## Streamer Studio production UI
+
+- Implemented locally: single Studio shell, non-overlapping header, desktop sidebar, mobile navigation sheet, state-aware Setup/Live control label, flatter data/configuration surfaces, consistent button geometry, and production-facing connection/status terminology.
+- Implemented locally: compact mobile pre-live ordering that surfaces metadata and the explicit camera/microphone action before the empty preview.
+- Deferred: real-route replacement for Studio hash subsections, a dedicated multi-step setup state machine, searchable tag selection, and authenticated visual acceptance after deployment or a user-completed local test-age acknowledgement.
+
 ## Creator onboarding reliability and polish
 
 - Implemented locally: isolated 9 MB Nginx allowance for the 8 MB identity-document contract, JSON 413 responses, route-scoped multipart enforcement, encrypted-file rollback cleanup, private-storage readiness, and a non-root API volume initializer.

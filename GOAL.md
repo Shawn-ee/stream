@@ -1,5 +1,9 @@
 # Stream Platform Product Goal
 
+## Current milestone — Streamer Studio production UI
+
+Replace the nested audience/Studio chrome with one dedicated Studio shell, keep the publishing surface mounted during internal navigation, expose desktop tools through a stable sidebar and mobile tools through a contained sheet, and reduce pre-live setup, data pages, controls, and empty states to a consistent production visual hierarchy. Preserve creator authorization, explicit room creation/publication, safe active-broadcast navigation, camera-permission intent, wallet integrity, and all server-side lifecycle rules.
+
 ## Current milestone — creator onboarding reliability and polish
 
 Make the complete audience-to-creator flow reliable from introduction through first Studio entry. Browser-side JPEG/PNG optimization must preserve orientation, preview the exact upload, and keep the original local; PDFs remain unmodified. Nginx, API multipart limits, encrypted private storage ownership/readiness, structured errors, honest upload progress, transactional activation, and orphan cleanup must agree. Document receipt must never be presented as identity verification, and neither navigation nor activation may create a room, broadcast, live state, or media permission request.

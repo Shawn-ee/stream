@@ -23,17 +23,21 @@ for (const behavior of [
   /creator-live-view" : "creator-center-view"/,
   /className="broadcaster-account-menu"/,
   /Open creator menu/,
-  /className="creator-menu-sections"/,
+  /className="creator-menu-sections studio-mobile-nav"/,
+  /className="studio-primary-nav"/,
+  /const studioNavigation = \[/,
+  /studioOpen \? " studio-open"/,
+  /!studioOpen \? <header className=\{`product-header/,
   /Sign out and end stream\?/,
   /if \(liveSessionActive\) setLogoutConfirmationOpen\(true\)/,
   /studio-view-active" : "studio-view-inactive"/,
   /Your live broadcast is still running for viewers/,
-  /\["live", zh \? "返回直播" : "Return to live"/,
+  /\["live", liveSessionActive \? \(zh \? "直播控制" : "Live control"\) : \(zh \? "开播设置" : "Stream setup"\)/,
   /\["profile", zh \? "公开主页" : "Public profile"/,
   /\["earnings", zh \? "收益" : "Earnings",/,
-  /\["supporters", zh \? "支持者排行" : "Top supporters"/,
+  /\["supporters", zh \? "支持者" : "Supporters"/,
   /\["followers", zh \? "关注者" : "Followers"/,
-  /\["actions", zh \? "互动与私密直播" : "Actions & private show"/,
+  /\["actions", zh \? "互动与变现" : "Monetization"/,
   /\["settings", zh \? "设置" : "Settings",/,
 ]) assert.match(app, behavior);
 
@@ -56,6 +60,8 @@ for (const rule of [
   /@media \(max-width: 767px\)[\s\S]*\.broadcaster-account-popover\s*\{[\s\S]*position:\s*fixed/,
   /\.broadcaster-account-popover \.locale\s*\{[\s\S]*position:\s*static/,
   /\.broadcaster-signout-button\s*\{[\s\S]*background:\s*#d92d4f/,
+  /\.studio-primary-nav\s*\{[\s\S]*position:\s*fixed/,
+  /\.studio-open \.broadcaster-account-menu\[open\]::before/,
 ]) assert.match(styles, rule);
 
 assert.doesNotMatch(
@@ -70,4 +76,4 @@ assert.equal(
 );
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:streamer-navigation"));
 
-console.log("Persistent publisher mounting, unified avatar navigation, contained language controls, history restoration, and active-session sign-out protection verified.");
+console.log("Persistent publisher mounting, single Studio shell, responsive primary navigation, history restoration, and active-session sign-out protection verified.");
