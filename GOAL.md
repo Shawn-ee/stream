@@ -1,5 +1,17 @@
 # Stream Platform Product Goal
 
+## Current milestone — compact creator setup
+
+Make the full Profile → Agreement → Document → Review path feel like one deliberate product flow rather than nested dashboard cards. Keep every desktop step within a normal Windows viewport, retain natural accessible scrolling on mobile, and present first-room creation as a bounded Studio setup page. Preserve all onboarding state, privacy, activation, and explicit POST-only room-creation behavior.
+
+## Current milestone — automatic live-card snapshots
+
+Remove manual room-cover management from Streamer Studio and use a low-load audience-card image pipeline. After a browser broadcast becomes authoritatively Cloudflare-live, capture one small frame from the existing local preview, upload it at a bounded low frequency, normalize it again to a metadata-free 640×360 WebP, and serve it through the immutable media path. Use branded artwork when capture is unavailable and creator avatars once offline. Discovery cards must never open video, chat, or presence connections. Provider-side snapshots for OBS are a later extension of the recorded source model.
+
+## Current milestone — single-viewport Studio alignment
+
+Align the camera-ready and live desktop Studio directly below the navigation bar, eliminate the overflowing microphone selector, tighten the preview/details gutter, and keep the complete broadcast workstation within one desktop viewport. Retain natural document scrolling and touch-sized controls on mobile while preserving the existing media-permission and broadcast lifecycle boundaries.
+
 ## Current milestone — camera-ready Studio composition
 
 Keep the complete post-permission broadcast workflow visible and coherent: camera preview, delivery health, device checks, microphone level, and Go Live form one workstation, while metadata remains in a bounded secondary panel. Remove pre-live viewer/timer claims and redundant preview surfaces without changing media permissions, publishing authorization, or broadcast lifecycle behavior.

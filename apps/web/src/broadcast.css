@@ -704,61 +704,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   display: none;
 }
 
-@media (min-width: 1024px) {
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) {
-    align-items: start;
-    display: grid;
-    gap: var(--space-3) var(--space-4);
-    grid-template-columns: minmax(0, 2.15fr) minmax(20rem, 0.85fr);
-    grid-template-rows: auto auto auto auto 1fr;
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .quick-live-video-shell {
-    grid-column: 1;
-    grid-row: 1 / span 6;
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-permission-step {
-    align-items: stretch;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    grid-column: 2;
-    padding: var(--space-5);
-    text-align: left;
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-setup-heading,
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-metadata-layout {
-    grid-column: 2;
-    margin: 0;
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-metadata-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-audience-preview {
-    align-items: center;
-    grid-template-columns: 7.5rem minmax(0, 1fr);
-    grid-template-rows: auto auto;
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-audience-preview-media {
-    grid-row: 1 / span 2;
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-metadata-save {
-    width: 100%;
-  }
-
-  .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-permission-step p {
-    margin-left: 0;
-    margin-right: 0;
-  }
-
-}
-
 .broadcaster-stage .quick-live-video-shell {
   background: #020308;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1679,13 +1624,8 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
 .room-language-options button.remove { border: 0; background: transparent; color: var(--color-text-muted); font-size: 1.1rem; }
 .room-tag-selector { display: grid; gap: var(--space-2); }
 .room-tag-selector > small { color: var(--color-text-muted); }
-.room-tag-heading,
-.stream-thumbnail-field,
-.stream-thumbnail-field > span { display: flex; }
-.room-tag-heading,
-.stream-thumbnail-field { align-items: center; justify-content: space-between; }
-.room-tag-heading small,
-.stream-thumbnail-field small { color: var(--color-text-muted); }
+.room-tag-heading { align-items: center; display: flex; justify-content: space-between; }
+.room-tag-heading small { color: var(--color-text-muted); }
 .selected-room-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .selected-room-tags > span { align-items: center; background: rgba(124, 92, 252, 0.13); border: 1px solid rgba(124, 92, 252, 0.42); border-radius: 0.4rem; color: #d7d0ff; display: inline-flex; font-size: 0.8rem; gap: 0.35rem; min-height: 1.85rem; padding: 0 0.35rem 0 0.6rem; }
 .selected-room-tags button { background: transparent; border: 0; color: var(--color-text-muted); min-height: 1.5rem; min-width: 1.5rem; padding: 0; }
@@ -1697,29 +1637,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
 .room-tag-suggestions button:focus-visible { background: rgba(124, 92, 252, 0.12); color: var(--color-text-primary); }
 .room-tag-error { color: var(--color-danger) !important; }
 
-.stream-thumbnail-field { border-top: 1px solid var(--color-border); gap: var(--space-3); padding-top: var(--space-3); }
-.stream-thumbnail-field > span { align-items: flex-start; flex-direction: column; gap: 0.2rem; }
-
-.stream-thumbnail-picker {
-  align-items: center;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  display: flex !important;
-  min-height: var(--control-min);
-  padding: var(--space-2) var(--space-3);
-  white-space: nowrap;
-}
-
-.stream-thumbnail-picker input {
-  height: 1px;
-  opacity: 0;
-  position: absolute;
-  width: 1px;
-}
-
-.stream-thumbnail-picker .broadcast-control-icon,
 .creator-menu-sections .broadcast-control-icon,
 .broadcaster-chat-settings-button .broadcast-control-icon,
 .chat-message-actions .broadcast-control-icon {
@@ -1727,45 +1644,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   height: 1.15rem;
   width: 1.15rem;
 }
-
-.broadcast-audience-preview {
-  background: var(--color-surface-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  display: grid;
-  gap: var(--space-2);
-  overflow: hidden;
-  padding: var(--space-2);
-}
-
-.broadcast-audience-preview-media {
-  align-items: center;
-  aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, rgba(124, 92, 252, .32), rgba(255, 77, 109, .16));
-  border-radius: var(--radius-md);
-  display: flex;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-}
-
-.broadcast-audience-preview-media img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.broadcast-audience-preview-media b {
-  background: var(--color-live);
-  border-radius: 999px;
-  font-size: .65rem;
-  left: .5rem;
-  padding: .2rem .45rem;
-  position: absolute;
-  top: .5rem;
-}
-
-.broadcast-audience-preview small { color: var(--color-text-secondary); }
 
 .broadcast-health-layers {
   display: grid;
@@ -1880,8 +1758,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   .broadcast-health-layers,
   .broadcast-ended-metrics,
   .avatar-focus-controls { grid-template-columns: 1fr; }
-
-  .broadcast-audience-preview { display: none; }
 
   .broadcast-health-layers { margin-left: var(--space-4); margin-right: var(--space-4); }
 
@@ -2470,7 +2346,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   min-height: 2.25rem;
 }
 
-.studio-open .broadcast-audience-preview,
 .studio-open .broadcast-permission-step,
 .studio-open .broadcast-health-layers > span {
   border-radius: 0.5rem;
@@ -2486,25 +2361,40 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   min-width: 0;
 }
 
+.broadcast-device-console .device-grid,
+.broadcast-device-console .device-grid label,
+.broadcast-device-console .device-grid select {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
 @media (min-width: 1024px) {
   .studio-open .broadcaster-page {
-    padding: clamp(1.25rem, 2vw, 2rem);
+    height: calc(100dvh - 4rem);
+    overflow: hidden;
+    padding: 0.75rem 1rem;
   }
 
   .studio-open .broadcaster-page:not(.phase-live):not(.phase-connecting):not(.phase-ending) .broadcaster-layout {
-    grid-template-columns: minmax(0, 92rem);
+    grid-template-columns: minmax(0, 1fr);
+    height: 100%;
+    max-width: none;
+    min-height: 0;
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.phase-preview,
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) {
-    gap: 1rem 1.5rem;
-    grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.85fr);
-    grid-template-rows: auto auto auto;
+    gap: 0.75rem 1rem;
+    grid-template-columns: minmax(0, 1.55fr) minmax(22rem, 0.95fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    height: 100%;
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.phase-preview .quick-live-video-shell,
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .quick-live-video-shell {
     align-self: start;
+    max-height: 100%;
     grid-column: 1;
     grid-row: 1;
   }
@@ -2515,25 +2405,20 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     grid-row: 2;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel {
-    align-self: start;
+  .studio-open .phase-preview .broadcast-details-panel {
     background: var(--color-surface);
     border: 1px solid rgba(126, 143, 181, 0.18);
     border-radius: 0.625rem;
     display: grid;
-    gap: 0.85rem;
+    gap: 0.55rem;
     grid-column: 2;
     grid-row: 1 / span 3;
-    max-height: calc(100dvh - 7.5rem);
-    min-width: 0;
-    overflow-y: auto;
-    padding: 1rem;
-    position: sticky;
-    scrollbar-width: thin;
-    top: 5rem;
+    height: 100%;
+    overflow: hidden;
+    padding: 0.8rem;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-setup-heading {
+  .studio-open .phase-preview .broadcast-details-panel .broadcast-setup-heading {
     background: transparent;
     border: 0;
     border-radius: 0;
@@ -2541,45 +2426,86 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     padding: 0;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-metadata-layout {
-    display: grid;
-    gap: 0.75rem;
-    grid-template-columns: minmax(0, 1fr);
+  .studio-open .phase-preview .broadcast-details-panel .broadcast-setup-heading h4 {
+    font-size: 1.25rem;
+    line-height: 1.2;
+  }
+
+  .studio-open .phase-preview .broadcast-details-panel .broadcast-metadata-layout {
+    gap: 0.5rem;
     margin: 0;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-metadata-fields {
-    grid-template-columns: minmax(0, 1fr);
+  .studio-open .phase-preview .broadcast-details-panel .broadcast-metadata-fields {
+    gap: 0.5rem;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-title-field {
+  .studio-open .phase-preview .broadcast-details-panel .broadcast-title-field {
     background: transparent;
     border: 0;
     margin: 0;
     padding: 0;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-audience-preview {
+  .studio-open .phase-preview .broadcast-details-panel :is(.broadcast-title-field input, .broadcast-metadata-save, .room-tag-search button) {
+    min-height: 2.45rem;
+  }
+
+  .studio-open .phase-preview .broadcast-details-panel .room-classification-fields {
+    gap: 0.5rem;
+    padding: 0.65rem;
+  }
+
+  .studio-open .phase-preview .broadcast-details-panel :is(.room-classification-fields > p, .room-tag-selector > small) {
     display: none;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console {
-    align-self: start;
+  .studio-open .phase-preview .broadcast-details-panel .room-language-options {
+    gap: 0.4rem;
+  }
+
+  .studio-open .phase-preview .broadcast-details-panel .room-language-options > span {
+    gap: 0.35rem;
+    min-height: 2rem;
+    padding: 0.2rem 0.45rem 0.2rem 0.65rem;
+  }
+
+  .studio-open .phase-preview .broadcast-details-panel .room-language-options button {
+    min-height: 1.55rem;
+  }
+
+  .studio-open .phase-preview .broadcast-details-panel :is(.room-tag-selector, .selected-room-tags) {
+    gap: 0.35rem;
+  }
+
+  .studio-open .phase-preview .broadcast-device-console {
     background: var(--color-surface);
     border: 1px solid rgba(126, 143, 181, 0.18);
     border-radius: 0.625rem;
     grid-column: 1;
     grid-row: 3;
-    padding: 0.85rem;
+    gap: 0.5rem;
+    padding: 0.65rem;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .device-grid {
+  .studio-open .phase-preview .broadcast-device-console .device-grid {
+    gap: 0.6rem;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .device-grid,
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .broadcast-audio-check,
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls {
+  .studio-open .phase-preview .broadcast-device-console .device-grid label {
+    gap: 0.25rem;
+  }
+
+  .studio-open .phase-preview .broadcast-device-console .device-grid select {
+    min-height: 2.5rem;
+    overflow: hidden;
+    padding: 0 2rem 0 0.65rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .studio-open .phase-preview .broadcast-device-console :is(.device-grid, .broadcast-audio-check, .quick-live-controls) {
     background: transparent;
     border: 0;
     grid-column: auto;
@@ -2587,52 +2513,59 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     padding: 0;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls {
+  .studio-open .phase-preview .broadcast-device-console .quick-live-controls button {
+    min-height: 2.65rem;
+  }
+
+  .studio-open .phase-preview .broadcast-health-layers {
+    gap: 0.55rem;
+    margin: 0;
+  }
+
+  .studio-open .phase-preview .broadcast-health-layers > span {
+    min-height: 3.5rem;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .studio-open .broadcaster-page:not(.phase-live):not(.phase-connecting):not(.phase-ending) .broadcaster-stream-bar {
+    display: none;
+  }
+
+  .studio-open .broadcaster-page:is(.phase-live, .phase-connecting, .phase-ending) .broadcaster-layout {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .studio-open .broadcaster-page:is(.phase-live, .phase-connecting, .phase-ending) .broadcaster-stage .quick-live-panel {
+    flex: 1 1 auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-height: 0;
+  }
+
+  .studio-open .broadcaster-page:is(.phase-live, .phase-connecting, .phase-ending) :is(.quick-live-video-shell, .broadcaster-chat) {
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .studio-open .phase-preview .broadcast-device-console .quick-live-controls {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(10rem, 1.25fr);
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls .creator-primary-action {
+  .studio-open .phase-preview .broadcast-device-console .quick-live-controls .creator-primary-action {
     grid-column: auto;
     min-height: var(--control-min);
   }
 
   @media (max-width: 1199px) {
-    .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls {
+    .studio-open .phase-preview .broadcast-device-console .quick-live-controls {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls .creator-primary-action {
+    .studio-open .phase-preview .broadcast-device-console .quick-live-controls .creator-primary-action {
       grid-column: 1 / -1;
     }
-  }
-
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading,
-  .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-setup-heading {
-    background: transparent;
-    border: 0;
-    grid-column: 2;
-    grid-row: 1;
-    margin: 0;
-    padding: 0;
-  }
-
-  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-metadata-layout,
-  .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-metadata-layout {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-permission-step {
-    background: transparent;
-    border: 0;
-    grid-column: 2;
-    grid-row: 3;
-    padding: 0;
-  }
-
-  .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-permission-step .creator-primary-action {
-    width: 100%;
   }
 
   .studio-open .broadcast-metadata-layout {
@@ -2640,21 +2573,13 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     margin: 0;
   }
 
-  .studio-open .broadcast-audience-preview {
-    align-items: center;
-    grid-template-columns: 6rem minmax(0, 1fr);
-    grid-template-rows: auto auto;
-  }
-
-  .studio-open .broadcast-audience-preview-media {
-    grid-row: 1 / span 2;
-  }
-
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) {
+    align-items: start;
     display: grid;
-    grid-template-columns: minmax(0, 78rem);
-    grid-template-rows: auto auto auto auto;
-    justify-content: center;
+    gap: 0.75rem 1rem;
+    grid-template-columns: minmax(0, 1.5fr) minmax(19rem, 0.5fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
     width: 100%;
   }
 
@@ -2662,30 +2587,40 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     display: none;
   }
 
-  .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-setup-heading {
+  .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-details-panel {
+    background: var(--color-surface);
+    border: 1px solid rgba(126, 143, 181, 0.18);
+    border-radius: 0.625rem;
+    display: grid;
+    gap: 0.55rem;
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 1 / span 2;
+    height: 100%;
+    overflow: hidden;
+    padding: 0.8rem;
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-metadata-layout {
-    grid-column: 1;
-    grid-row: 2;
-    grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.42fr);
-  }
-
-  .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-audience-preview {
-    align-self: start;
-    grid-template-rows: auto auto;
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-permission-step {
-    grid-column: 1;
-    grid-row: 3;
+    align-items: stretch;
+    background: var(--color-surface);
+    border: 1px solid rgba(126, 143, 181, 0.18);
+    grid-column: 2;
+    grid-row: 1;
+    padding: 1rem;
+    text-align: left;
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-health-layers {
-    grid-column: 1;
-    grid-row: 4;
+    align-self: start;
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: 1fr;
+    margin: 0;
   }
 }
 
@@ -2767,11 +2702,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
 
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .quick-live-video-shell {
     display: none;
-  }
-
-  .stream-thumbnail-field {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-setup-heading {

@@ -24,8 +24,8 @@ assert.match(app, /The broadcast could not be confirmed ended, so you were not s
 assert.match(app, /This is a simulated live state; viewers cannot play video\./);
 assert.match(app, /source=\{room\.broadcast_status_source\}/);
 assert.match(app, /broadcastSource=\{room\.broadcast_status_source\}/);
-assert.match(app, /No media published/);
-assert.match(app, /No audience media/);
+assert.match(app, /Available after you go live/);
+assert.match(app, /Camera preview is available, but browser broadcasting is not connected in this environment/);
 assert.match(discovery, /roomState\(room\)==="live"&&!isSimulated\(room\)/);
 assert.match(discovery, /Creators you may like/);
 assert.match(app, /void loadRooms\(\);[\s\S]*void loadFollowing\(\);[\s\S]*void loadRooms\(\);/);

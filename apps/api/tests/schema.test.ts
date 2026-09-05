@@ -115,7 +115,7 @@ test("schema contains the full local prototype data model", async () => {
     const polishColumns = await client.query<{ table_name: string; column_name: string }>(`
       SELECT table_name,column_name FROM information_schema.columns
       WHERE table_schema='public' AND (
-        (table_name='live_rooms' AND column_name IN ('stream_language','stream_tags','stream_thumbnail_url','chat_slow_mode_seconds','blocked_terms','broadcast_status_source')) OR
+        (table_name='live_rooms' AND column_name IN ('stream_language','stream_tags','stream_thumbnail_url','live_snapshot_captured_at','live_snapshot_source','chat_slow_mode_seconds','blocked_terms','broadcast_status_source')) OR
         (table_name='room_moderation_restrictions' AND column_name IN ('is_banned','muted_until')) OR
         (table_name='chat_messages' AND column_name IN ('deleted_at','deleted_by'))
       )
@@ -125,6 +125,8 @@ test("schema contains the full local prototype data model", async () => {
       "live_rooms.stream_language",
       "live_rooms.stream_tags",
       "live_rooms.stream_thumbnail_url",
+      "live_rooms.live_snapshot_captured_at",
+      "live_rooms.live_snapshot_source",
       "live_rooms.chat_slow_mode_seconds",
       "live_rooms.blocked_terms",
       "live_rooms.broadcast_status_source",

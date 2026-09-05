@@ -12,11 +12,7 @@
   font-synthesis: none;
 }
 
-.creator-onboarding {
-  margin: clamp(1rem, 4vw, 3rem) auto;
-  max-width: 800px;
-  min-width: 0;
-}
+.creator-onboarding { min-width: 0; }
 .onboarding-intro,
 .onboarding-status {
   align-items: flex-start;
@@ -34,66 +30,49 @@
 }
 .onboarding-steps {
   display: grid;
-  gap: .75rem;
   grid-template-columns: repeat(4,minmax(0,1fr));
   list-style: none;
-  margin: 1.5rem 0;
   padding: 0;
 }
 .onboarding-steps li {
   align-items: center;
-  color: #aab4cc;
   display: flex;
-  font-size: .875rem;
-  gap: .5rem;
 }
 .onboarding-steps span {
   align-items: center;
   border: 1px solid #2b3655;
   border-radius: 999px;
   display: inline-flex;
-  height: 2rem;
   justify-content: center;
-  width: 2rem;
 }
 .onboarding-steps .current { color: #f7f8fc; font-weight: 700; }
-.onboarding-steps .current span { background: #7c5cfc; border-color: #7c5cfc; }
-.onboarding-steps .complete span { border-color: #3ddc97; color: #3ddc97; }
+.onboarding-steps .complete span { color: #3ddc97; }
 .onboarding-form,
 .onboarding-panel,
 .creator-room-empty .onboarding-form {
-  background: #12182a;
   border: 1px solid #27314d;
-  border-radius: 14px;
   display: grid;
-  gap: 1.15rem;
   min-width: 0;
-  padding: clamp(1rem, 3vw, 1.75rem);
 }
 .onboarding-form label,
-.onboarding-panel > label { display: grid; gap: .5rem; }
+.onboarding-panel > label { display: grid; }
 .onboarding-form input,
 .onboarding-form textarea,
 .onboarding-form select,
 .onboarding-panel select {
   background: #0b1020;
   border: 1px solid #2b3655;
-  border-radius: 10px;
   color: #f7f8fc;
   font: inherit;
-  min-height: 46px;
-  padding: .75rem;
 }
-.onboarding-form textarea { min-height: 120px; resize: vertical; }
-.onboarding-form-row { display: grid; gap: 1rem; grid-template-columns: repeat(2,minmax(0,1fr)); }
-.agreement-check { align-items: center; display: flex !important; grid-template-columns: auto 1fr; }
-.agreement-check input { min-height: 20px; width: 20px; }
+.onboarding-form textarea { resize: vertical; }
+.onboarding-form-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.agreement-check { align-items: center; display: flex !important; }
 .identity-dropzone {
   border: 1px dashed #526080;
   border-radius: 12px;
   cursor: pointer;
   display: grid !important;
-  min-height: 9rem;
   place-items: center;
   text-align: center;
 }
@@ -112,8 +91,8 @@
 .upload-progress { align-items: center; display: grid; gap: .5rem; grid-template-columns: minmax(0,1fr) auto; }
 .upload-progress progress { accent-color: #7657ff; width: 100%; }
 .document-received { color: #63dfa7; }
-.review-panel dl { display: grid; gap: .75rem; margin: 0; }
-.review-panel dl div { border-bottom: 1px solid #27314d; display: grid; gap: .3rem; padding-bottom: .75rem; }
+.review-panel dl { display: grid; margin: 0; }
+.review-panel dl div { display: grid; gap: .3rem; }
 .review-panel dt { color: #aab4cc; font-size: .8rem; text-transform: uppercase; }
 .review-panel dd { margin: 0; }
 .account-section-nav {
@@ -149,11 +128,6 @@
 .studio-draft-banner { background: rgba(246,183,60,.12); border: 1px solid rgba(246,183,60,.45); border-radius: 14px; margin: 0 0 1rem; padding: .8rem 1rem; }
 .studio-draft-banner span { display: grid; gap: .2rem; }
 @media (max-width: 767px) {
-  .creator-onboarding { margin: .75rem auto; padding: .75rem; width: 100%; }
-  .onboarding-steps { grid-template-columns: repeat(4,minmax(3.5rem,1fr)); overflow: hidden; }
-  .onboarding-steps li { flex-direction: column; font-size: .72rem; text-align: center; }
-  .onboarding-form-row { grid-template-columns: 1fr; }
-  .onboarding-heading,.studio-draft-banner { align-items: stretch; flex-direction: column; }
   .identity-file-card { grid-template-columns: 3.25rem minmax(0,1fr); }
   .identity-file-card img,.identity-pdf-mark { height: 3rem; width: 3.25rem; }
   .identity-file-card .text-button { grid-column: 2; }
@@ -2958,6 +2932,356 @@ p {
 }
 .identity-upload progress { width: 100%; accent-color: var(--brand-primary, #7657ff); }
 .creator-agreement > p { max-width: 72ch; line-height: 1.65; color: var(--text-secondary, #b8bfd3); }
+
+/* Creator setup uses one quiet surface and a compact, viewport-conscious rhythm. */
+.creator-onboarding.workspace {
+  width: min(920px, calc(100% - 32px));
+  max-width: 920px;
+  margin: clamp(12px, 2vh, 22px) auto;
+  padding: clamp(18px, 2.2vw, 28px);
+  border: 1px solid rgba(122, 139, 184, 0.22);
+  border-radius: 18px;
+  background: #10162a;
+  box-shadow: 0 22px 70px rgba(2, 5, 16, 0.22);
+}
+.creator-onboarding .onboarding-heading {
+  min-height: 52px;
+}
+.creator-onboarding .onboarding-heading h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.55rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+.creator-onboarding .onboarding-heading p {
+  margin: 7px 0 0;
+  color: #929db8;
+  font-size: 0.86rem;
+}
+.creator-onboarding .onboarding-heading .text-button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 4px;
+  color: #b5a8ff;
+  font-size: 0.82rem;
+}
+.creator-onboarding .onboarding-steps {
+  position: relative;
+  gap: 0;
+  margin: 18px 0;
+}
+.creator-onboarding .onboarding-steps::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 15px;
+  right: 9%;
+  left: 9%;
+  height: 1px;
+  background: #29324d;
+}
+.creator-onboarding .onboarding-steps li {
+  position: relative;
+  z-index: 1;
+  justify-content: center;
+  gap: 8px;
+  color: #8e99b5;
+  font-size: 0.8rem;
+}
+.creator-onboarding .onboarding-steps span {
+  width: 30px;
+  height: 30px;
+  border-color: #35405f;
+  background: #10162a;
+}
+.creator-onboarding .onboarding-steps .current span {
+  background: #7357f6;
+  border-color: #7357f6;
+  box-shadow: 0 0 0 4px rgba(115, 87, 246, 0.12);
+}
+.creator-onboarding .onboarding-steps .complete span {
+  border-color: #35d69b;
+  background: #10243a;
+}
+.creator-onboarding .onboarding-form,
+.creator-onboarding .onboarding-panel {
+  gap: 12px;
+  padding: 20px 22px;
+  border-color: rgba(122, 139, 184, 0.2);
+  border-radius: 14px;
+  background: #131a2e;
+  box-shadow: none;
+}
+.creator-onboarding .onboarding-form h2,
+.creator-onboarding .onboarding-panel h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.creator-onboarding .form-help {
+  margin-top: 4px;
+  max-width: 72ch;
+}
+.creator-onboarding .onboarding-form label,
+.creator-onboarding .onboarding-panel > label {
+  gap: 6px;
+  font-size: 0.84rem;
+}
+.creator-onboarding .onboarding-form input,
+.creator-onboarding .onboarding-form select,
+.creator-onboarding .onboarding-panel select {
+  min-height: 42px;
+  padding: 9px 11px;
+  border-radius: 8px;
+}
+.creator-onboarding .onboarding-form textarea {
+  min-height: 78px;
+  max-height: 96px;
+  padding: 10px 11px;
+  border-radius: 8px;
+}
+.creator-onboarding .onboarding-form-row {
+  gap: 12px;
+}
+.creator-onboarding .onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+.creator-onboarding .onboarding-actions > button,
+.creator-first-room-submit {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid #8069fa;
+  border-radius: 9px;
+  background: #7357f6;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: none;
+}
+.creator-onboarding .onboarding-actions > button:hover:not(:disabled),
+.creator-first-room-submit:hover:not(:disabled) {
+  background: #8067ff;
+}
+.creator-onboarding .onboarding-actions > button:disabled,
+.creator-first-room-submit:disabled {
+  border-color: #303a58;
+  background: #252d43;
+  color: #7f899f;
+  cursor: not-allowed;
+}
+.creator-onboarding .agreement-version {
+  display: inline-flex;
+  margin: 5px 0 0;
+  color: #8f9ab5;
+  font-size: 0.72rem;
+}
+.creator-onboarding .agreement-copy {
+  max-width: none;
+  padding: 12px 14px;
+  border-left: 2px solid #7357f6;
+  border-radius: 0 8px 8px 0;
+  background: #0e1426;
+  color: #c8cede;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+.creator-onboarding .agreement-check {
+  gap: 10px;
+  color: #dce1ef;
+}
+.creator-onboarding .agreement-check input {
+  min-height: 18px;
+  width: 18px;
+  accent-color: #7357f6;
+}
+.creator-onboarding .identity-dropzone {
+  min-height: 98px;
+  padding: 14px;
+  border-color: #526080;
+  background: #0f1527;
+}
+.creator-onboarding .identity-dropzone span {
+  max-width: 62ch;
+  font-size: 0.78rem;
+}
+.creator-onboarding .identity-file-card {
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #28334f;
+  border-radius: 10px;
+  background: #0f1527;
+}
+.creator-onboarding .identity-file-card p {
+  margin: 4px 0 0;
+  color: #919cb6;
+  font-size: 0.76rem;
+}
+.creator-onboarding .review-panel dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.creator-onboarding .review-panel dl div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #28334f;
+  border-radius: 9px;
+  background: #0f1527;
+}
+.creator-onboarding .review-panel dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+.creator-onboarding .review-panel dd span {
+  color: #929db8;
+}
+.creator-onboarding .privacy-note {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(246, 183, 60, 0.08);
+  color: #c8cede;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.creator-onboarding .privacy-note strong {
+  flex: 0 0 auto;
+  color: #f2c66d;
+}
+.creator-onboarding .activation-note {
+  margin: 0;
+  color: #8f9ab5;
+  font-size: 0.76rem;
+  text-align: right;
+}
+.creator-room-empty.workspace.creator-studio {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100dvh - 72px);
+  margin: 0;
+  padding: clamp(18px, 3vw, 36px);
+  border: 0;
+  border-radius: 0;
+  background: #0b1020;
+  box-shadow: none;
+}
+.creator-room-empty-card {
+  width: min(920px, 100%);
+  margin: 0 auto;
+}
+.creator-room-empty-heading {
+  display: block;
+  margin-bottom: 16px;
+  padding: 0;
+  border: 0;
+}
+.creator-room-empty-heading .eyebrow {
+  margin: 0 0 5px;
+}
+.creator-room-empty-heading h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  letter-spacing: -0.035em;
+}
+.creator-room-empty-heading > p:last-child {
+  margin: 7px 0 0;
+  color: #929db8;
+  font-size: 0.88rem;
+}
+.creator-room-empty .creator-first-room-form {
+  gap: 14px;
+  padding: 20px;
+  border-color: rgba(122, 139, 184, 0.2);
+  background: #11182b;
+}
+.creator-room-empty .creator-first-room-submit {
+  justify-self: end;
+}
+
+@media (max-width: 767px) {
+  .creator-onboarding.workspace {
+    width: 100%;
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .creator-onboarding .onboarding-heading {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+  .creator-onboarding .onboarding-heading h1 {
+    font-size: 1.75rem;
+  }
+  .creator-onboarding .onboarding-heading p {
+    font-size: 0.78rem;
+  }
+  .creator-onboarding .onboarding-steps {
+    margin: 15px 0;
+    overflow: visible;
+  }
+  .creator-onboarding .onboarding-steps::before {
+    right: 11%;
+    left: 11%;
+  }
+  .creator-onboarding .onboarding-steps li {
+    gap: 5px;
+    font-size: 0.66rem;
+  }
+  .creator-onboarding .onboarding-steps span {
+    width: 28px;
+    height: 28px;
+  }
+  .creator-onboarding .onboarding-form,
+  .creator-onboarding .onboarding-panel {
+    gap: 12px;
+    padding: 16px;
+    border-radius: 12px;
+  }
+  .creator-onboarding .onboarding-form h2,
+  .creator-onboarding .onboarding-panel h2 {
+    font-size: 1.3rem;
+  }
+  .creator-onboarding .onboarding-form-row,
+  .creator-onboarding .review-panel dl {
+    grid-template-columns: 1fr;
+  }
+  .creator-onboarding .onboarding-actions {
+    justify-content: stretch;
+  }
+  .creator-onboarding .onboarding-actions > button {
+    width: 100%;
+  }
+  .creator-onboarding .agreement-copy {
+    max-height: none;
+  }
+  .creator-onboarding .privacy-note {
+    display: grid;
+  }
+  .creator-onboarding .activation-note {
+    text-align: left;
+  }
+  .creator-room-empty.workspace.creator-studio {
+    min-height: calc(100dvh - 58px);
+    padding: 16px;
+  }
+  .creator-room-empty-heading h2 {
+    font-size: 1.75rem;
+  }
+  .creator-room-empty .creator-first-room-form {
+    padding: 16px;
+  }
+  .creator-room-empty .creator-first-room-submit {
+    width: 100%;
+  }
+}
 .admin-review-filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 16px 0; }
 .admin-review-filters label { display: grid; gap: 6px; min-width: 190px; }
 .admin-review-detail { margin-top: 18px; padding: 18px; border: 1px solid var(--border, #28314c); border-radius: 14px; background: var(--surface, #11182c); }

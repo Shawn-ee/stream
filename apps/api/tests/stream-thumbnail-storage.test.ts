@@ -26,9 +26,10 @@ test("normalizes a stream thumbnail to 16:9 metadata-free WebP", async () => {
     const output = await readFile(path.join(storagePath, saved.filename));
     const metadata = await sharp(output).metadata();
     assert.equal(metadata.format, "webp");
-    assert.equal(metadata.width, 1280);
-    assert.equal(metadata.height, 720);
+    assert.equal(metadata.width, 640);
+    assert.equal(metadata.height, 360);
     assert.equal(metadata.exif, undefined);
+    assert.ok(output.length < 512 * 1024);
     await removeStoredStreamThumbnail(storagePath, saved.url);
     await assert.rejects(readFile(path.join(storagePath, saved.filename)));
   } finally {

@@ -2,7 +2,9 @@
 
 ## Compact pre-live setup and creator tags
 
-- Implemented locally: pre-permission preview collapse, full-width setup workspace, compact room-card preview, and clear Room cover labeling.
+- Implemented locally: pre-permission preview collapse, full-width setup workspace, and removal of manual room-cover controls.
+- Implemented locally: low-frequency browser-live snapshots captured from the existing preview, client/server 640×360 WebP normalization, owner/live-state authorization, per-room throttling, audit events, static lazy-loaded audience cards, and offline avatar fallback.
+- Deferred: provider-side snapshot capture for OBS streams and retention cleanup for superseded immutable snapshot files.
 - Implemented locally: searchable existing tags, explicit custom-tag creation, removable selections, server normalization, creator authorization, rate limiting, reserved-label protection, and audit logging.
 - Deferred: administrator tag merge/alias tools, automated semantic moderation, creator tag ownership analytics, and tag suggestions based on real inventory volume.
 

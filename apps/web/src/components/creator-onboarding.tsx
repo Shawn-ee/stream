@@ -135,7 +135,7 @@ export function CreatorOnboarding({ language, step, api, onNavigate, onActivated
   const allowedIndex = steps.findIndex((item) => item.id === allowed);
   const visible = steps.findIndex((item) => item.id === step) <= allowedIndex ? step : allowed;
 
-  return <section className="creator-onboarding workspace">
+  return <section className={`creator-onboarding workspace onboarding-step-${visible}`}>
     <div className="onboarding-heading"><div><h1>{zh ? "主播设置" : "Creator setup"}</h1><p>{zh ? "你的进度会自动保留。" : "Your progress is saved as you continue."}</p></div><button className="text-button" onClick={onBack}>{zh ? "稍后继续" : "Resume later"}</button></div>
     <ol className="onboarding-steps" aria-label={zh ? "主播设置进度" : "Creator setup progress"}>{steps.map((item, index) => <li key={item.id} aria-current={item.id === visible ? "step" : undefined} className={item.id === visible ? "current" : index < allowedIndex ? "complete" : ""}><span>{index < allowedIndex ? "✓" : index + 1}</span>{item.label}</li>)}</ol>
 

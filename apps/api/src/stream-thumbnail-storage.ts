@@ -3,7 +3,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
-export const streamThumbnailUploadLimitBytes = 6 * 1024 * 1024;
+export const streamThumbnailUploadLimitBytes = 512 * 1024;
 const thumbnailPattern = /^stream-thumbnail-[0-9a-f-]{36}-[0-9a-f-]{36}\.webp$/i;
 const acceptedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -43,8 +43,8 @@ export async function saveStreamThumbnail(options: {
       throw new StreamThumbnailUploadError("thumbnail_image_invalid");
     output = await image
       .rotate()
-      .resize(1280, 720, { fit: "cover", position: "attention" })
-      .webp({ quality: 84, effort: 4 })
+      .resize(640, 360, { fit: "cover", position: "attention" })
+      .webp({ quality: 72, effort: 4 })
       .toBuffer();
   } catch (error) {
     if (error instanceof StreamThumbnailUploadError) throw error;

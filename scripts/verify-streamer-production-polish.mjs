@@ -17,8 +17,10 @@ for (const branding of ["PRIVATE STAGING", "HOLIWYN", "Creator preview environme
   assert.match(app, new RegExp(branding), `missing staging branding: ${branding}`);
 assert.doesNotMatch(app, />Stream MVP</, "visible product heading must not use the old MVP brand");
 
-for (const metadata of ["Stream title", "Audience card preview", "Room cover", "Shown on your room card before viewers enter."])
+for (const metadata of ["Stream title"])
   assert.match(app, new RegExp(metadata.replace(/[()]/g, "\\$&")), `missing pre-live metadata: ${metadata}`);
+for (const removedCoverUi of ["Audience card preview", "Room cover", "Shown on your room card before viewers enter.", "onThumbnailSelected"])
+  assert.doesNotMatch(app, new RegExp(removedCoverUi), `manual room-cover UI must stay removed: ${removedCoverUi}`);
 for (const metadata of ["Stream languages", "Content tags"])
   assert.match(classification, new RegExp(metadata), `missing room classification metadata: ${metadata}`);
 for (const tagControl of ["Search or create a tag", "Press Enter to add", "onCreateTag"])
@@ -44,7 +46,7 @@ for (const icon of ["viewers", "more", "close", "upload", "timeout", "ban"])
   assert.match(app, new RegExp(`${icon}:`), `missing SVG icon ${icon}`);
 assert.match(app, /focusX=/);
 assert.match(app, /focusY=/);
-assert.match(app, /stream-thumbnail/);
+assert.match(api, /\/api\/streamer\/stream-thumbnail/, "automatic live-card snapshot command must remain available");
 assert.match(styles, /avatar-focus-controls/);
 assert.match(styles, /broadcast-health-layers/);
 assert.match(styles, /broadcaster-chat-settings/);
@@ -59,9 +61,9 @@ for (const reset of [
   "blocked_terms='{}'::text[]",
 ])
   assert.match(seed, new RegExp(reset.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `seed must reset ${reset}`);
-assert.match(nginx, /location = \/api\/streamer\/stream-thumbnail[\s\S]*client_max_body_size 7m/);
+assert.match(nginx, /location = \/api\/streamer\/stream-thumbnail[\s\S]*client_max_body_size 640k/);
 
 assert.equal(packageJson.scripts["verify:streamer-production-polish"], "node scripts/verify-streamer-production-polish.mjs");
 assert.ok(packageJson.scripts["verify:staging"].includes("npm run verify:streamer-production-polish"));
 
-console.log("Streamer staging branding, pre-live metadata, moderation, layered health, summary, icon, crop, and thumbnail surfaces verified.");
+console.log("Streamer staging branding, cover-free pre-live metadata, moderation, layered health, summary, icons, avatar crop, and bounded snapshot-storage foundation verified.");

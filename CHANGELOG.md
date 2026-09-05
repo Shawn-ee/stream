@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-09-05 — Creator setup visual consolidation (local)
+
+- Reworked Profile, Agreement, Document, and Review into one compact 920px setup shell with a smaller heading, connected progress track, denser fields, consistent purple actions, and clearer disabled states. All four steps fit a standard Windows desktop viewport without hiding content.
+- Made the review summary a two-column desktop grid, separated the agreement into a readable inset, tightened identity upload and file receipt, and fixed the missing spacing in the document warning.
+- Added a mobile layout with a flat full-width surface, four compact steps, single-column fields and review cards, natural page scrolling, and full-width primary actions.
+- Rebuilt the no-room Studio state as a centered first-stream setup instead of a full-width unfinished form. Draft creation remains an explicit POST and still creates no public or live resource.
+- Consolidated legacy setup CSS before deliberately moving the reviewed bundle ceilings to 161 KiB raw CSS and 170 KiB combined gzip; measured output remains below both and no UI/media dependency was added.
+
+## 2026-09-05 — Automatic low-load live-card snapshots (local)
+
+- Added a browser-side capture that waits for an authoritative Cloudflare LIVE state, crops one existing camera frame to 640×360, encodes it as a compact WebP, retries only during initial startup, and refreshes at most every ten minutes.
+- Converted the former thumbnail endpoint into a room-owner-only live snapshot command. It revalidates published/live/provider state transactionally, throttles each room to one accepted update per five minutes, normalizes media again, strips metadata, and audits successful replacement.
+- Added migration `032` to distinguish trusted browser/provider snapshots from deprecated legacy manual covers. Public discovery and social-preview APIs expose the static image only while the room is genuinely Cloudflare-live; offline recommendations continue using creator avatars and cards retain branded fallback artwork.
+- Reduced the upload ceiling from 6 MB to 512 KiB (640 KiB including multipart gateway overhead). Audience cards continue to use lazy-loaded immutable static assets and never connect to video, chat, or presence.
+
+## 2026-09-05 — Manual room-cover removal (local)
+
+- Removed Room cover upload and audience-card preview controls from Streamer Studio, including their client state, object URLs, and save-time upload side effect.
+- Kept the existing normalized thumbnail storage and public card field as the migration foundation for the automatic live-frame snapshot pipeline completed above.
+- Reduced pre-live metadata height without changing explicit room creation, publication, media permission, or broadcast start behavior.
+
+## 2026-09-05 — Single-viewport Studio alignment (local)
+
+- Constrained long camera and microphone device names to their grid columns so native selectors cannot escape the device console.
+- Removed the sticky offset and nested scrollbar from the Ready to go live panel; preview and details now share the same top edge beneath the Studio header.
+- Split the pre-permission desktop state into a setup panel and a visible device-permission panel so the required next action cannot be clipped below the viewport.
+- Reduced desktop page gutters, workstation gaps, health-card height, metadata spacing, and device-control height so pre-live setup fits one desktop viewport.
+- Sized the live video and chat workspace to the available desktop viewport while retaining the existing full-screen mobile broadcast and natural mobile setup flow.
+
 ## 2026-09-05 — Post-permission Studio composition (local)
 
 - Rebuilt the camera-ready desktop composition so the video, delivery health, device selectors, microphone meter, and Go Live action remain one continuous broadcast workstation.

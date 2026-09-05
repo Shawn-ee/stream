@@ -27,7 +27,7 @@ const kib = (bytes) => Math.round((bytes / 1024) * 10) / 10;
 // bundle. Keep these ceilings within roughly 1 KiB of the measured artifact so
 // future growth remains deliberate and reviewed.
 assert.ok(javascript.raw <= 455 * 1024, `JavaScript budget exceeded: ${kib(javascript.raw)} KiB > 455 KiB`);
-assert.ok(css.raw <= 157 * 1024, `CSS budget exceeded: ${kib(css.raw)} KiB > 157 KiB`);
-assert.ok(javascript.gzip + css.gzip <= 168 * 1024, `compressed asset budget exceeded: ${kib(javascript.gzip + css.gzip)} KiB > 168 KiB`);
+assert.ok(css.raw <= 161 * 1024, `CSS budget exceeded: ${kib(css.raw)} KiB > 161 KiB`);
+assert.ok(javascript.gzip + css.gzip <= 170 * 1024, `compressed asset budget exceeded: ${kib(javascript.gzip + css.gzip)} KiB > 170 KiB`);
 
 console.log(`Web bundle budget passed: JS ${kib(javascript.raw)} KiB raw/${kib(javascript.gzip)} KiB gzip; CSS ${kib(css.raw)} KiB raw/${kib(css.gzip)} KiB gzip.`);

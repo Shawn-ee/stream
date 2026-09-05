@@ -517,6 +517,8 @@ export function buildApi() {
           ? 10
         : request.url === "/api/studio/tags"
           ? 20
+        : request.routeOptions.url === "/api/streamer/stream-thumbnail"
+          ? 12
         : request.url.includes("/identity-document")
           ? 10
         : request.url.includes("/creator-reviews/")
@@ -1464,7 +1466,7 @@ export function buildApi() {
           last_visited_at: Date | null;
           [key: string]: unknown;
         }>(
-          `SELECT r.slug,r.public_room_id AS "publicRoomId",r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.goal_text,r.stream_thumbnail_url,u.id AS streamer_id,u.handle AS streamer_handle,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},COALESCE((SELECT array_agg(rl.language_code ORDER BY rl.display_order) FROM room_languages rl WHERE rl.room_id=r.id),'{}'::text[]) AS language_codes,COALESCE((SELECT array_agg(t.normalized_slug ORDER BY rt.display_order) FROM room_tags rt JOIN tags t ON t.id=rt.tag_id WHERE rt.room_id=r.id AND t.status='ACTIVE' AND t.tag_type IN ('CONTENT','FORMAT','MOOD')),'{}'::text[]) AS tag_slugs,(SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count,(SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at,($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following,(SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count,(SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN streamer_profiles p ON p.user_id=u.id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND ($1='' OR r.public_room_id=$1 OR r.slug ILIKE '%'||$1||'%' OR r.title ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%' OR u.handle ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM room_tags search_rt JOIN tags search_t ON search_t.id=search_rt.tag_id WHERE search_rt.room_id=r.id AND search_t.status='ACTIVE' AND search_t.tag_type IN ('CONTENT','FORMAT','MOOD') AND (search_t.display_name ILIKE '%'||$1||'%' OR search_t.normalized_slug ILIKE '%'||$1||'%')) OR EXISTS(SELECT 1 FROM room_languages search_rl JOIN supported_languages search_l ON search_l.language_code=search_rl.language_code WHERE search_rl.room_id=r.id AND (search_l.language_code=$1 OR search_l.name_en ILIKE '%'||$1||'%' OR search_l.name_native ILIKE '%'||$1||'%'))) AND (cardinality($2::text[])=0 OR EXISTS(SELECT 1 FROM room_languages filter_rl WHERE filter_rl.room_id=r.id AND filter_rl.language_code=ANY($2::text[]))) AND (cardinality($3::text[])=0 OR EXISTS(SELECT 1 FROM room_tags filter_rt JOIN tags filter_t ON filter_t.id=filter_rt.tag_id WHERE filter_rt.room_id=r.id AND filter_t.normalized_slug=ANY($3::text[]) AND filter_t.status='ACTIVE' AND filter_t.tag_type IN ('CONTENT','FORMAT','MOOD'))) AND (NOT $5::boolean OR EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AND (NOT $6::boolean OR (r.broadcast_state='live' AND r.broadcast_status_source<>'local')) LIMIT 100`,
+          `SELECT r.slug,r.public_room_id AS "publicRoomId",r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.goal_text,CASE WHEN r.broadcast_state='live' AND r.broadcast_status_source='cloudflare' AND r.live_snapshot_source IS NOT NULL THEN r.stream_thumbnail_url ELSE NULL END AS stream_thumbnail_url,u.id AS streamer_id,u.handle AS streamer_handle,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect},COALESCE((SELECT array_agg(rl.language_code ORDER BY rl.display_order) FROM room_languages rl WHERE rl.room_id=r.id),'{}'::text[]) AS language_codes,COALESCE((SELECT array_agg(t.normalized_slug ORDER BY rt.display_order) FROM room_tags rt JOIN tags t ON t.id=rt.tag_id WHERE rt.room_id=r.id AND t.status='ACTIVE' AND t.tag_type IN ('CONTENT','FORMAT','MOOD')),'{}'::text[]) AS tag_slugs,(SELECT COUNT(*)::int FROM follows f WHERE f.streamer_id=u.id) AS follower_count,(SELECT e.created_at FROM room_lifecycle_events e WHERE e.room_id=r.id AND e.event_type='broadcast_started' ORDER BY e.created_at DESC LIMIT 1) AS live_started_at,($4::uuid IS NOT NULL AND EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AS is_following,(SELECT LEAST(COUNT(*),5)::int FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS recent_visit_count,(SELECT MAX(visit.visited_at) FROM room_visits visit WHERE visit.user_id=$4 AND visit.room_id=r.id AND visit.visited_at>NOW()-INTERVAL '30 days') AS last_visited_at FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN streamer_profiles p ON p.user_id=u.id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' WHERE r.publication_status='published' AND ($1='' OR r.public_room_id=$1 OR r.slug ILIKE '%'||$1||'%' OR r.title ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%' OR u.handle ILIKE '%'||$1||'%' OR EXISTS(SELECT 1 FROM room_tags search_rt JOIN tags search_t ON search_t.id=search_rt.tag_id WHERE search_rt.room_id=r.id AND search_t.status='ACTIVE' AND search_t.tag_type IN ('CONTENT','FORMAT','MOOD') AND (search_t.display_name ILIKE '%'||$1||'%' OR search_t.normalized_slug ILIKE '%'||$1||'%')) OR EXISTS(SELECT 1 FROM room_languages search_rl JOIN supported_languages search_l ON search_l.language_code=search_rl.language_code WHERE search_rl.room_id=r.id AND (search_l.language_code=$1 OR search_l.name_en ILIKE '%'||$1||'%' OR search_l.name_native ILIKE '%'||$1||'%'))) AND (cardinality($2::text[])=0 OR EXISTS(SELECT 1 FROM room_languages filter_rl WHERE filter_rl.room_id=r.id AND filter_rl.language_code=ANY($2::text[]))) AND (cardinality($3::text[])=0 OR EXISTS(SELECT 1 FROM room_tags filter_rt JOIN tags filter_t ON filter_t.id=filter_rt.tag_id WHERE filter_rt.room_id=r.id AND filter_t.normalized_slug=ANY($3::text[]) AND filter_t.status='ACTIVE' AND filter_t.tag_type IN ('CONTENT','FORMAT','MOOD'))) AND (NOT $5::boolean OR EXISTS(SELECT 1 FROM follows own_follow WHERE own_follow.follower_id=$4 AND own_follow.streamer_id=u.id)) AND (NOT $6::boolean OR (r.broadcast_state='live' AND r.broadcast_status_source<>'local')) LIMIT 100`,
           [query, languages, tagSlugs, viewer?.id ?? null, followingOnly, liveOnly],
         );
         const rooms = await Promise.all(result.rows.map(async (room) => {
@@ -1849,7 +1851,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug,r.public_room_id AS "publicRoomId",r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,r.stream_thumbnail_url,u.id AS streamer_id,u.handle AS streamer_handle,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE (r.slug=$1 OR r.public_room_id=$1) AND r.publication_status='published'`,
+          `SELECT r.slug,r.public_room_id AS "publicRoomId",r.title,r.status,r.broadcast_state,r.broadcast_checked_at,r.broadcast_status_message,r.broadcast_status_source,r.broadcast_transport,CASE WHEN r.broadcast_state='live' AND r.broadcast_status_source='cloudflare' AND r.live_snapshot_source IS NOT NULL THEN r.stream_thumbnail_url ELSE NULL END AS stream_thumbnail_url,u.id AS streamer_id,u.handle AS streamer_handle,u.display_name AS streamer_name,p.avatar_url,p.bio,p.schedule_text,p.next_stream_at,p.schedule_timezone,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE (r.slug=$1 OR r.public_room_id=$1) AND r.publication_status='published'`,
           [request.params.slug],
         );
         if (!result.rows[0])
@@ -1869,7 +1871,7 @@ export function buildApi() {
       await client.connect();
       try {
         const result = await client.query(
-          `SELECT r.slug,r.title,r.broadcast_state,r.broadcast_status_source,r.stream_thumbnail_url,u.display_name AS streamer_name,u.handle,p.avatar_url,p.bio,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1 AND r.publication_status='published'`,
+          `SELECT r.slug,r.title,r.broadcast_state,r.broadcast_status_source,CASE WHEN r.broadcast_state='live' AND r.broadcast_status_source='cloudflare' AND r.live_snapshot_source IS NOT NULL THEN r.stream_thumbnail_url ELSE NULL END AS stream_thumbnail_url,u.display_name AS streamer_name,u.handle,p.avatar_url,p.bio,${roomClassificationSelect} FROM live_rooms r JOIN users u ON u.id=r.streamer_id JOIN creator_accounts ca ON ca.user_id=u.id AND ca.status='ACTIVE' JOIN streamer_profiles p ON p.user_id=u.id WHERE r.slug=$1 AND r.publication_status='published'`,
           [slug],
         );
         if (!result.rows[0]) return reply.code(404).send({ error: "preview_not_found" });
@@ -2154,17 +2156,39 @@ export function buildApi() {
     async (request, reply) => {
       const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
       if (!streamer) return;
+      const slug = (request.query as { slug?: string }).slug?.trim();
+      if (!slug) return reply.code(400).send({ error: "room_slug_required" });
+      const eligibilityClient = database();
+      await eligibilityClient.connect();
+      try {
+        const eligibility = await eligibilityClient.query<{
+          live_snapshot_captured_at: Date | null;
+        }>(
+          "SELECT live_snapshot_captured_at FROM live_rooms WHERE slug=$1 AND streamer_id=$2 AND publication_status='published' AND broadcast_state='live' AND broadcast_status_source='cloudflare'",
+          [slug, streamer.id],
+        );
+        if (!eligibility.rows[0])
+          return reply.code(409).send({ error: "live_snapshot_not_allowed" });
+        const capturedAt = eligibility.rows[0].live_snapshot_captured_at?.getTime() ?? 0;
+        if (capturedAt > Date.now() - 5 * 60_000) {
+          reply.header("retry-after", Math.ceil((capturedAt + 5 * 60_000 - Date.now()) / 1_000));
+          return reply.code(429).send({ error: "live_snapshot_too_frequent" });
+        }
+      } finally {
+        await eligibilityClient.end();
+      }
       let upload;
       try {
         upload = await request.file({ limits: { files: 1, fields: 0, fileSize: streamThumbnailUploadLimitBytes } });
       } catch {
-        return reply.code(413).send({ error: "thumbnail_too_large" });
+        return reply.code(413).send({ error: "live_snapshot_too_large" });
       }
-      if (!upload) return reply.code(400).send({ error: "thumbnail_file_required" });
+      if (!upload || upload.fieldname !== "snapshot")
+        return reply.code(400).send({ error: "live_snapshot_file_required" });
       let saved: Awaited<ReturnType<typeof saveStreamThumbnail>>;
       try {
         const buffer = await upload.toBuffer();
-        if (upload.file.truncated) return reply.code(413).send({ error: "thumbnail_too_large" });
+        if (upload.file.truncated) return reply.code(413).send({ error: "live_snapshot_too_large" });
         saved = await saveStreamThumbnail({ storagePath: config.avatarStoragePath, userId: streamer.id, mimeType: upload.mimetype, buffer });
       } catch (error) {
         if (error instanceof StreamThumbnailUploadError)
@@ -2176,17 +2200,35 @@ export function buildApi() {
       let previous: string | null = null;
       try {
         await client.query("BEGIN");
-        const current = await client.query<{ stream_thumbnail_url: string | null }>(
-          "SELECT stream_thumbnail_url FROM live_rooms WHERE streamer_id=$1 FOR UPDATE",
-          [streamer.id],
+        const current = await client.query<{
+          id: string;
+          stream_thumbnail_url: string | null;
+          live_snapshot_captured_at: Date | null;
+        }>(
+          "SELECT id,stream_thumbnail_url,live_snapshot_captured_at FROM live_rooms WHERE slug=$1 AND streamer_id=$2 AND publication_status='published' AND broadcast_state='live' AND broadcast_status_source='cloudflare' FOR UPDATE",
+          [slug, streamer.id],
         );
         if (!current.rows[0]) {
           await client.query("ROLLBACK");
           await removeStoredStreamThumbnail(config.avatarStoragePath, saved.url);
-          return reply.code(404).send({ error: "streamer_room_not_found" });
+          return reply.code(409).send({ error: "live_snapshot_not_allowed" });
+        }
+        const capturedAt = current.rows[0].live_snapshot_captured_at?.getTime() ?? 0;
+        if (capturedAt > Date.now() - 5 * 60_000) {
+          await client.query("ROLLBACK");
+          await removeStoredStreamThumbnail(config.avatarStoragePath, saved.url);
+          reply.header("retry-after", Math.ceil((capturedAt + 5 * 60_000 - Date.now()) / 1_000));
+          return reply.code(429).send({ error: "live_snapshot_too_frequent" });
         }
         previous = current.rows[0].stream_thumbnail_url;
-        await client.query("UPDATE live_rooms SET stream_thumbnail_url=$1,updated_at=NOW() WHERE streamer_id=$2", [saved.url, streamer.id]);
+        await client.query(
+          "UPDATE live_rooms SET stream_thumbnail_url=$1,live_snapshot_captured_at=NOW(),live_snapshot_source='BROWSER',updated_at=NOW() WHERE id=$2",
+          [saved.url, current.rows[0].id],
+        );
+        await client.query(
+          "INSERT INTO audit_events(id,actor_id,subject_user_id,event_type,metadata) VALUES($1,$2,$2,'live_room_snapshot_updated',jsonb_build_object('roomId',$3::uuid,'source','BROWSER'))",
+          [crypto.randomUUID(), streamer.id, current.rows[0].id],
+        );
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -2196,37 +2238,9 @@ export function buildApi() {
         await client.end();
       }
       await removeStoredStreamThumbnail(config.avatarStoragePath, previous);
-      return { thumbnailUrl: saved.url };
+      return reply.code(201).send({ captured: true });
     },
   );
-  api.delete("/api/streamer/stream-thumbnail", async (request, reply) => {
-    const streamer = (await requireRole(request, reply, "streamer")) as DemoUser | undefined;
-    if (!streamer) return;
-    const client = database();
-    await client.connect();
-    let previous: string | null = null;
-    try {
-      await client.query("BEGIN");
-      const result = await client.query<{ stream_thumbnail_url: string | null }>(
-        "SELECT stream_thumbnail_url FROM live_rooms WHERE streamer_id=$1 FOR UPDATE",
-        [streamer.id],
-      );
-      previous = result.rows[0]?.stream_thumbnail_url ?? null;
-      if (!result.rows[0]) {
-        await client.query("ROLLBACK");
-        return reply.code(404).send({ error: "streamer_room_not_found" });
-      }
-      await client.query("UPDATE live_rooms SET stream_thumbnail_url=NULL,updated_at=NOW() WHERE streamer_id=$1", [streamer.id]);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      await client.end();
-    }
-    await removeStoredStreamThumbnail(config.avatarStoragePath, previous);
-    return reply.code(204).send();
-  });
   api.post<{
     Params: { slug: string };
     Body: { sdp?: string };

@@ -2413,7 +2413,6 @@ function QuickGoLive({
   tagIds,
   languageOptions,
   tagOptions,
-  thumbnailUrl,
   t,
   onChanged,
   onTitleChange,
@@ -2422,7 +2421,6 @@ function QuickGoLive({
   onTagIdsChange,
   onCreateTag,
   onSaveMetadata,
-  onThumbnailSelected,
   overlay,
   viewerCount,
   onRuntimeChange,
@@ -2440,7 +2438,6 @@ function QuickGoLive({
   tagIds: string[];
   languageOptions: LanguageOption[];
   tagOptions: TagOption[];
-  thumbnailUrl?: string | null;
   t: typeof copy.en;
   onChanged: () => void;
   onTitleChange: (title: string) => void;
@@ -2449,7 +2446,6 @@ function QuickGoLive({
   onTagIdsChange: (ids: string[]) => void;
   onCreateTag: (name: string) => Promise<TagOption>;
   onSaveMetadata: () => Promise<void>;
-  onThumbnailSelected: (file: File | null) => void;
   overlay?: ReactNode;
   viewerCount: number;
   onRuntimeChange: (runtime: BroadcasterRuntime) => void;
@@ -2485,6 +2481,8 @@ function QuickGoLive({
   const pageHidingRef = useRef(false);
   const controlsTimerRef = useRef(0);
   const wakeLockRef = useRef<WakeLockHandle | null>(null);
+  const snapshotUploadingRef = useRef(false);
+  const snapshotCapturedAtRef = useRef(0);
   const immersiveBroadcast =
     phase === "connecting" ||
     phase === "live" ||
@@ -2519,6 +2517,91 @@ function QuickGoLive({
     const timer = window.setInterval(() => setClock(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [liveStartedAt, phase]);
+  useEffect(() => {
+    if (phase !== "live") snapshotCapturedAtRef.current = 0;
+  }, [phase]);
+  useEffect(() => {
+    if (
+      phase !== "live" ||
+      broadcastState !== "live" ||
+      broadcastSource !== "cloudflare" ||
+      !cameraEnabled
+    )
+      return;
+    const sessionStartedAt = liveStartedAt ?? Date.now();
+    const captureSnapshot = async (initialCapture: boolean) => {
+      if (
+        snapshotUploadingRef.current ||
+        document.hidden ||
+        (initialCapture && snapshotCapturedAtRef.current >= sessionStartedAt)
+      )
+        return;
+      const video = videoRef.current;
+      const videoTrack = streamRef.current?.getVideoTracks()[0];
+      if (
+        !video ||
+        video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+        !video.videoWidth ||
+        !video.videoHeight ||
+        !videoTrack?.enabled ||
+        videoTrack.readyState !== "live"
+      )
+        return;
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 360;
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) return;
+      const sourceRatio = video.videoWidth / video.videoHeight;
+      const targetRatio = canvas.width / canvas.height;
+      const sourceWidth = sourceRatio > targetRatio
+        ? video.videoHeight * targetRatio
+        : video.videoWidth;
+      const sourceHeight = sourceRatio > targetRatio
+        ? video.videoHeight
+        : video.videoWidth / targetRatio;
+      context.drawImage(
+        video,
+        (video.videoWidth - sourceWidth) / 2,
+        (video.videoHeight - sourceHeight) / 2,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+      const snapshot = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/webp", 0.68),
+      );
+      if (!snapshot || snapshot.size > 512 * 1024) return;
+      const form = new FormData();
+      form.append("snapshot", snapshot, "live-snapshot.webp");
+      snapshotUploadingRef.current = true;
+      try {
+        await request(
+          `/api/streamer/stream-thumbnail?slug=${encodeURIComponent(slug)}`,
+          { method: "POST", body: form },
+        );
+        snapshotCapturedAtRef.current = Date.now();
+      } catch {
+        // A snapshot is optional presentation metadata; broadcasting must remain uninterrupted.
+      } finally {
+        snapshotUploadingRef.current = false;
+      }
+    };
+    const initialTimers = [5_000, 15_000, 30_000].map((delay) =>
+      window.setTimeout(() => void captureSnapshot(true), delay),
+    );
+    const refreshTimer = window.setInterval(
+      () => void captureSnapshot(false),
+      10 * 60_000,
+    );
+    return () => {
+      initialTimers.forEach((timer) => window.clearTimeout(timer));
+      window.clearInterval(refreshTimer);
+    };
+  }, [broadcastSource, broadcastState, cameraEnabled, liveStartedAt, phase, slug]);
   useEffect(() => {
     if (!stream?.getAudioTracks()[0]) {
       setMicLevel(0);
@@ -3061,17 +3144,8 @@ function QuickGoLive({
             <input value={title} maxLength={120} onChange={(event) => onTitleChange(event.target.value)} placeholder={zh ? "告诉观众您正在直播什么" : "Tell viewers what you are streaming"} />
           </label>
           <RoomClassificationFields languages={languageOptions} tags={tagOptions} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={zh} onPrimaryLanguageChange={onPrimaryLanguageChange} onAdditionalLanguagesChange={onAdditionalLanguagesChange} onTagIdsChange={onTagIdsChange} onCreateTag={onCreateTag} />
-          <div className="stream-thumbnail-field">
-            <span><strong>{zh ? "直播间封面" : "Room cover"}</strong><small>{zh ? "观众进入直播间前，会在直播卡片上看到这张图片。" : "Shown on your room card before viewers enter."}</small></span>
-            <label className="stream-thumbnail-picker"><BroadcastIcon name="upload" />{thumbnailUrl ? (zh ? "更换图片" : "Change image") : (zh ? "选择图片" : "Choose image")}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onThumbnailSelected(event.target.files?.[0] ?? null)} /></label>
-          </div>
           <button type="button" className="secondary broadcast-metadata-save" disabled={!title.trim() || !primaryLanguage} onClick={() => void onSaveMetadata()}>{zh ? "保存直播信息" : "Save details"}</button>
         </div>
-        <aside className="broadcast-audience-preview" aria-label={zh ? "观众卡片预览" : "Audience card preview"}>
-          <div className="broadcast-audience-preview-media">{thumbnailUrl ? <img src={thumbnailUrl} alt="" /> : <span>HOLIWYN</span>}<b>{zh ? "预览" : "PREVIEW"}</b></div>
-          <strong>{title || (zh ? "未命名直播" : "Untitled stream")}</strong>
-          <small>{[primaryLanguage, ...additionalLanguages].map((code) => languageOptions.find((item) => item.code === code)?.nameNative ?? code.toUpperCase()).join(" · ")}</small>
-        </aside>
       </div>
     </div>
   );
@@ -3722,9 +3796,6 @@ function StreamerStudio({
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [avatarFocusX, setAvatarFocusX] = useState(50);
   const [avatarFocusY, setAvatarFocusY] = useState(50);
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
-  const [, setThumbnailSaving] = useState(false);
   const accountMenuRef = useRef<HTMLDetailsElement | null>(null);
   const [runtime, setRuntime] = useState<BroadcasterRuntime>({
     phase: "idle",
@@ -3773,9 +3844,6 @@ function StreamerStudio({
   useEffect(() => () => {
     if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
   }, [avatarPreviewUrl]);
-  useEffect(() => () => {
-    if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
-  }, [thumbnailPreviewUrl]);
   const refresh = () =>
     void request("/api/streamer/studio").then((d) => {
       setStudio(d);
@@ -3991,34 +4059,11 @@ function StreamerStudio({
       setAvatarSaving(false);
     }
   }
-  function selectThumbnail(file: File | null) {
-    if (!file) return;
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 6 * 1024 * 1024) {
-      setNotice(zh ? "请选择 6 MB 以下的 JPEG、PNG 或 WebP 封面。" : "Choose a JPEG, PNG, or WebP thumbnail under 6 MB.");
-      return;
-    }
-    if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
-    setThumbnailFile(file);
-    setThumbnailPreviewUrl(URL.createObjectURL(file));
-  }
   async function saveBroadcastMetadata() {
     await request(`/api/streamer/rooms/${studio.room.slug}`, {
       method: "PUT",
       body: JSON.stringify({ title, primaryLanguage, additionalLanguages, tagIds }),
     });
-    if (thumbnailFile) {
-      setThumbnailSaving(true);
-      try {
-        const form = new FormData();
-        form.append("thumbnail", thumbnailFile);
-        await request("/api/streamer/stream-thumbnail", { method: "POST", body: form });
-        if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
-        setThumbnailFile(null);
-        setThumbnailPreviewUrl(null);
-      } finally {
-        setThumbnailSaving(false);
-      }
-    }
     setNotice(zh ? "直播信息已保存。" : "Stream details saved.");
     refresh();
   }
@@ -4052,15 +4097,19 @@ function StreamerStudio({
   if (!room)
     return (
       <section className="workspace creator-studio creator-room-empty">
-        <p className="eyebrow">{t.title === "Stream MVP" ? "STREAMER STUDIO" : "主播工作室"}</p>
-        <h2>{t.title === "Stream MVP" ? "Create your first stream" : "创建您的首个直播间"}</h2>
-        <p>{t.title === "Stream MVP" ? "Your creator account is active. Creating a draft is an explicit action; it will remain private until you publish it." : "您的主播账户已激活。创建草稿需要明确操作，发布前不会出现在公开发现中。"}</p>
-        <form className="onboarding-form" onSubmit={(event) => { event.preventDefault(); void request("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: title || (t.title === "Stream MVP" ? "My first Holiwyn stream" : "我的首场 Holiwyn 直播"), primaryLanguage, additionalLanguages, tagIds }) }).then(() => refresh()).catch(() => setNotice(t.title === "Stream MVP" ? "The draft room could not be created." : "无法创建直播间草稿。")); }}>
-          <label>{t.title === "Stream MVP" ? "Stream title" : "直播标题"}<input required minLength={2} maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-          <RoomClassificationFields languages={studioLanguages} tags={studioTags} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={t.title !== "Stream MVP"} onPrimaryLanguageChange={setPrimaryLanguage} onAdditionalLanguagesChange={setAdditionalLanguages} onTagIdsChange={setTagIds} onCreateTag={createStudioTag} />
-          <button>{t.title === "Stream MVP" ? "Create private draft" : "创建私有草稿"}</button>
-        </form>
-        {notice ? <p role="alert">{notice}</p> : null}
+        <div className="creator-room-empty-card">
+          <header className="creator-room-empty-heading">
+            <p className="eyebrow">{t.title === "Stream MVP" ? "STREAMER STUDIO" : "主播工作室"}</p>
+            <h2>{t.title === "Stream MVP" ? "Create your first stream" : "创建您的首个直播间"}</h2>
+            <p>{t.title === "Stream MVP" ? "Set the basics now. Your draft stays private until you publish it." : "先设置基本信息。草稿在发布前始终保持私密。"}</p>
+          </header>
+          <form className="onboarding-form creator-first-room-form" onSubmit={(event) => { event.preventDefault(); void request("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: title || (t.title === "Stream MVP" ? "My first Holiwyn stream" : "我的首场 Holiwyn 直播"), primaryLanguage, additionalLanguages, tagIds }) }).then(() => refresh()).catch(() => setNotice(t.title === "Stream MVP" ? "The draft room could not be created." : "无法创建直播间草稿。")); }}>
+            <label>{t.title === "Stream MVP" ? "Stream title" : "直播标题"}<input required minLength={2} maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+            <RoomClassificationFields languages={studioLanguages} tags={studioTags} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={t.title !== "Stream MVP"} onPrimaryLanguageChange={setPrimaryLanguage} onAdditionalLanguagesChange={setAdditionalLanguages} onTagIdsChange={setTagIds} onCreateTag={createStudioTag} />
+            <button className="creator-first-room-submit">{t.title === "Stream MVP" ? "Create private draft" : "创建私有草稿"}</button>
+          </form>
+          {notice ? <p className="account-notice" role="alert">{notice}</p> : null}
+        </div>
       </section>
     );
   const broadcastState = room.broadcast_state ?? "offline";
@@ -4197,7 +4246,6 @@ function StreamerStudio({
             tagIds={tagIds}
             languageOptions={studioLanguages}
             tagOptions={studioTags}
-            thumbnailUrl={thumbnailPreviewUrl ?? room.stream_thumbnail_url}
             t={t}
             onChanged={refresh}
             onTitleChange={setTitle}
@@ -4206,7 +4254,6 @@ function StreamerStudio({
             onTagIdsChange={setTagIds}
             onCreateTag={createStudioTag}
             onSaveMetadata={saveBroadcastMetadata}
-            onThumbnailSelected={selectThumbnail}
             overlay={<CreatorRealtimeOverlay slug={room.slug} t={t} />}
             viewerCount={viewerCount}
             onRuntimeChange={updateRuntime}
