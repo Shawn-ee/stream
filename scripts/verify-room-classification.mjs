@@ -5,12 +5,14 @@ import { Client } from "pg";
 const base = process.env.API_BASE_URL ?? "http://127.0.0.1:3001";
 const password = process.env.LOCAL_DEMO_PASSWORD ?? "Local-demo-2026!";
 const db = new Client({ connectionString: process.env.DATABASE_URL });
+let customTagId = null;
 function authState(response) { const pairs=response.headers.getSetCookie().map((item)=>item.split(";")[0]); return {cookie:pairs.join("; "),csrf:pairs.find((item)=>item.startsWith("stream_csrf="))?.slice(12)}; }
 async function login(handle) { const response=await fetch(`${base}/api/auth/login`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({handle,password})}); assert.equal(response.status,200); return authState(response); }
 async function call(path,auth,options={}) { const response=await fetch(`${base}${path}`,{method:options.method??"GET",headers:{...(auth?{cookie:auth.cookie}:{}),...(auth&&options.method&&options.method!=="GET"?{"x-csrf-token":auth.csrf}:{}),...(options.body!==undefined?{"content-type":"application/json"}:{})},body:options.body===undefined?undefined:JSON.stringify(options.body)}); return {status:response.status,body:await response.json()}; }
 
 await db.connect();
 const streamer=await login("demo-streamer");
+const audience=await login("demo-audience");
 const beforeCount=await db.query("SELECT COUNT(*)::int count FROM live_rooms");
 const studio=await call("/api/streamer/studio",streamer);
 assert.equal(studio.status,200);
@@ -23,12 +25,21 @@ try {
   const publicTags=await call("/api/discovery/tags",null);
   const music=publicTags.body.tags.find((item)=>item.slug==="music");
   assert.ok(music);
+  assert.equal((await call("/api/studio/tags",audience,{method:"POST",body:{name:"Audience Tag"}})).status,403,"audience users cannot create public tags");
+  assert.equal((await call("/api/studio/tags",streamer,{method:"POST",body:{name:"Trending"}})).status,400,"reserved system labels cannot be creator-created");
+  const customName=`Studio Topic ${Date.now()}`;
+  const custom=await call("/api/studio/tags",streamer,{method:"POST",body:{name:customName}});
+  assert.equal(custom.status,201);
+  assert.equal(custom.body.tag.type,"CONTENT");
+  customTagId=custom.body.tag.id;
+  const duplicate=await call("/api/studio/tags",streamer,{method:"POST",body:{name:customName}});
+  assert.equal(duplicate.status,200); assert.equal(duplicate.body.tag.id,customTagId);
   assert.equal((await call("/api/discovery/tags?type=COMMUNITY",null)).status,410);
-  const updated=await call(`/api/streamer/rooms/${slug}`,streamer,{method:"PUT",body:{title:original.title,primaryLanguage:"en",additionalLanguages:["zh","ja"],tagIds:[music.id]}});
+  const updated=await call(`/api/streamer/rooms/${slug}`,streamer,{method:"PUT",body:{title:original.title,primaryLanguage:"en",additionalLanguages:["zh","ja"],tagIds:[music.id,customTagId]}});
   assert.equal(updated.status,200);
   assert.deepEqual(updated.body.room.languages.map((item)=>item.code),["en","zh","ja"]);
   assert.equal(updated.body.room.languages.filter((item)=>item.isPrimary).length,1);
-  assert.deepEqual(updated.body.room.tags.map((item)=>item.slug),["music"]);
+  assert.deepEqual(updated.body.room.tags.map((item)=>item.id),[music.id,customTagId]);
   const communityTag=await db.query("SELECT id FROM tags WHERE tag_type='COMMUNITY' LIMIT 1");
   assert.equal((await call(`/api/streamer/rooms/${slug}`,streamer,{method:"PUT",body:{primaryLanguage:"en",additionalLanguages:[],tagIds:[communityTag.rows[0].id]}})).status,400);
   for (const body of [{primaryLanguage:"en",additionalLanguages:["zh","ja","ko"],tagIds:[]},{primaryLanguage:"en",additionalLanguages:["en"],tagIds:[]},{primaryLanguage:"xx",additionalLanguages:[],tagIds:[]}]) assert.equal((await call(`/api/streamer/rooms/${slug}`,streamer,{method:"PUT",body})).status,400);
@@ -55,5 +66,9 @@ try {
   console.log("Structured room languages, controlled tags, migration mapping, public privacy, and no-navigation-side-effects verified.");
 } finally {
   await call(`/api/streamer/rooms/${slug}`,streamer,{method:"PUT",body:original});
+  if(customTagId){
+    await db.query("DELETE FROM audit_events WHERE event_type='creator_tag_created' AND metadata->>'tagId'=$1",[customTagId]);
+    await db.query("DELETE FROM tags WHERE id=$1",[customTagId]);
+  }
   await db.end();
 }

@@ -108,6 +108,12 @@ export const mutationSchemas = {
       tagIds: { type: "array", maxItems: 8, items: boundedString(36, 36) },
     },
   },
+  studioTagCreate: {
+    type: "object",
+    additionalProperties: false,
+    required: ["name"],
+    properties: { name: boundedString(30, 2) },
+  },
   report: {
     type: "object",
     additionalProperties: false,

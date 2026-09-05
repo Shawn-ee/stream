@@ -1,5 +1,12 @@
 # Architecture Decisions
 
+## 2026-09-04 — Creators may add moderated public content tags
+
+- Studio searches the shared public tag catalog first and creates a CONTENT tag only when no normalized match exists.
+- Custom tag creation requires an authorized creator session, passes bounded character and reserved-term validation, is rate-limited, and emits an audit event. Trending, Featured, SYSTEM, MODERATION, inactive, and blocked tags remain unavailable.
+- The room still references normalized tag IDs and retains the server/database limit of eight; editing the form creates no room and only the explicit Add action may create a reusable tag.
+- A room cover is presentation metadata for audience cards, distinct from the live camera feed and requested media permission.
+
 ## 2026-09-04 — Studio uses one shell and separates navigation from the account menu
 
 - Studio suppresses the audience header and owns one sticky status header so nested sticky regions cannot cover creator controls.

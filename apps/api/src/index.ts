@@ -2,7 +2,7 @@ import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyReply } from "fastify";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createConnection } from "node:net";
@@ -90,6 +90,31 @@ type RoomClassificationInput = {
   tagIds: string[];
 };
 const identityDocumentViews = new Map<string,{adminId:string;documentId:string;expiresAt:number}>();
+
+const reservedCreatorTagSlugs = new Set(["admin", "featured", "moderation", "system", "trending"]);
+const prohibitedCreatorTagTerms = ["child sexual", "minor sexual", "terrorism", "human trafficking"];
+
+function normalizeCreatorTag(raw: string) {
+  const displayName = raw.trim().replace(/^#+/, "").replace(/\s+/g, " ");
+  if (
+    [...displayName].length < 2 ||
+    [...displayName].length > 30 ||
+    !/^[\p{L}\p{N}][\p{L}\p{N}\s&+.'’_-]*$/u.test(displayName)
+  ) return null;
+  const normalizedName = displayName.normalize("NFKC").toLocaleLowerCase("en-US");
+  let slug = displayName
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("en-US")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  if (!slug) slug = `tag-${createHash("sha256").update(normalizedName).digest("hex").slice(0, 16)}`;
+  if (reservedCreatorTagSlugs.has(slug) || prohibitedCreatorTagTerms.some((term) => normalizedName.includes(term))) return null;
+  return { displayName, slug };
+}
 
 async function validateRoomClassification(client: ReturnType<typeof database>, input: RoomClassificationInput) {
   const languages=[input.primaryLanguage,...input.additionalLanguages];
@@ -490,6 +515,8 @@ export function buildApi() {
         ? 15
         : request.url === "/api/account/password"
           ? 10
+        : request.url === "/api/studio/tags"
+          ? 20
         : request.url.includes("/identity-document")
           ? 10
         : request.url.includes("/creator-reviews/")
@@ -3781,6 +3808,35 @@ export function buildApi() {
       await client.end();
     }
   });
+  api.post<{Body:{name:string}}>(
+    "/api/studio/tags",
+    {schema:{body:mutationSchemas.studioTagCreate}},
+    async(request,reply)=>{
+      const creator=(await requireRole(request,reply,"streamer")) as DemoUser|undefined;
+      if(!creator)return;
+      const normalized=normalizeCreatorTag(request.body.name);
+      if(!normalized)return reply.code(400).send({error:"invalid_creator_tag"});
+      const client=database();await client.connect();
+      try{
+        await client.query("BEGIN");
+        const existing=await client.query("SELECT id,normalized_slug AS slug,display_name AS \"displayName\",tag_type AS type,status,creator_selectable FROM tags WHERE normalized_slug=$1 FOR UPDATE",[normalized.slug]);
+        if(existing.rows[0]){
+          const tag=existing.rows[0];
+          if(tag.status!=="ACTIVE"||!tag.creator_selectable||!["CONTENT","FORMAT","MOOD"].includes(tag.type)){
+            await client.query("ROLLBACK");
+            return reply.code(400).send({error:"creator_tag_unavailable"});
+          }
+          await client.query("COMMIT");
+          const {status:_status,creator_selectable:_selectable,...publicTag}=tag;
+          return {tag:publicTag,created:false};
+        }
+        const inserted=await client.query("INSERT INTO tags(id,canonical_name,normalized_slug,display_name,tag_type,status,creator_selectable) VALUES($1,$2,$3,$2,'CONTENT','ACTIVE',TRUE) RETURNING id,normalized_slug AS slug,display_name AS \"displayName\",tag_type AS type",[crypto.randomUUID(),normalized.displayName,normalized.slug]);
+        await client.query("INSERT INTO audit_events(id,actor_id,subject_user_id,event_type,metadata) VALUES($1,$2,$2,'creator_tag_created',jsonb_build_object('tagId',$3::uuid,'slug',$4::text))",[crypto.randomUUID(),creator.id,inserted.rows[0].id,inserted.rows[0].slug]);
+        await client.query("COMMIT");
+        return reply.code(201).send({tag:inserted.rows[0],created:true});
+      }catch(error){await client.query("ROLLBACK");throw error;}finally{await client.end();}
+    },
+  );
   api.post<{Body:RoomClassificationInput&{title:string}}>(
     "/api/studio/rooms",
     {schema:{body:mutationSchemas.studioRoomCreate}},

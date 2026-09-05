@@ -1,5 +1,9 @@
 # Stream Platform Product Goal
 
+## Current milestone — compact pre-live setup and creator tags
+
+Remove the unused camera-preview void before device permission, use the full Studio workspace for setup, explain the room-cover image in viewer-facing terms, and replace the fixed tag checklist with a compact search/create control. Custom tags remain server-normalized, creator-authorized, rate-limited, auditable, limited to eight per room, and unable to impersonate system-owned labels.
+
 ## Current milestone — Streamer Studio production UI
 
 Replace the nested audience/Studio chrome with one dedicated Studio shell, keep the publishing surface mounted during internal navigation, expose desktop tools through a stable sidebar and mobile tools through a contained sheet, and reduce pre-live setup, data pages, controls, and empty states to a consistent production visual hierarchy. Preserve creator authorization, explicit room creation/publication, safe active-broadcast navigation, camera-permission intent, wallet integrity, and all server-side lifecycle rules.

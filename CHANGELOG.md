@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-04 — Compact pre-live setup and creator tags (local)
+
+- Collapsed the unused black camera placeholder before permission so the setup form uses the available Studio width; the real preview still appears after explicit device access.
+- Renamed the ambiguous stream-thumbnail action to **Room cover** and explains that it is the image shown on the audience room card before entry.
+- Replaced the permanent tag checkbox cloud with a compact searchable input, selected-tag chips, matching suggestions, and custom-tag creation.
+- Added an authenticated, rate-limited custom-tag API with normalization, reserved/unsafe-name rejection, public tag-type enforcement, and audit events; the existing eight-tag room limit remains authoritative.
+- Re-baselined the stale shared web-bundle gate to the already-deployed Studio architecture with less than 1 KiB of measured CSS/compressed headroom; JavaScript remains under its existing ceiling.
+
 ## 2026-09-04 — Streamer Studio production UI (local)
 
 - Removed the outer audience/account header while Studio is open, eliminating the overlapping sticky-header defect on desktop and mobile.

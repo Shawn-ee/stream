@@ -1,10 +1,16 @@
 # Stream MVP Backlog
 
+## Compact pre-live setup and creator tags
+
+- Implemented locally: pre-permission preview collapse, full-width setup workspace, compact room-card preview, and clear Room cover labeling.
+- Implemented locally: searchable existing tags, explicit custom-tag creation, removable selections, server normalization, creator authorization, rate limiting, reserved-label protection, and audit logging.
+- Deferred: administrator tag merge/alias tools, automated semantic moderation, creator tag ownership analytics, and tag suggestions based on real inventory volume.
+
 ## Streamer Studio production UI
 
 - Implemented locally: single Studio shell, non-overlapping header, desktop sidebar, mobile navigation sheet, state-aware Setup/Live control label, flatter data/configuration surfaces, consistent button geometry, and production-facing connection/status terminology.
 - Implemented locally: compact mobile pre-live ordering that surfaces metadata and the explicit camera/microphone action before the empty preview.
-- Deferred: real-route replacement for Studio hash subsections, a dedicated multi-step setup state machine, searchable tag selection, and authenticated visual acceptance after deployment or a user-completed local test-age acknowledgement.
+- Deferred: real-route replacement for Studio hash subsections, a dedicated multi-step setup state machine, and authenticated visual acceptance after deployment or a user-completed local test-age acknowledgement.
 
 ## Creator onboarding reliability and polish
 

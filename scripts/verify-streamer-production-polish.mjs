@@ -17,11 +17,14 @@ for (const branding of ["PRIVATE STAGING", "HOLIWYN", "Creator preview environme
   assert.match(app, new RegExp(branding), `missing staging branding: ${branding}`);
 assert.doesNotMatch(app, />Stream MVP</, "visible product heading must not use the old MVP brand");
 
-for (const metadata of ["Stream title", "Audience card preview", "Choose stream thumbnail"])
+for (const metadata of ["Stream title", "Audience card preview", "Room cover", "Shown on your room card before viewers enter."])
   assert.match(app, new RegExp(metadata.replace(/[()]/g, "\\$&")), `missing pre-live metadata: ${metadata}`);
 for (const metadata of ["Stream languages", "Content tags"])
   assert.match(classification, new RegExp(metadata), `missing room classification metadata: ${metadata}`);
+for (const tagControl of ["Search or create a tag", "Press Enter to add", "onCreateTag"])
+  assert.match(classification, new RegExp(tagControl), `missing compact custom-tag control: ${tagControl}`);
 assert.match(app, /await onSaveMetadata\(\)/, "metadata must be saved before broadcast starts");
+assert.match(styles, /quick-live-panel\.no-media:not\(\.phase-ended\) \.quick-live-video-shell\s*\{\s*display: none;/, "unused pre-permission preview must collapse");
 
 for (const action of ['"delete"', '"mute"', '"timeout"', '"ban"', '"unban"'])
   assert.match(api, new RegExp(action), `missing moderation action ${action}`);

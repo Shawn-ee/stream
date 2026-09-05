@@ -2420,6 +2420,7 @@ function QuickGoLive({
   onPrimaryLanguageChange,
   onAdditionalLanguagesChange,
   onTagIdsChange,
+  onCreateTag,
   onSaveMetadata,
   onThumbnailSelected,
   overlay,
@@ -2446,6 +2447,7 @@ function QuickGoLive({
   onPrimaryLanguageChange: (language: string) => void;
   onAdditionalLanguagesChange: (languages: string[]) => void;
   onTagIdsChange: (ids: string[]) => void;
+  onCreateTag: (name: string) => Promise<TagOption>;
   onSaveMetadata: () => Promise<void>;
   onThumbnailSelected: (file: File | null) => void;
   overlay?: ReactNode;
@@ -3058,8 +3060,11 @@ function QuickGoLive({
             {zh ? "直播标题" : "Stream title"}
             <input value={title} maxLength={120} onChange={(event) => onTitleChange(event.target.value)} placeholder={zh ? "告诉观众您正在直播什么" : "Tell viewers what you are streaming"} />
           </label>
-          <RoomClassificationFields languages={languageOptions} tags={tagOptions} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={zh} onPrimaryLanguageChange={onPrimaryLanguageChange} onAdditionalLanguagesChange={onAdditionalLanguagesChange} onTagIdsChange={onTagIdsChange} />
-          <label className="stream-thumbnail-picker"><BroadcastIcon name="upload" />{zh ? "选择直播封面" : "Choose stream thumbnail"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onThumbnailSelected(event.target.files?.[0] ?? null)} /></label>
+          <RoomClassificationFields languages={languageOptions} tags={tagOptions} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={zh} onPrimaryLanguageChange={onPrimaryLanguageChange} onAdditionalLanguagesChange={onAdditionalLanguagesChange} onTagIdsChange={onTagIdsChange} onCreateTag={onCreateTag} />
+          <div className="stream-thumbnail-field">
+            <span><strong>{zh ? "直播间封面" : "Room cover"}</strong><small>{zh ? "观众进入直播间前，会在直播卡片上看到这张图片。" : "Shown on your room card before viewers enter."}</small></span>
+            <label className="stream-thumbnail-picker"><BroadcastIcon name="upload" />{thumbnailUrl ? (zh ? "更换图片" : "Change image") : (zh ? "选择图片" : "Choose image")}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onThumbnailSelected(event.target.files?.[0] ?? null)} /></label>
+          </div>
           <button type="button" className="secondary broadcast-metadata-save" disabled={!title.trim() || !primaryLanguage} onClick={() => void onSaveMetadata()}>{zh ? "保存直播信息" : "Save details"}</button>
         </div>
         <aside className="broadcast-audience-preview" aria-label={zh ? "观众卡片预览" : "Audience card preview"}>
@@ -4015,6 +4020,15 @@ function StreamerStudio({
     setNotice(zh ? "直播信息已保存。" : "Stream details saved.");
     refresh();
   }
+  async function createStudioTag(name: string) {
+    const result = await request("/api/studio/tags", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    const tag = result.tag as TagOption;
+    setStudioTags((current) => current.some((item) => item.id === tag.id) ? current : [...current, tag]);
+    return tag;
+  }
   async function removeAvatar() {
     setAvatarSaving(true);
     try {
@@ -4041,7 +4055,7 @@ function StreamerStudio({
         <p>{t.title === "Stream MVP" ? "Your creator account is active. Creating a draft is an explicit action; it will remain private until you publish it." : "您的主播账户已激活。创建草稿需要明确操作，发布前不会出现在公开发现中。"}</p>
         <form className="onboarding-form" onSubmit={(event) => { event.preventDefault(); void request("/api/studio/rooms", { method: "POST", body: JSON.stringify({ title: title || (t.title === "Stream MVP" ? "My first Holiwyn stream" : "我的首场 Holiwyn 直播"), primaryLanguage, additionalLanguages, tagIds }) }).then(() => refresh()).catch(() => setNotice(t.title === "Stream MVP" ? "The draft room could not be created." : "无法创建直播间草稿。")); }}>
           <label>{t.title === "Stream MVP" ? "Stream title" : "直播标题"}<input required minLength={2} maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-          <RoomClassificationFields languages={studioLanguages} tags={studioTags} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={t.title !== "Stream MVP"} onPrimaryLanguageChange={setPrimaryLanguage} onAdditionalLanguagesChange={setAdditionalLanguages} onTagIdsChange={setTagIds} />
+          <RoomClassificationFields languages={studioLanguages} tags={studioTags} primaryLanguage={primaryLanguage} additionalLanguages={additionalLanguages} selectedTagIds={tagIds} zh={t.title !== "Stream MVP"} onPrimaryLanguageChange={setPrimaryLanguage} onAdditionalLanguagesChange={setAdditionalLanguages} onTagIdsChange={setTagIds} onCreateTag={createStudioTag} />
           <button>{t.title === "Stream MVP" ? "Create private draft" : "创建私有草稿"}</button>
         </form>
         {notice ? <p role="alert">{notice}</p> : null}
@@ -4187,6 +4201,7 @@ function StreamerStudio({
             onPrimaryLanguageChange={setPrimaryLanguage}
             onAdditionalLanguagesChange={setAdditionalLanguages}
             onTagIdsChange={setTagIds}
+            onCreateTag={createStudioTag}
             onSaveMetadata={saveBroadcastMetadata}
             onThumbnailSelected={selectThumbnail}
             overlay={<CreatorRealtimeOverlay slug={room.slug} t={t} />}
