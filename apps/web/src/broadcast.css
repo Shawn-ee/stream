@@ -705,7 +705,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
 }
 
 @media (min-width: 1024px) {
-  .broadcaster-stage .quick-live-panel.phase-preview,
   .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) {
     align-items: start;
     display: grid;
@@ -714,7 +713,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     grid-template-rows: auto auto auto auto 1fr;
   }
 
-  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-video-shell,
   .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .quick-live-video-shell {
     grid-column: 1;
     grid-row: 1 / span 6;
@@ -759,57 +757,6 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
     margin-right: 0;
   }
 
-  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading,
-  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-title-field,
-  .broadcaster-stage .quick-live-panel.phase-preview .device-grid,
-  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-audio-check,
-  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls,
-  .broadcaster-stage .quick-live-panel.phase-preview .control-note,
-  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-error {
-    grid-column: 2;
-  }
-
-  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading {
-    align-items: flex-start;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-bottom: 0;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    margin-bottom: calc(var(--space-3) * -1);
-    padding: var(--space-4) var(--space-4) var(--space-3);
-  }
-
-  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading small {
-    display: none;
-  }
-
-  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-title-field,
-  .broadcaster-stage .quick-live-panel.phase-preview .device-grid,
-  .broadcaster-stage .quick-live-panel.phase-preview .broadcast-audio-check,
-  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls:not(.live-controls) {
-    background: var(--color-surface);
-    border-left: 1px solid var(--color-border);
-    border-right: 1px solid var(--color-border);
-    padding-left: var(--space-4);
-    padding-right: var(--space-4);
-  }
-
-  .broadcaster-stage .quick-live-panel.phase-preview .device-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls:not(.live-controls) {
-    border-bottom: 1px solid var(--color-border);
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding-bottom: var(--space-4);
-  }
-
-  .broadcaster-stage .quick-live-panel.phase-preview .quick-live-controls .creator-primary-action {
-    grid-column: 1 / -1;
-    min-height: 3.25rem;
-  }
 }
 
 .broadcaster-stage .quick-live-video-shell {
@@ -2529,6 +2476,16 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   border-radius: 0.5rem;
 }
 
+.broadcast-details-panel {
+  display: contents;
+}
+
+.broadcast-device-console {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 @media (min-width: 1024px) {
   .studio-open .broadcaster-page {
     padding: clamp(1.25rem, 2vw, 2rem);
@@ -2541,7 +2498,7 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   .studio-open .broadcaster-stage .quick-live-panel.phase-preview,
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) {
     gap: 1rem 1.5rem;
-    grid-template-columns: minmax(30rem, 1.25fr) minmax(24rem, 0.9fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.85fr);
     grid-template-rows: auto auto auto;
   }
 
@@ -2549,13 +2506,105 @@ body.mobile-broadcast-scroll-locked .app.role-streamer {
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .quick-live-video-shell {
     align-self: start;
     grid-column: 1;
-    grid-row: 1 / span 2;
+    grid-row: 1;
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-health-layers,
   .studio-open .broadcaster-stage .quick-live-panel.no-media:not(.phase-ended) .broadcast-health-layers {
     grid-column: 1;
+    grid-row: 2;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel {
+    align-self: start;
+    background: var(--color-surface);
+    border: 1px solid rgba(126, 143, 181, 0.18);
+    border-radius: 0.625rem;
+    display: grid;
+    gap: 0.85rem;
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    max-height: calc(100dvh - 7.5rem);
+    min-width: 0;
+    overflow-y: auto;
+    padding: 1rem;
+    position: sticky;
+    scrollbar-width: thin;
+    top: 5rem;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-setup-heading {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-metadata-layout {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-metadata-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-details-panel .broadcast-title-field {
+    background: transparent;
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-audience-preview {
+    display: none;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console {
+    align-self: start;
+    background: var(--color-surface);
+    border: 1px solid rgba(126, 143, 181, 0.18);
+    border-radius: 0.625rem;
+    grid-column: 1;
     grid-row: 3;
+    padding: 0.85rem;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .device-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .device-grid,
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .broadcast-audio-check,
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls {
+    background: transparent;
+    border: 0;
+    grid-column: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(10rem, 1.25fr);
+  }
+
+  .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls .creator-primary-action {
+    grid-column: auto;
+    min-height: var(--control-min);
+  }
+
+  @media (max-width: 1199px) {
+    .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-device-console .quick-live-controls .creator-primary-action {
+      grid-column: 1 / -1;
+    }
   }
 
   .studio-open .broadcaster-stage .quick-live-panel.phase-preview .broadcast-setup-heading,

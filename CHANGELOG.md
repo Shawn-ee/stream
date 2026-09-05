@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-05 — Post-permission Studio composition (local)
+
+- Rebuilt the camera-ready desktop composition so the video, delivery health, device selectors, microphone meter, and Go Live action remain one continuous broadcast workstation.
+- Moved stream metadata into a bounded sticky details panel whose height no longer pushes the controls below a large empty grid row.
+- Removed the redundant audience-card preview after camera access and hid pre-live timer/viewer chrome until an actual broadcast is live.
+- Clarified camera controls as actions (`Turn camera off/on`) and added focused layout regression coverage for the new details and device-console regions.
+
 ## 2026-09-04 — Compact pre-live setup and creator tags (local)
 
 - Collapsed the unused black camera placeholder before permission so the setup form uses the available Studio width; the real preview still appears after explicit device access.

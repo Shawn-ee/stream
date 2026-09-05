@@ -3050,7 +3050,7 @@ function QuickGoLive({
     onRuntimeChange({ phase, health: connectionHealth, duration });
   }, [connectionHealth, duration, onRuntimeChange, phase, viewerCount]);
   const metadataEditor = (
-    <>
+    <div className="broadcast-details-panel">
       <div className="broadcast-setup-heading">
         <div><h4>{zh ? "准备开播" : "Ready to go live"}</h4></div>
       </div>
@@ -3073,7 +3073,7 @@ function QuickGoLive({
           <small>{[primaryLanguage, ...additionalLanguages].map((code) => languageOptions.find((item) => item.code === code)?.nameNative ?? code.toUpperCase()).join(" · ")}</small>
         </aside>
       </div>
-    </>
+    </div>
   );
   return (
     <section className={`quick-live-panel phase-${phase} ${stream ? "has-media" : "no-media"} camera-facing-${cameraFacingMode} controls-${controlsVisible ? "visible" : "hidden"}`} id="quick-go-live">
@@ -3128,30 +3128,32 @@ function QuickGoLive({
       ) : stream && !sessionActive ? (
         <>
           {metadataEditor}
-          <div className="device-grid">
-            <label>
-              {zh ? "相机" : "Camera"}
-              <select value={cameraId} onChange={(event) => void replaceInputDevice("video", event.target.value)}>
-                {cameras.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${zh ? "相机" : "Camera"} ${index + 1}`}</option>)}
-              </select>
-            </label>
-            <label>
-              {zh ? "麦克风" : "Microphone"}
-              <select value={microphoneId} onChange={(event) => void replaceInputDevice("audio", event.target.value)}>
-                {microphones.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${zh ? "麦克风" : "Microphone"} ${index + 1}`}</option>)}
-              </select>
-            </label>
-          </div>
-          <div className="broadcast-audio-check">
-            <span>{microphoneEnabled ? (zh ? "麦克风已开启" : "Microphone on") : zh ? "麦克风已静音" : "Microphone muted"}</span>
-            <div className="microphone-meter" aria-label={zh ? "麦克风音量" : "Microphone level"}>
-              <span style={{ width: `${microphoneEnabled ? micLevel : 0}%` }} />
+          <div className="broadcast-device-console">
+            <div className="device-grid">
+              <label>
+                {zh ? "相机" : "Camera"}
+                <select value={cameraId} onChange={(event) => void replaceInputDevice("video", event.target.value)}>
+                  {cameras.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${zh ? "相机" : "Camera"} ${index + 1}`}</option>)}
+                </select>
+              </label>
+              <label>
+                {zh ? "麦克风" : "Microphone"}
+                <select value={microphoneId} onChange={(event) => void replaceInputDevice("audio", event.target.value)}>
+                  {microphones.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${zh ? "麦克风" : "Microphone"} ${index + 1}`}</option>)}
+                </select>
+              </label>
             </div>
-          </div>
-          <div className="quick-live-controls">
-            <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
-            <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
-            <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim() || !primaryLanguage}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
+            <div className="broadcast-audio-check">
+              <span>{microphoneEnabled ? (zh ? "麦克风已开启" : "Microphone on") : zh ? "麦克风已静音" : "Microphone muted"}</span>
+              <div className="microphone-meter" aria-label={zh ? "麦克风音量" : "Microphone level"}>
+                <span style={{ width: `${microphoneEnabled ? micLevel : 0}%` }} />
+              </div>
+            </div>
+            <div className="quick-live-controls">
+              <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Turn camera off") : zh ? "打开相机" : "Turn camera on"}</span></button>
+              <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone} aria-pressed={!microphoneEnabled} aria-label={microphoneEnabled ? (zh ? "麦克风已开启，点击静音" : "Microphone on, tap to mute") : zh ? "麦克风已静音，点击取消静音" : "Microphone muted, tap to unmute"}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
+              <button type="button" className="creator-primary-action" onClick={() => void goLive()} disabled={!available || phase !== "preview" || !title.trim() || !primaryLanguage}><span className="go-live-dot" aria-hidden="true" />{zh ? "开始直播" : "Go Live"}</button>
+            </div>
           </div>
         </>
       ) : stream && sessionActive ? (
@@ -3168,7 +3170,7 @@ function QuickGoLive({
           ) : null}
           <div className="quick-live-controls live-controls">
             <button type="button" className={`secondary ${microphoneEnabled ? "" : "is-off"}`} onClick={toggleMicrophone}><BroadcastIcon name="microphone" /><span>{microphoneEnabled ? (zh ? "静音" : "Mute") : zh ? "取消静音" : "Unmute"}</span></button>
-            <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Camera off") : zh ? "打开相机" : "Camera on"}</span></button>
+            <button type="button" className={`secondary ${cameraEnabled ? "" : "is-off"}`} onClick={toggleCamera}><BroadcastIcon name="camera" /><span>{cameraEnabled ? (zh ? "关闭相机" : "Turn camera off") : zh ? "打开相机" : "Turn camera on"}</span></button>
             <button type="button" className="secondary" disabled={cameraSwitching} onClick={() => void switchCamera()}><BroadcastIcon name="flip" /><span>{cameraSwitching ? (zh ? "切换中…" : "Switching…") : zh ? "切换相机" : "Flip"}</span></button>
             <button type="button" className="secondary mobile-chat-trigger" onClick={onChatOpen}><BroadcastIcon name="chat" /><span>{zh ? "聊天" : "Chat"}</span></button>
             <button type="button" className="danger" onClick={() => setEndConfirmationOpen(true)} aria-label={zh ? "结束直播" : "End stream"} title={zh ? "结束直播" : "End stream"}><BroadcastIcon name="stop" /><span>{zh ? "结束直播" : "End stream"}</span></button>
@@ -4093,13 +4095,14 @@ function StreamerStudio({
     <section className={`workspace creator-studio broadcaster-runtime-${effectiveSessionPhase} ${activeSection === "live" ? "creator-live-view" : "creator-center-view"}`}>
       <header className="broadcaster-header">
         <strong className="broadcaster-brand">HOLIWYN</strong>
-        <div className="broadcaster-session-state" aria-live="polite">
-          <span className={effectiveSessionPhase === "live" ? "is-live" : ""}>
-            <i /> {effectiveSessionPhase === "live" ? (zh ? "直播中" : "LIVE") : effectiveSessionPhase === "connecting" ? (zh ? "正在开播" : "STARTING") : effectiveSessionPhase === "ending" ? (zh ? "正在结束" : "ENDING") : effectiveSessionPhase === "preview" ? (zh ? "预览就绪" : "PREVIEW READY") : (zh ? "准备开播" : "SET UP")}
-          </span>
-          <time>{runtime.duration}</time>
-          <span className="broadcaster-viewers"><BroadcastIcon name="viewers" /> {viewerCount}</span>
-        </div>
+        {(["live", "connecting", "ending"] as const).includes(effectiveSessionPhase as "live" | "connecting" | "ending") ? (
+          <div className="broadcaster-session-state" aria-live="polite">
+            <span className={effectiveSessionPhase === "live" ? "is-live" : ""}>
+              <i /> {effectiveSessionPhase === "live" ? (zh ? "直播中" : "LIVE") : effectiveSessionPhase === "connecting" ? (zh ? "正在开播" : "STARTING") : zh ? "正在结束" : "ENDING"}
+            </span>
+            {effectiveSessionPhase === "live" ? <><time>{runtime.duration}</time><span className="broadcaster-viewers"><BroadcastIcon name="viewers" /> {viewerCount}</span></> : null}
+          </div>
+        ) : <span className="broadcaster-header-spacer" aria-hidden="true" />}
         <div className="broadcaster-header-actions">
           <details className="broadcaster-account-menu" ref={accountMenuRef}>
             <summary aria-label={zh ? "打开创作者菜单" : "Open creator menu"} title={zh ? "创作者菜单" : "Creator menu"}>

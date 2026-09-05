@@ -1,5 +1,9 @@
 # Stream Platform Product Goal
 
+## Current milestone — camera-ready Studio composition
+
+Keep the complete post-permission broadcast workflow visible and coherent: camera preview, delivery health, device checks, microphone level, and Go Live form one workstation, while metadata remains in a bounded secondary panel. Remove pre-live viewer/timer claims and redundant preview surfaces without changing media permissions, publishing authorization, or broadcast lifecycle behavior.
+
 ## Current milestone — compact pre-live setup and creator tags
 
 Remove the unused camera-preview void before device permission, use the full Studio workspace for setup, explain the room-cover image in viewer-facing terms, and replace the fixed tag checklist with a compact search/create control. Custom tags remain server-normalized, creator-authorized, rate-limited, auditable, limited to eight per room, and unable to impersonate system-owned labels.
