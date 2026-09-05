@@ -69,7 +69,7 @@ import {
   streamThumbnailUploadLimitBytes,
 } from "./stream-thumbnail-storage.js";
 import { renderSocialPreview, validSocialPreviewPath, type SocialPreviewKind } from "./social-preview.js";
-import { IdentityDocumentUploadError, identityDocumentLimitBytes, readIdentityDocument, saveIdentityDocument, type IdentityDocumentType } from "./identity-document-storage.js";
+import { IdentityDocumentUploadError, identityDocumentLimitBytes, readIdentityDocument, removeIdentityDocument, saveIdentityDocument, verifyIdentityDocumentStorage, type IdentityDocumentType } from "./identity-document-storage.js";
 
 type Role = "audience" | "streamer" | "admin";
 type CreatorStatus =
@@ -613,6 +613,7 @@ export function buildApi() {
     try {
       await client.connect();
       await client.query("SELECT 1");
+      await verifyIdentityDocumentStorage(config.identityDocumentStoragePath);
       const redis = new URL(required(config.redisUrl, "REDIS_URL"));
       await new Promise<void>((resolve, reject) => {
         const socket = createConnection({
@@ -633,7 +634,7 @@ export function buildApi() {
           reject(error);
         });
       });
-      return { status: "ready", database: "ok", redis: "ok" };
+      return { status: "ready", database: "ok", redis: "ok", privateStorage: "ok" };
     } catch {
       runtimeMetrics.readinessFailuresTotal += 1;
       return reply.code(503).send({ status: "not_ready" });
@@ -787,17 +788,25 @@ export function buildApi() {
     } catch (error) { await client.query("ROLLBACK"); if ((error as {code?:string}).code === "23505") return reply.code(409).send({error:"creator_handle_unavailable"}); throw error; }
     finally { await client.end(); }
   });
-  api.post<{Querystring:{documentType:IdentityDocumentType}}>("/api/creator/onboarding/identity-document", async (request, reply) => {
+  api.post<{Querystring:{documentType:IdentityDocumentType}}>("/api/creator/onboarding/identity-document", { bodyLimit: identityDocumentLimitBytes + 64 * 1024 }, async (request, reply) => {
     const user=await currentUser(request); if(!user)return reply.code(401).send({error:"session_required"});
     if(!["passport","national_id","driver_license"].includes(request.query.documentType)) return reply.code(400).send({error:"unsupported_document_type"});
     const eligibility=database();await eligibility.connect();try{const allowed=await eligibility.query("SELECT 1 FROM creator_accounts c WHERE c.user_id=$1 AND c.status IN ('ONBOARDING_IDENTITY','READY_FOR_REVIEW','ACTIVE') AND EXISTS(SELECT 1 FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=c.user_id AND v.is_current=TRUE AND a.age_confirmed=TRUE AND a.agreement_confirmed=TRUE)",[user.id]);if(!allowed.rows[0])return reply.code(409).send({error:"agreement_required_before_document"});}finally{await eligibility.end();}
-    const file=await request.file(); if(!file)return reply.code(400).send({error:"identity_document_required"});
-    const buffer=await file.toBuffer();
+    let file;
+    try { file=await request.file({limits:{files:1,fields:0,fileSize:identityDocumentLimitBytes}}); }
+    catch { return reply.code(413).send({error:"identity_document_too_large"}); }
+    if(!file)return reply.code(400).send({error:"identity_document_required"});
+    let buffer:Buffer;
+    try { buffer=await file.toBuffer(); }
+    catch { return reply.code(413).send({error:"identity_document_too_large"}); }
+    if(file.file.truncated)return reply.code(413).send({error:"identity_document_too_large"});
     let stored;
     try { stored=await saveIdentityDocument({storagePath:config.identityDocumentStoragePath,encryptionKey:config.identityDocumentEncryptionKey,userId:user.id,buffer}); }
-    catch(error){ if(error instanceof IdentityDocumentUploadError)return reply.code(error.code==="identity_document_too_large"?413:400).send({error:error.code}); throw error; }
-    const client=database();await client.connect();
-    try{await client.query("BEGIN");
+    catch(error){ if(error instanceof IdentityDocumentUploadError)return reply.code(error.code==="identity_document_too_large"?413:error.code==="identity_document_storage_unavailable"?503:400).send({error:error.code}); throw error; }
+    const client=database();
+    let committed=false;
+    let transactionStarted=false;
+    try{await client.connect();await client.query("BEGIN");transactionStarted=true;
       const account=await client.query<{status:CreatorStatus}>("SELECT status FROM creator_accounts WHERE user_id=$1 FOR UPDATE",[user.id]);
       if(!account.rows[0]||!["ONBOARDING_IDENTITY","READY_FOR_REVIEW","ACTIVE"].includes(account.rows[0].status)){await client.query("ROLLBACK");return reply.code(409).send({error:"identity_document_step_unavailable"});}
       const agreement=await client.query("SELECT 1 FROM creator_agreement_acceptances a JOIN creator_agreement_versions v ON v.id=a.agreement_version_id WHERE a.user_id=$1 AND v.is_current=TRUE AND a.age_confirmed=TRUE AND a.agreement_confirmed=TRUE",[user.id]);
@@ -812,8 +821,8 @@ export function buildApi() {
       }
       await client.query("INSERT INTO audit_events(id,actor_id,subject_user_id,event_type,metadata) VALUES($1,$2,$2,'identity_document_uploaded',jsonb_build_object('documentId',$3::text,'mimeType',$4::text,'replacement',$5::boolean))",[crypto.randomUUID(),user.id,id,stored.mimeType,Boolean(previous.rows[0])]);
       await client.query("INSERT INTO notifications(id,user_id,kind,title,body,notification_key) VALUES($1,$2,'creator_document','Document received','Your private identity document was received. Upload does not mean it has been verified.',$3) ON CONFLICT DO NOTHING",[crypto.randomUUID(),user.id,`creator-document-received:${id}`]);
-      await client.query("COMMIT");return reply.code(201).send({document:{id,status:"UPLOADED",documentType:request.query.documentType,mimeType:stored.mimeType,fileSize:stored.fileSize},creatorStatus:account.rows[0].status==="ONBOARDING_IDENTITY"?"READY_FOR_REVIEW":account.rows[0].status});
-    }catch(error){await client.query("ROLLBACK");throw error;}finally{await client.end();}
+      await client.query("COMMIT");committed=true;return reply.code(201).send({document:{id,status:"UPLOADED",documentType:request.query.documentType,mimeType:stored.mimeType,fileSize:stored.fileSize},creatorStatus:account.rows[0].status==="ONBOARDING_IDENTITY"?"READY_FOR_REVIEW":account.rows[0].status});
+    }catch(error){if(transactionStarted)await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{await client.end().catch(()=>undefined);if(!committed)await removeIdentityDocument(config.identityDocumentStoragePath,stored.storageReference).catch(()=>undefined);}
   });
   api.post<{Body:{agreementVersion:string;signerName:string;ageConfirmed:true;agreementConfirmed:true}}>("/api/creator/onboarding/agreement/accept", {schema:{body:mutationSchemas.creatorAgreementAcceptance}}, async(request,reply)=>{
     const user=await currentUser(request); if(!user)return reply.code(401).send({error:"session_required"});

@@ -1,5 +1,16 @@
 # Local Runbook
 
+## Creator identity-upload release gate
+
+1. Use Windows Docker Desktop; do not bypass it with direct WSL operation. Run `npm run verify:creator-upload-reliability`, `npm run check`, and `npm test`.
+2. Run `npm run verify:production-compose`. It must prove the private document directory is `1000:1000` with mode `700`, `/ready` reports private storage healthy, and a 7 MB request reaches API authentication instead of receiving Nginx 413.
+3. In a synthetic audience account, complete Profile → Agreement → Document → Review. Test a JPEG/PNG over 8 MB and confirm an optimized preview and smaller transfer size appear before upload. Test an oversized PDF and confirm it is rejected without upload.
+4. Interrupt one upload and confirm the retry message is actionable. Confirm application logs contain no file bytes, original paths, document URLs, encryption keys, or signed viewing URLs.
+5. Activate twice using the same completed onboarding record. The result must remain idempotent, retain audience access, enter Studio, create no room/broadcast, and request no camera or microphone permission.
+6. Repeat at 390×844 Android Chrome and desktop Chrome, then run creator onboarding and manual-review integration verifiers. Remove only the uniquely identified synthetic account and encrypted test document after acceptance.
+
+Do not deploy if private-storage readiness is red, if the gateway rejects a valid-size upload, or if the UI describes an uploaded document as verified. Never factory-reset Docker Desktop or remove Docker volumes as part of this gate.
+
 ## Room classification verification
 
 After applying migrations 027 through 029, run `npm run db:seed`, `npm run verify:room-classification`, and `npm run verify:staging`. Inspect `legacy_category_migration_report` before any future compatibility-column removal. Confirm every room has one primary language at display order zero and no more than three total languages. Confirm `/api/discovery/categories` and Community tag requests return their documented retirement responses, while `/api/discovery/languages` plus public `/api/discovery/tags` remain healthy. Never repair missing language data by inferring from a creator's name, avatar, location, or identity.

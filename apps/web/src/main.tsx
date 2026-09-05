@@ -353,8 +353,17 @@ async function request(path: string, options?: RequestInit) {
     },
     ...options,
   });
-  if (!response.ok && response.status !== 204)
-    throw new Error(`${response.status}`);
+  if (!response.ok && response.status !== 204) {
+    let code = `http_${response.status}`;
+    try {
+      const payload = (await response.json()) as { error?: unknown };
+      if (typeof payload.error === "string") code = payload.error;
+    } catch {}
+    const error = new Error(code) as Error & { code: string; status: number };
+    error.code = code;
+    error.status = response.status;
+    throw error;
+  }
   return response.status === 204 ? null : response.json();
 }
 function roleLabel(t: Record<string, string>, role: Role) {
@@ -584,6 +593,7 @@ function App() {
     setAccountMenuOpen(false);
     setAccountOpen(false);
     setCreatorPortalStep(null);
+    setStudioOpen(false);
     writeAudienceHistory({ view: "discovery" }, mode);
     window.scrollTo({ top: 0 });
   };
@@ -665,11 +675,40 @@ function App() {
     }
     if (route.view === "creator-onboarding") {
       setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setAccountOpen(false);
+      setStudioOpen(false);
       setCreatorPortalStep(route.step); setRouteLoading(false); return;
     }
-    if (route.view === "creator-status" || route.view === "studio") {
+    if (route.view === "creator-status") {
       setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setAccountOpen(false);
+      setStudioOpen(false);
       setCreatorPortalStep("status"); setRouteLoading(false); return;
+    }
+    if (route.view === "studio") {
+      setRoom(null); setProfileRoom(null); setPublicUserProfile(null); setAccountOpen(false);
+      setRouteLoading(true);
+      try {
+        const access = await request("/api/broadcast/access");
+        if (requestId !== routeRequestRef.current) return;
+        if (access.allowed) {
+          setCreatorPortalStep(null);
+          setStudioOpen(true);
+          return;
+        }
+        setStudioOpen(false);
+        const step = access.status === "AUDIENCE" ? "intro" : access.status === "ONBOARDING_IDENTITY" ? "identity" : access.status === "ONBOARDING_AGREEMENT" ? "agreement" : access.status === "READY_FOR_REVIEW" ? "review" : ["PENDING_REVIEW", "REJECTED", "SUSPENDED"].includes(access.status) ? "status" : "profile";
+        setCreatorPortalStep(step);
+        const target = step === "status" ? "/creator/status" : step === "intro" ? "/creator/onboarding" : `/creator/onboarding/${step}`;
+        window.history.replaceState({ ...window.history.state, holiwynCreatorRoute: target }, "", target);
+      } catch {
+        if (requestId === routeRequestRef.current) {
+          setStudioOpen(false);
+          setCreatorPortalStep("status");
+          window.history.replaceState({ ...window.history.state, holiwynCreatorRoute: "/creator/status" }, "", "/creator/status");
+        }
+      } finally {
+        if (requestId === routeRequestRef.current) setRouteLoading(false);
+      }
+      return;
     }
     if (route.view === "legacy-discovery") {
       const legacyTag=window.location.pathname.match(/^\/tags\/([a-z0-9-]+)\/?$/)?.[1];

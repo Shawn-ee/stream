@@ -23,7 +23,7 @@ child.stdout.on("data", (chunk) => (output += chunk.toString()));
 child.stderr.on("data", (chunk) => (output += chunk.toString()));
 
 async function waitForReady() {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     try {
       if ((await fetch(`${base}/ready`)).ok) return;
     } catch {}

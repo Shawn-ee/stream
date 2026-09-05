@@ -1,5 +1,13 @@
 # Architecture Decisions
 
+## 2026-09-04 — Identity images are optimized locally, but the server remains authoritative
+
+- JPEG and PNG identity images above the presentation target are decoded with source orientation, bounded to 2600 pixels on the longest edge, flattened onto a white background, and encoded as JPEG toward 3 MB before upload. The source file is never modified or transmitted when an optimized derivative is used.
+- Browser preparation accepts source images up to 30 MB and rejects images above 40 megapixels to bound client memory risk. The encrypted API contract remains a maximum of 8 MB and validates magic bytes rather than filename or browser MIME claims.
+- PDF documents are never rewritten in the browser; a PDF above 8 MB is rejected with a specific explanation.
+- Upload success means only **Document received**. It is distinct from administrative review and identity verification.
+- Production uses a one-shot root storage initializer to assign named volumes to UID/GID 1000, then runs the API as the unprivileged `node` user. Readiness fails when the private document directory cannot complete a write/delete probe.
+
 ## 2026-09-03 — Public audience identity remains intentionally limited
 
 Holiwyn provides one public identity per user at `/@handle`. Active creator capabilities enrich that identity, but do not create a second audience login. Audience profiles do not expose private account or behavioral data, and audience-to-audience following is deferred until its privacy, notification, blocking, and moderation semantics are designed.

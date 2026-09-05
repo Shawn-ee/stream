@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-04 — Creator onboarding upload reliability (local)
+
+- Fixed the production gateway contract so valid identity uploads can reach the API while oversized requests receive a structured error.
+- Added production volume ownership initialization and private-storage write readiness without running the API as root.
+- Added rollback cleanup so failed database persistence does not leave an orphan encrypted document.
+- Added local JPEG/PNG optimization with orientation handling, preview, before/after size, source safety limits, and unchanged PDF handling.
+- Replaced synthetic upload percentages and generic/raw status presentation with real transfer progress, actionable errors, and truthful document-received language.
+- Simplified the onboarding introduction, step presentation, review, and activation copy while preserving state authorization and the no-room/no-broadcast invariant.
+- Fixed a Studio route-restoration race that could show Review again after successful activation and local age acknowledgement; `/studio` now resolves server-authoritative broadcast access before rendering.
+- Eliminated the Windows-scrollbar-width horizontal overflow in the full-width audience header and replaced the off-screen file-input technique with clipped accessible input styling.
+- Verified with Windows Docker Desktop: all migrations; 32/32 unit tests; the complete staging gate; automatic and manual-review onboarding; production Compose build/readiness/storage permissions; and the production bundle budget (JS 451.4 KiB raw/135.2 KiB gzip, CSS 144.9 KiB raw/25.8 KiB gzip).
+- Browser QA completed with a synthetic 23.8 MB PNG compressed to 3.0 MB, uploaded, reviewed, auto-activated, and routed into an empty Studio without creating a room or requesting media permissions. Desktop and 390×844 responsive widths had no horizontal overflow; the synthetic account and encrypted document were removed afterward.
+
 ## 2026-09-04 — Visual system and desktop shell polish (local)
 
 - Expanded the audience shell to the usable viewport and made the sticky header full-width with consistent responsive gutters.

@@ -34,12 +34,22 @@ services:
       postgres: { condition: service_healthy }
     restart: "no"
 
+  private-storage-init:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /app/work/avatars /app/work/private-identity-documents && chown -R 1000:1000 /app/work/avatars /app/work/private-identity-documents && chmod 700 /app/work/private-identity-documents"]
+    volumes:
+      - avatar_production_data:/app/work/avatars
+      - identity_document_production_data:/app/work/private-identity-documents
+    restart: "no"
+
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     restart: unless-stopped
     env_file: ${PRODUCTION_ENV_FILE:-.env.production}
     depends_on:
       migrate: { condition: service_completed_successfully }
+      private-storage-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
     volumes:
       - avatar_production_data:/app/work/avatars

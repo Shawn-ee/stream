@@ -1,5 +1,13 @@
 # Stream MVP Backlog
 
+## Creator onboarding reliability and polish
+
+- Implemented locally: isolated 9 MB Nginx allowance for the 8 MB identity-document contract, JSON 413 responses, route-scoped multipart enforcement, encrypted-file rollback cleanup, private-storage readiness, and a non-root API volume initializer.
+- Implemented locally: on-device JPEG/PNG resize/compression, EXIF-aware decoding, 30 MB/40-megapixel source safeguards, exact preview, before/after size, real XHR upload progress, specific recoverable errors, and truthful receipt/review labels.
+- Implemented locally: more compact introduction, progress, document, and activation presentation with mobile containment and no raw identity status enums.
+- Verified locally with Windows Docker Desktop: production-style Compose, migrations, full staging regression suite, automatic and manual-review modes, a real 23.8 MB → 3.0 MB browser upload, Studio route recovery, desktop/390px responsive containment, and exact synthetic-data cleanup.
+- Deferred: PDF recompression, malware scanning, external identity verification, automated retention, Google OAuth, and final physical-Android acceptance before a production release.
+
 ## Radical audience simplicity
 
 - Implemented locally: canonical `/`, legacy Discover/Tags redirects, minimal header, compact multi-language/tag filters, live-first grid, conditional offline creator recommendations, compact cards, concise authentication, and simplified creator profiles.

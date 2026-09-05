@@ -1,5 +1,9 @@
 # Stream Platform Product Goal
 
+## Current milestone — creator onboarding reliability and polish
+
+Make the complete audience-to-creator flow reliable from introduction through first Studio entry. Browser-side JPEG/PNG optimization must preserve orientation, preview the exact upload, and keep the original local; PDFs remain unmodified. Nginx, API multipart limits, encrypted private storage ownership/readiness, structured errors, honest upload progress, transactional activation, and orphan cleanup must agree. Document receipt must never be presented as identity verification, and neither navigation nor activation may create a room, broadcast, live state, or media permission request.
+
 ## Current milestone — visual system and desktop shell polish
 
 Make Holiwyn feel like a deliberate production product rather than a collection of generated UI cards. Use a full-width sticky audience header, wider desktop content, flatter account pages, a compact offline-room composition, restrained button hierarchy, and transient toast feedback. Preserve mobile behavior, routing, accessibility, creator authorization, room lifecycle, privacy, and side-effect-free navigation.

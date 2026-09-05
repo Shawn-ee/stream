@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 
 export const identityDocumentLimitBytes = 8 * 1024 * 1024;
@@ -7,6 +7,16 @@ export type IdentityDocumentType = "passport" | "national_id" | "driver_license"
 
 export class IdentityDocumentUploadError extends Error {
   constructor(public code: "unsupported_identity_document" | "identity_document_too_large" | "identity_document_storage_unavailable") { super(code); }
+}
+
+function safeStoragePath(storagePath: string, storageReference: string) {
+  if (!/^[0-9a-f-]{36}-[0-9a-f-]{36}\.idoc$/i.test(storageReference))
+    throw new IdentityDocumentUploadError("identity_document_storage_unavailable");
+  const root = resolve(storagePath);
+  const path = resolve(root, storageReference);
+  if (!path.startsWith(root + sep))
+    throw new IdentityDocumentUploadError("identity_document_storage_unavailable");
+  return path;
 }
 
 function sniff(buffer: Buffer): "application/pdf" | "image/jpeg" | "image/png" | null {
@@ -35,10 +45,28 @@ export async function saveIdentityDocument(options: { storagePath:string; encryp
 }
 
 export async function readIdentityDocument(options:{storagePath:string;encryptionKey:string;storageReference:string}) {
-  if (!/^[0-9a-f-]{36}-[0-9a-f-]{36}\.idoc$/i.test(options.storageReference)) throw new IdentityDocumentUploadError("identity_document_storage_unavailable");
-  const root=resolve(options.storagePath), path=resolve(root,options.storageReference);
-  if (!path.startsWith(root+sep)) throw new IdentityDocumentUploadError("identity_document_storage_unavailable");
+  const path=safeStoragePath(options.storagePath,options.storageReference);
   const value=await readFile(path); if(value.length<29) throw new IdentityDocumentUploadError("identity_document_storage_unavailable");
   const decipher=createDecipheriv("aes-256-gcm",keyFrom(options.encryptionKey),value.subarray(0,12));
   decipher.setAuthTag(value.subarray(12,28)); return Buffer.concat([decipher.update(value.subarray(28)),decipher.final()]);
+}
+
+export async function removeIdentityDocument(storagePath:string,storageReference:string) {
+  const path=safeStoragePath(storagePath,storageReference);
+  await unlink(path).catch((error:NodeJS.ErrnoException)=>{
+    if(error.code!=="ENOENT") throw new IdentityDocumentUploadError("identity_document_storage_unavailable");
+  });
+}
+
+export async function verifyIdentityDocumentStorage(storagePath:string) {
+  const root=resolve(storagePath);
+  const probe=resolve(root,`.storage-probe-${randomUUID()}`);
+  try {
+    await mkdir(root,{recursive:true});
+    await writeFile(probe,randomBytes(16),{flag:"wx",mode:0o600});
+    await unlink(probe);
+  } catch {
+    await unlink(probe).catch(()=>undefined);
+    throw new IdentityDocumentUploadError("identity_document_storage_unavailable");
+  }
 }

@@ -123,6 +123,24 @@ try {
     404,
     "internal metrics must not be exposed by the web gateway",
   );
+  const identityGatewayForm = new FormData();
+  identityGatewayForm.append(
+    "document",
+    new Blob([Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(7 * 1024 * 1024 - 9)])], { type: "application/pdf" }),
+    "gateway-probe.pdf",
+  );
+  const identityGatewayProbe = await fetch(
+    `${gateway}/api/creator/onboarding/identity-document?documentType=passport`,
+    {
+      method: "POST",
+      body: identityGatewayForm,
+    },
+  );
+  assert.equal(
+    identityGatewayProbe.status,
+    401,
+    "a valid-size identity upload must reach API authentication instead of being rejected by Nginx",
+  );
 
   const readiness = compose(
     "exec",
@@ -133,6 +151,18 @@ try {
     "http://127.0.0.1:3001/ready",
   );
   assert.ok(readiness.includes('"status":"ready"'));
+  assert.ok(readiness.includes('"privateStorage":"ok"'));
+
+  const privateStorageMode = compose(
+    "exec",
+    "-T",
+    "api",
+    "stat",
+    "-c",
+    "%u:%g:%a",
+    "/app/work/private-identity-documents",
+  ).trim();
+  assert.equal(privateStorageMode, "1000:1000:700");
 
   const metricsProbe = compose(
     "exec",

@@ -7,6 +7,7 @@ assert.deepEqual(await ready.json(), {
   status: "ready",
   database: "ok",
   redis: "ok",
+  privateStorage: "ok",
 });
 assert.equal(ready.headers.get("x-content-type-options"), "nosniff");
 assert.equal(ready.headers.get("x-frame-options"), "DENY");
